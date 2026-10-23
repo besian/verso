@@ -16,10 +16,10 @@ import type { Wear } from './wear';
 import { INK, MARK, PAPER, STONE } from './theme';
 import Stage from './views/Stage';
 import { AuthPage, Explore, HomeScreen, Profile, Settings } from './views/Screens';
-import { Admin, Legal, NotFound } from './views/Pages';
-import { Editor, EditProfile, EmbedModal, Manager, NewBookPicker, ReportModal, Toast, Welcome } from './views/Overlays';
+import { Admin, AuthAction, Legal, NotFound } from './views/Pages';
+import { CollectionModal, Editor, EditProfile, EmbedModal, Manager, NewBookPicker, ReportModal, Toast, Welcome } from './views/Overlays';
 
-export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound';
+export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound' | 'action';
 /** A report with what it points at, for the moderation page. */
 type AdminItem = Report & { targetName: string; ownerName: string; ownerHandle: string; hidden: boolean; banned: boolean; gone: boolean };
 type AnyBook = Book | OtherBook;
@@ -70,8 +70,12 @@ interface State {
   vfUntil?: number;
   /** Saved tab: the collection shown ('' = all), and collections made but still empty. */
   pfCol?: string; newCols?: string[];
+  /** New-collection dialog: its name, and the saved sketchbook to move into it (if any). The open collection menu. */
+  colNew?: { name: string; forId?: string } | null; colMenu?: string | null;
   /** Shown inside an iframe on someone's site (/embed/<id>): just the book. And the embed-code dialog. */
   embed?: boolean; embedFor?: { id: string; title: string } | null;
+  /** /auth/action: a link from one of our emails (confirm email, reset password, email change). */
+  act?: { mode: string; code: string; next: string; step: 'checking' | 'form' | 'working' | 'done' | 'error'; email: string; pw: string; err: string };
   tagDraft?: string; soundOn?: boolean; dark?: boolean; welcome?: boolean;
   /** Shared sketchbooks: invitations waiting for an answer, and the invite form on the Pages screen. */
   invites?: BookDoc[]; shDraft?: string; shBusy?: boolean; shErr?: string;
@@ -249,14 +253,27 @@ export default class App extends Component<object, State> {
     api.shareLink(location.origin + path, title).then(r => { if (r === 'copied') this.toast('Link copied'); }).catch(() => this.toast('Couldn’t copy the link'));
   }
   openBookById(id: string) { api.getBook(id).then(d => d ? this.openOtherBook(toOther(d, 0)) : this.toast('That sketchbook is no longer available')); }
+  /** Handles an emailed link: confirm email straight away, or ask for the new password first. */
+  async openAction() {
+    const q = new URLSearchParams(location.search), mode = q.get('mode') || '', code = q.get('oobCode') || '';
+    let next = '/'; try { const c = new URL(q.get('continueUrl') || '', location.origin); if (c.origin === location.origin) next = c.pathname + c.search; } catch { /* no continue link */ }
+    const set = (p: Partial<NonNullable<State['act']>>) => this.setState(s => ({ act: { ...(s.act || { mode, code, next, step: 'checking', email: '', pw: '', err: '' }), ...p } }));
+    cancelAnimationFrame(this.raf); this.setState({ mode: 'action', other: null, focus: false, fz: 0, managing: false, act: { mode, code, next, step: 'checking', email: '', pw: '', err: '' } });
+    try {
+      const { email } = await api.checkLink(mode, code);
+      if (mode === 'resetPassword') return set({ step: 'form', email });
+      await api.useLink(code); set({ step: 'done', email });
+      if (mode === 'verifyEmail') this.checkVerified();
+    } catch (e) { set({ step: 'error', err: api.errMsg(e) }); }
+  }
   notFound(nf: string) { cancelAnimationFrame(this.raf); this.target = 0; this.setState(s => ({ mode: 'notfound', nf, other: null, images: s.books[s.active].images, p: 0, focus: false, fz: 0, managing: false })); }
   openLegal(legal: 'privacy' | 'terms') { cancelAnimationFrame(this.raf); this.setState({ mode: 'legal', legal, other: null, focus: false, fz: 0, managing: false, draft: null }); }
   openAdmin() { cancelAnimationFrame(this.raf); this.setState({ mode: 'admin', other: null, focus: false, fz: 0, managing: false, draft: null }); if (this.state.admin) this.loadReports(); }
   collections(): string[] { return [...new Set([...(this.state.saved || []).map(x => x.col || '').filter(Boolean), ...(this.state.newCols || [])])].sort((a, b) => a.localeCompare(b)); }
   moveSaved(id: string, col: string) {
     const a = this.state.acct; if (!a) return;
-    if (col === '__new') { const n = (window.prompt('Name your collection') || '').trim().slice(0, 40); if (!n) return; col = n; }
-    this.setState(st => ({ saved: (st.saved || []).map(x => x.id === id ? { ...x, col } : x) }));
+    if (col === '__new') return this.setState({ colNew: { name: '', forId: id }, colMenu: null });
+    this.setState(st => ({ saved: (st.saved || []).map(x => x.id === id ? { ...x, col } : x), colMenu: null }));
     this.toast(col ? `Moved to ${col}` : 'Removed from the collection');
     api.setCollection(a.uid, id, col).catch(e => { console.error(e); this.toast('Couldn’t move that. Try again.'); });
   }
@@ -389,7 +406,7 @@ export default class App extends Component<object, State> {
       }
       case 'legal': return '/' + (s.legal || 'privacy');
       case 'admin': return '/admin';
-      case 'notfound': return here;
+      case 'notfound': case 'action': return here;
       case 'mine': { const b = s.books[s.active]; return s.acct && b && !b.id.startsWith('local') ? '/sketchbooks/' + b.id : '/sketchbooks'; }
       case 'other': { const o = s.other as OtherBook | null; if (s.embed && o) return '/embed/' + o.id; return o?.handle ? `/@${o.handle}/${o.id}` : here; }
       case 'profile': {
@@ -421,6 +438,7 @@ export default class App extends Component<object, State> {
         return this.setLabel(m ? 'm:' + m : t ? 't:' + tagSlug(t) : '');
       }
       if (a === 'privacy' || a === 'terms') return this.openLegal(a);
+      if (a === 'auth' && b === 'action') return this.openAction();
       if (a === 'embed' && b) {
         const d = await api.getBook(b);
         if (!d) return this.notFound('sketchbook');
@@ -455,7 +473,11 @@ export default class App extends Component<object, State> {
     }
   }
   openSettings = () => { cancelAnimationFrame(this.raf); this.setState({ mode: 'settings', other: null, focus: false, fz: 0, managing: false, draft: null, acErr: '', acInfo: '' }); };
-  closeAuth = () => this.setState(s => ({ mode: s.authFrom && s.authFrom !== 'auth' ? s.authFrom : 'home', suErr: '', suInfo: '', su: null }));
+  closeAuth = () => {
+    // Coming from an emailed link (e.g. after resetting a password), carry on to the sketchbooks rather than back to the link page.
+    if (this.state.authFrom === 'action') { this.setState({ suErr: '', suInfo: '', su: null }); return this.goMode(this.state.acct ? 'mine' : 'home'); }
+    this.setState(s => ({ mode: s.authFrom && s.authFrom !== 'auth' ? s.authFrom : 'home', suErr: '', suInfo: '', su: null }));
+  };
   openProfile(who: Who | null, force?: boolean) {
     if (!who && !this.state.acct && !force) return this.openJoin();
     if (who?.uid && who.uid === this.state.acct?.uid) who = null;
@@ -942,7 +964,8 @@ export default class App extends Component<object, State> {
           // Collections: shelves for saved sketchbooks (private, like Saved).
           pfColl: tab === 'saved' ? this.collections() : null, pfColOn: s.pfCol || '',
           pfPickCol: (c: string) => this.setState({ pfCol: c }),
-          pfNewCol: () => { const n = (window.prompt('Name your collection (e.g. Inspiration, Ink, Faces)') || '').trim().slice(0, 40); if (n) this.setState(st => ({ newCols: [...new Set([...(st.newCols || []), n])], pfCol: n })); },
+          pfNewCol: () => this.setState({ colNew: { name: '' } }),
+          colMenu: s.colMenu || null, toggleColMenu: (id: string) => this.setState(st => ({ colMenu: st.colMenu === id ? null : id })),
           pfPeople: tab === 'following' ? (s.followPeople || []).map(x => ({ key: x.uid, name: x.name, handle: '@' + x.handle, avBg: avatarBg(x.av), init: x.av ? '' : ini(x.name), open: () => this.openProfile({ uid: x.uid, name: x.name, handle: x.handle }) })) : null,
           pfBlocked: blockedOn, pfUnblock: () => this.toggleBlock(uid, name),
           pfSuspended: !mine && !!uid && (s.banned || []).includes(uid),
@@ -1036,6 +1059,31 @@ export default class App extends Component<object, State> {
       inInstall: () => installer.install().then(ok => ok && this.toast('verso is on your home screen')),
       isDark: !!s.dark, setTheme: (t: 'light' | 'dark') => { themeMode.setTheme(t); this.setState({ dark: t === 'dark' }); },
       openPrivacy: () => this.openLegal('privacy'), openTerms: () => this.openLegal('terms'),
+      ...(() => {
+        const t = s.act; if (s.mode !== 'action' || !t) return { isAction: false };
+        return {
+          isAction: true, acMode: t.mode, acStep: t.step, acMail: t.email, acPw: t.pw, acErr: t.err, acSignedIn: !!a,
+          onAcPw: (e: ChangeEvent<HTMLInputElement>) => { const pw = e.target.value; this.setState(st => ({ act: { ...st.act!, pw, err: '' } })); },
+          acSubmit: async (e?: { preventDefault(): void }) => {
+            e?.preventDefault(); if (t.pw.length < 6) return this.setState(st => ({ act: { ...st.act!, err: 'Choose a password of at least 6 characters.' } }));
+            this.setState(st => ({ act: { ...st.act!, step: 'working' } }));
+            try { await api.setNewPassword(t.code, t.pw); this.setState(st => ({ act: { ...st.act!, step: 'done', pw: '' } })); }
+            catch (err) { this.setState(st => ({ act: { ...st.act!, step: 'form', err: api.errMsg(err) } })); }
+          },
+          acContinue: () => { history.replaceState(null, '', t.next); this.applyRoute(); },
+          acSignIn: () => { this.openAuth('signin'); this.setState(st => ({ su: { ...(st.su || { name: '', handle: '', pw: '' }), email: t.email, pw: '', name: '', handle: '' } })); },
+          acResetAgain: () => { this.openAuth('signin'); this.setState({ suMode: 'reset' }); },
+        };
+      })(),
+      // New collection dialog.
+      cnOpen: !!s.colNew, cnName: s.colNew?.name || '', cnMoving: !!s.colNew?.forId,
+      onCnName: (e: ChangeEvent<HTMLInputElement>) => { const name = e.target.value.slice(0, 40); this.setState(st => ({ colNew: { ...st.colNew!, name } })); },
+      cnClose: () => this.setState({ colNew: null }),
+      cnCreate: (e?: { preventDefault(): void }) => {
+        e?.preventDefault(); const c = s.colNew, n = (c?.name || '').trim(); if (!c || !n) return;
+        this.setState(st => ({ colNew: null, newCols: [...new Set([...(st.newCols || []), n])], pfCol: c.forId ? st.pfCol : n }));
+        if (c.forId) this.moveSaved(c.forId, n);
+      },
       isLegal: s.mode === 'legal', legalDoc: s.legal || 'privacy', isNotFound: s.mode === 'notfound', nfWhat: s.nf || 'page',
       ...this.settingsVals(),
       pfEditing: !!s.draft, dName: d.name || '', dHandle: d.handle || '', dBio: d.bio || '', dLoc: d.loc || '', dWeb: d.web || '', dEmail: a?.email || '', dBioCount: `${(d.bio || '').length}/160`,
@@ -1448,7 +1496,7 @@ export default class App extends Component<object, State> {
           bkMoreOpen: s.more === 'book', bkMore: () => this.setState(st => ({ more: st.more === 'book' ? null : 'book' })),
           bkReport: () => o && this.openReport({ kind: 'book', targetId: o.id, ownerId: o.ownerId || '', label: `“${o.name}”` }),
           bkBlock: () => o?.ownerId && this.toggleBlock(o.ownerId, o.artist), bkBlockLbl: `Block ${o?.artist || ''}`,
-          closeMore: () => (s.more || s.notifOpen) && this.setState({ more: null, notifOpen: false }),
+          closeMore: () => (s.more || s.notifOpen || s.colMenu) && this.setState({ more: null, notifOpen: false, colMenu: null }),
           toastMsg: s.toast || '',
           ...this.notifVals(),
           reportOpen: !!s.reportFor, reportLabel: s.reportFor?.label || '', reportKind: s.reportFor?.kind, reportReasons: api.REPORT_REASONS.map(r => ({ key: r, label: r, on: s.reportReason === r, pick: () => this.setState({ reportReason: r, reportErr: '' }) })),
@@ -1599,9 +1647,11 @@ export default class App extends Component<object, State> {
         {v.isSettings && <Settings v={v} />}
         {v.isLegal && <Legal v={v} />}
         {v.isNotFound && <NotFound v={v} />}
+        {v.isAction && <AuthAction v={v} />}
         {v.isAdminPage && <Admin v={v} />}
         {v.reportOpen && <ReportModal v={v} />}
         {v.emOpen && <EmbedModal v={v} />}
+        {v.cnOpen && <CollectionModal v={v} />}
         {v.toastMsg && <Toast msg={v.toastMsg} />}
         {v.isAuth && <AuthPage v={v} />}
         {v.pfEditing && <EditProfile v={v} />}

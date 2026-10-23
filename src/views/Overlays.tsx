@@ -1,7 +1,7 @@
 import type { CSSProperties, ChangeEventHandler, MouseEventHandler, ReactNode } from 'react';
 import type { V } from '../App';
 import { focus, hover, wheelSideways } from '../pseudo';
-import { INK, MARK, MUTED, PAPER, SANS, SERIF } from '../theme';
+import { INK, MARK, MUTED, PAPER, SANS, SERIF, pagePad } from '../theme';
 
 const field: CSSProperties = { height: 44, padding: '0 14px', borderRadius: 2, border: '1.5px solid rgba(var(--ink-rgb),.14)', background: 'rgba(var(--ink-rgb),.06)', color: INK, font: `500 14px ${SANS}`, outline: 'none', width: '100%', boxSizing: 'border-box' };
 const fieldLabel: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'rgba(var(--ink-rgb),.75)' };
@@ -151,7 +151,7 @@ export function Manager({ v }: { v: V }) {
         <button onClick={v.mgSave} className={hover(`background:${MARK}`)} style={{ justifySelf: 'end', height: 40, padding: '0 22px', borderRadius: 2, border: 'none', background: v.mgChanged ? MARK : INK, color: PAPER, font: `500 15px ${SANS}`, cursor: 'pointer', transition: 'background .2s' }}>Save</button>
       </header>
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', boxSizing: 'border-box', padding: `${v.notMob ? 28 : 18}px ${pad}px 48px`, display: 'flex', flexDirection: 'column', gap: v.notMob ? 24 : 18 }}>
+        <div style={{ boxSizing: 'border-box', padding: `${v.notMob ? 28 : 18}px ${pad}px 48px`, display: 'flex', flexDirection: 'column', gap: v.notMob ? 24 : 18 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <input value={v.bookName} onChange={v.onName} readOnly={v.isCollab} aria-label="Sketchbook name" className={v.isCollab ? undefined : focus(`border-color:${INK}`)} style={{ background: 'none', border: 'none', borderBottom: `1.5px solid ${v.isCollab ? 'transparent' : 'rgba(var(--ink-rgb),.2)'}`, color: INK, font: `400 ${v.notMob ? 48 : 36}px/1.1 ${SERIF}`, letterSpacing: '-.01em', padding: '0 0 4px', outline: 'none', width: '100%', maxWidth: 560, boxSizing: 'border-box' }} />
             <span style={hint}>{v.mgSummary}</span>
@@ -495,7 +495,7 @@ const WELCOME_STEPS: [string, string][] = [
 export function Welcome({ v }: { v: V }) {
   return (
     <div role="dialog" aria-modal="true" aria-label="Welcome to verso" style={{ position: 'absolute', inset: 0, zIndex: 25, background: PAPER, overflowY: 'auto' }}>
-      <div style={{ maxWidth: 980, margin: '0 auto', boxSizing: 'border-box', padding: `${v.notMob ? 96 : 56}px ${v.notMob ? 40 : 16}px 48px`, display: 'flex', flexDirection: 'column', gap: v.notMob ? 40 : 28 }}>
+      <div style={{ ...pagePad(!v.notMob), maxWidth: 1100, display: 'flex', flexDirection: 'column', gap: v.notMob ? 40 : 28 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <span style={{ font: `500 11px ${SANS}`, letterSpacing: '.14em', textTransform: 'uppercase', color: MARK }}>Welcome to verso.</span>
           <h1 style={{ margin: 0, font: `400 ${v.notMob ? 88 : 52}px/.95 ${SERIF}`, letterSpacing: '-.025em' }}>Hello, {v.welcomeName}. <em style={{ color: MARK }}>Start anywhere.</em></h1>
@@ -516,6 +516,25 @@ export function Welcome({ v }: { v: V }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Name a new collection (and optionally move a saved sketchbook into it). */
+export function CollectionModal({ v }: { v: V }) {
+  return (
+    <Modal onClose={e => { if (e.target === e.currentTarget) v.cnClose(); }} pad={v.mModalPad} maxWidth={420}>
+      <form onSubmit={v.cnCreate} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={heading}>New collection</div>
+          <div style={{ fontSize: 14, lineHeight: 1.5, color: 'rgba(var(--ink-rgb),.7)' }}>{v.cnMoving ? 'Name it, and this sketchbook moves straight in.' : 'A shelf for saved sketchbooks. Only you can see it.'}</div>
+        </div>
+        <TextField label="Name" value={v.cnName} onChange={v.onCnName} placeholder="Inspiration, Ink, Faces…" autoFocus />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button type="button" onClick={v.cnClose} className={hoverTint} style={{ ...ghostBtn, height: 44, padding: '0 18px', fontSize: 14 }}>Cancel</button>
+          <button type="submit" disabled={!v.cnName.trim()} style={{ height: 44, padding: '0 22px', borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer', opacity: v.cnName.trim() ? 1 : 0.5 }}>Create</button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

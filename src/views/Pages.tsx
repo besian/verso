@@ -1,8 +1,8 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { V } from '../App';
 import { hover } from '../pseudo';
-import { INK, MARK, MUTED, PAPER, SANS, label, serif } from '../theme';
-import { Notice } from './Overlays';
+import { INK, MARK, MUTED, PAPER, SANS, label, pagePad, serif } from '../theme';
+import { Notice, TextField } from './Overlays';
 
 const screen: CSSProperties = { position: 'absolute', inset: '0 0 var(--tabbar, 0px) 0', zIndex: 4, background: PAPER, overflowX: 'hidden', overflowY: 'auto' };
 const hoverText = hover(`color:${MARK}`);
@@ -15,7 +15,8 @@ function Page({ v, kicker, title, children }: { v: V; kicker: string; title: Rea
   const mob = !v.notMob;
   return (
     <div style={screen}>
-      <div style={{ maxWidth: 760, margin: '0 auto', boxSizing: 'border-box', padding: `${mob ? 84 : 108}px ${mob ? 16 : 40}px 64px`, display: 'flex', flexDirection: 'column', gap: 28 }}>
+      {/* Same spacing as every page; long text keeps a comfortable reading width from the same left edge. */}
+      <div style={{ ...pagePad(mob, 64), display: 'flex', flexDirection: 'column', gap: 28, maxWidth: 860 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <span style={label(MARK)}>{kicker}</span>
           <h1 style={{ margin: 0, ...serif(mob ? 44 : 64, 1, '-.02em') }}>{title}</h1>
@@ -177,5 +178,57 @@ export function Admin({ v }: { v: V }) {
         </article>
       ))}
     </Page>
+  );
+}
+
+const ACTION_TEXT: Record<string, { kicker: string; title: ReactNode; done: string }> = {
+  verifyEmail: { kicker: 'Confirm email', title: <>You’re <em style={{ color: MARK }}>in.</em></>, done: 'Thanks, your email is confirmed. Your sketchbooks are waiting.' },
+  resetPassword: { kicker: 'New password', title: <>A fresh <em style={{ color: MARK }}>start.</em></>, done: 'Your password has been changed. Sign in with the new one.' },
+  verifyAndChangeEmail: { kicker: 'Change email', title: <>All <em style={{ color: MARK }}>set.</em></>, done: 'Your email address has been changed. Use the new one next time you sign in.' },
+  recoverEmail: { kicker: 'Email restored', title: <>Back as <em style={{ color: MARK }}>before.</em></>, done: 'The change to your email address was undone. If you didn’t ask for it, change your password in Account settings.' },
+};
+
+/** Our own page for the links in verso's emails (instead of Firebase's plain one). */
+export function AuthAction({ v }: { v: V }) {
+  const t = ACTION_TEXT[v.acMode] || ACTION_TEXT.verifyEmail, mob = !v.notMob;
+  const primary: CSSProperties = { height: 48, padding: '0 26px', border: 'none', background: INK, color: PAPER, font: `500 15px ${SANS}`, cursor: 'pointer', alignSelf: 'flex-start' };
+  return (
+    <div style={screen}>
+      <div style={{ ...pagePad(mob, 64), display: 'flex', flexDirection: 'column', gap: 22, maxWidth: 640 }}>
+        <span style={label(MARK)}>{t.kicker}</span>
+        <h1 style={{ margin: 0, ...serif(mob ? 52 : 84, .95, '-.025em') }}>
+          {v.acStep === 'error' ? <>That link has <em style={{ color: MARK }}>faded.</em></> : v.acStep === 'checking' ? <>One <em style={{ color: MARK }}>moment…</em></> : t.title}
+        </h1>
+        {v.acStep === 'checking' && <p style={{ margin: 0, fontSize: 17, color: MUTED }}>Checking your link.</p>}
+        {v.acStep === 'done' && (
+          <>
+            <p style={{ margin: 0, fontSize: 17, lineHeight: 1.55, color: MUTED }}>{t.done}</p>
+            {v.acMode === 'resetPassword' && !v.acSignedIn
+              ? <button onClick={v.acSignIn} className={hover(`background:${MARK}`)} style={primary}>Sign in</button>
+              : <button onClick={v.acContinue} className={hover(`background:${MARK}`)} style={primary}>Continue to verso →</button>}
+          </>
+        )}
+        {(v.acStep === 'form' || v.acStep === 'working') && (
+          <form onSubmit={v.acSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 18, borderTop: `1px solid ${INK}`, maxWidth: 420 }}>
+            <span style={{ fontSize: 15, color: MUTED }}>Choose a new password for <b style={{ color: INK, fontWeight: 600 }}>{v.acMail}</b>.</span>
+            <TextField label="New password" value={v.acPw} onChange={v.onAcPw} type="password" placeholder="At least 6 characters" autoComplete="new-password" autoFocus />
+            <Notice err={v.acErr} />
+            <button type="submit" disabled={v.acStep === 'working'} className={hover(`background:${MARK}`)} style={{ ...primary, opacity: v.acStep === 'working' ? 0.6 : 1 }}>{v.acStep === 'working' ? 'Saving…' : 'Save new password'}</button>
+          </form>
+        )}
+        {v.acStep === 'error' && (
+          <>
+            <p style={{ margin: 0, fontSize: 17, lineHeight: 1.55, color: MUTED }}>{v.acErr} Links in our emails work once, and only for a while.</p>
+            <div style={{ display: 'flex', gap: 22, alignItems: 'center', flexWrap: 'wrap' }}>
+              {v.acMode === 'resetPassword'
+                ? <button onClick={v.acResetAgain} className={hover(`background:${MARK}`)} style={primary}>Send a new link</button>
+                : v.acSignedIn ? <button onClick={v.openSettings} className={hover(`background:${MARK}`)} style={primary}>Resend from Settings</button>
+                : <button onClick={v.openSignin} className={hover(`background:${MARK}`)} style={primary}>Sign in</button>}
+              <button onClick={v.goHome} className={hoverLine} style={underline(15)}>Go home</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

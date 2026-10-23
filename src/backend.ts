@@ -5,7 +5,7 @@ import { initializeApp } from 'firebase/app';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { getAnalytics, isSupported as analyticsSupported } from 'firebase/analytics';
 import {
-  EmailAuthProvider, connectAuthEmulator, createUserWithEmailAndPassword, deleteUser, getAuth, onAuthStateChanged,
+  EmailAuthProvider, applyActionCode, checkActionCode, confirmPasswordReset, connectAuthEmulator, verifyPasswordResetCode, createUserWithEmailAndPassword, deleteUser, getAuth, onAuthStateChanged,
   reauthenticateWithCredential, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut as fbSignOut,
   updatePassword, verifyBeforeUpdateEmail,
 } from 'firebase/auth';
@@ -73,6 +73,8 @@ export function errMsg(e: unknown): string {
     'storage/unauthorized': 'Upload refused. Images must be under 10 MB.',
     'auth/requires-recent-login': 'For your security, sign in again and retry.',
     'auth/missing-password': 'Enter your current password.',
+    'auth/invalid-action-code': 'This link has expired or has already been used.',
+    'auth/expired-action-code': 'This link has expired. Ask for a new one below.',
     'verify-wait': 'We just sent one. Firebase allows one email a minute, so try again shortly.',
   };
   return msgs[code] || 'Something went wrong. Please try again.';
@@ -577,6 +579,18 @@ async function sendVerification(u: User) {
   try { await sendEmailVerification(u, { url: location.origin + '/settings' }); }
   catch (e) { if ((e as { code?: string }).code !== 'auth/unauthorized-continue-uri') throw e; await sendEmailVerification(u); }
 }
+// ---------- email links (our own page at /auth/action instead of Firebase's) ----------
+
+/** What an emailed link is for, and the address it concerns. Throws for expired or used links. */
+export async function checkLink(mode: string, code: string): Promise<{ email: string }> {
+  const a = need().auth;
+  if (mode === 'resetPassword') return { email: await verifyPasswordResetCode(a, code) };
+  const info = await checkActionCode(a, code); return { email: info.data.email || '' };
+}
+/** Confirms an email address, an email change, or undoes one (recoverEmail). */
+export async function useLink(code: string) { await applyActionCode(need().auth, code); }
+export async function setNewPassword(code: string, pw: string) { await confirmPasswordReset(need().auth, code, pw); }
+
 export async function resendVerification() { const u = need().auth.currentUser; if (u) await sendVerification(u); }
 
 /** Reloads the signed-in user and reports whether their email is confirmed. */

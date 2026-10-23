@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { V } from '../App';
 import ClosedBook from '../ClosedBook';
 import { hover, wheelSideways } from '../pseudo';
-import { CANVAS, INK, MARK, MUTED, PAGE_EDGES, PAPER, SANS, SERIF, STONE, label, serif } from '../theme';
+import { CANVAS, INK, MARK, MUTED, PAGE_EDGES, PAPER, SANS, SERIF, STONE, label, pagePad, serif } from '../theme';
 import { HandleField, MoreMenu, Notice, TextField } from './Overlays';
 
 const screen = (overflowY: CSSProperties['overflowY'] = 'auto'): CSSProperties => ({ position: 'absolute', inset: '0 0 var(--tabbar, 0px) 0', zIndex: 4, background: PAPER, overflowX: 'hidden', overflowY });
@@ -225,12 +225,29 @@ function ShelfBook({ pb, zone }: { pb: V; zone: number }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
         <span style={{ ...serif(20, 1.15, 'normal'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pb.name}</span>
         <span style={{ fontSize: 13, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pb.count}</span>
-        {pb.moveTo && (
-          <select value={pb.col} onClick={e => e.stopPropagation()} onChange={e => pb.moveTo(e.target.value)} aria-label={`Collection for ${pb.name}`} style={{ marginTop: 4, maxWidth: '100%', height: 30, padding: '0 6px', border: '1px solid rgba(var(--ink-rgb),.2)', borderRadius: 2, background: PAPER, color: INK, font: `500 12px ${SANS}`, cursor: 'pointer' }}>
-            <option value="">No collection</option>
-            {pb.cols.map((c: string) => <option key={c} value={c}>{c}</option>)}
-            <option value="__new">New collection…</option>
-          </select>
+        {pb.moveTo && (pb.native
+          // Phones keep the system picker, which suits touch.
+          ? <select value={pb.col} onClick={e => e.stopPropagation()} onChange={e => pb.moveTo(e.target.value)} aria-label={`Collection for ${pb.name}`} style={{ marginTop: 4, maxWidth: '100%', height: 34, padding: '0 6px', border: '1px solid rgba(var(--ink-rgb),.2)', borderRadius: 2, background: PAPER, color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>
+              <option value="">No collection</option>
+              {pb.cols.map((c: string) => <option key={c} value={c}>{c}</option>)}
+              <option value="__new">New collection…</option>
+            </select>
+          : <span style={{ position: 'relative', alignSelf: 'flex-start', marginTop: 4 }} onClick={e => e.stopPropagation()}>
+              <button onClick={pb.toggleMenu} aria-haspopup="menu" aria-expanded={pb.menuOpen} className={hover(`border-color:${INK}`)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: 180, height: 30, padding: '0 10px', border: '1px solid rgba(var(--ink-rgb),.2)', borderRadius: 2, background: 'none', color: pb.col ? INK : MUTED, font: `500 12px ${SANS}`, cursor: 'pointer' }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pb.col || 'Add to collection'}</span><span aria-hidden="true">▾</span>
+              </button>
+              {pb.menuOpen && (
+                <span role="menu" style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 30, display: 'flex', flexDirection: 'column', minWidth: 200, padding: 6, background: PAPER, border: `1px solid ${INK}`, boxShadow: '0 12px 30px rgba(34,35,32,.14)' }}>
+                  {[['', 'No collection'], ...pb.cols.map((c: string) => [c, c])].map(([c, l]: string[]) => (
+                    <button key={c || '-'} role="menuitemradio" aria-checked={pb.col === c} onClick={() => pb.moveTo(c)} className={hover('background:rgba(var(--ink-rgb),.07)')} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, textAlign: 'left', padding: '9px 10px', border: 'none', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>
+                      <span>{l}</span>{pb.col === c && <span style={{ color: MARK }}>✓</span>}
+                    </button>
+                  ))}
+                  <span style={{ height: 1, margin: '4px 0', background: 'rgba(var(--ink-rgb),.12)' }} />
+                  <button role="menuitem" onClick={() => pb.moveTo('__new')} className={hover('background:rgba(var(--ink-rgb),.07)')} style={{ textAlign: 'left', padding: '9px 10px', border: 'none', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>+ New collection…</button>
+                </span>
+              )}
+            </span>
         )}
       </div>
     </div>
@@ -289,7 +306,7 @@ export function Profile({ v }: { v: V }) {
   );
   return (
     <div style={screen()}>
-      <div style={{ maxWidth: 1120, margin: '0 auto', padding: `${mob ? 72 : 100}px ${v.pfPadX}px 56px`, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: mob ? 24 : 32 }}>
+      <div style={{ ...pagePad(mob, 56), display: 'flex', flexDirection: 'column', gap: mob ? 24 : 32 }}>
         {header}
 
         <section style={{ display: 'flex', flexDirection: 'column', gap: mob ? 20 : 28 }}>
@@ -335,7 +352,7 @@ export function Profile({ v }: { v: V }) {
           ) : <div style={{ fontSize: 14, color: MUTED }}>You’re not following anyone yet. Follow artists from their profile to see their new pages on your home shelf.</div>)}
           {(v.pfBooks.length > 0 || v.pfShowNew) && (
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${mob ? 140 : 180}px, 1fr))`, gap: mob ? '28px 16px' : '40px 28px' }}>
-              {v.pfBooks.map((pb: V) => <ShelfBook key={pb.key} pb={pb.moveTo ? { ...pb, cols: v.pfColl || [] } : pb} zone={zone} />)}
+              {v.pfBooks.map((pb: V) => <ShelfBook key={pb.key} pb={pb.moveTo ? { ...pb, cols: v.pfColl || [], native: v.isTouch || mob, menuOpen: v.colMenu === pb.key, toggleMenu: () => v.toggleColMenu(pb.key) } : pb} zone={zone} />)}
               {v.pfShowNew && (
                 <div onClick={v.pfNew} style={{ display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer', minWidth: 0 }}>
                   <div style={{ height: zone, display: 'flex', alignItems: 'flex-end' }}>
@@ -365,7 +382,7 @@ export function AuthPage({ v }: { v: V }) {
   const mob = !v.notMob;
   return (
     <div style={screen()}>
-      <div style={{ maxWidth: 1080, margin: '0 auto', boxSizing: 'border-box', padding: `${mob ? 96 : 140}px ${mob ? 16 : 40}px 48px`, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,360px),1fr))', gap: mob ? '40px' : '48px 96px', alignItems: 'start' }}>
+      <div style={{ ...pagePad(mob), display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,360px),1fr))', gap: mob ? '40px' : '48px 96px', alignItems: 'start' }}>
         <section style={{ display: 'flex', flexDirection: 'column', gap: 24, minWidth: 0 }}>
           <div style={{ display: 'flex', gap: 14, alignItems: 'center', ...label() }}><span style={{ color: MARK }}>{v.suKicker}</span><span style={{ width: 40, height: 1, background: STONE }} /><span>verso.</span></div>
           <h1 style={{ margin: 0, ...serif(mob ? 56 : 96, .94, '-.025em'), textWrap: 'balance' } as CSSProperties}>{AUTH_HEAD[v.suMode]}</h1>
@@ -432,7 +449,7 @@ export function Settings({ v }: { v: V }) {
   const f = v.acF, on = v.onAc, mob = !v.notMob;
   return (
     <div style={screen()}>
-      <div style={{ maxWidth: 1080, margin: '0 auto', boxSizing: 'border-box', padding: `${mob ? 84 : 108}px ${mob ? 16 : 40}px 48px`, display: 'flex', flexDirection: 'column', gap: 32 }}>
+      <div style={{ ...pagePad(mob), display: 'flex', flexDirection: 'column', gap: 32 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button onClick={v.closeSettings} className={'tap ' + hoverText} style={{ alignSelf: 'flex-start', padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(INK) }}>← Your profile</button>
           <h1 style={{ margin: 0, ...serif(mob ? 44 : 64, 1, '-.02em') }}>Account <em>settings</em></h1>

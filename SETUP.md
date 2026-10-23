@@ -59,6 +59,10 @@ npm run dev:emulators    # terminal 2
 11. **Budget alert**: Google Cloud console → Billing → **Budgets & alerts** → Create budget
     (e.g. a small monthly amount with emails at 50%, 90% and 100%).
 
+12. **Email links on verso's own page**: Authentication → **Templates** → any template → pencil →
+    **Customize action URL** → `https://<your-domain>/auth/action` → Save (it applies to all
+    templates). Confirm-email, reset-password and change-email links then open verso's page.
+
 ## Vercel
 
 Project → Settings → **Environment Variables**: add the six `VITE_FIREBASE_*` variables for
