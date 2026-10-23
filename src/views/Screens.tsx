@@ -207,12 +207,13 @@ export function Profile({ v }: { v: V }) {
               {v.pfStats.map((st: V) => <span key={st.l} style={{ fontSize: 14, color: 'rgba(34,35,32,.7)' }}><b style={{ color: INK, fontWeight: 600 }}>{st.n}</b> {st.l}</span>)}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 10, flexShrink: 0, paddingTop: v.pfInfoTop }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: v.pfJust, flexShrink: 0, paddingTop: v.pfInfoTop }}>
             {v.pfMine && (
               <>
                 <button onClick={v.editProfile} className={hoverMark} style={actionBtn(true)}>Edit profile</button>
                 <button onClick={v.togglePreview} className={hover('background:rgba(34,35,32,.1)')} style={actionBtn(false)}>View as public</button>
                 <button onClick={v.openSettings} className={hover('background:rgba(34,35,32,.1)')} style={actionBtn(false)}>Settings</button>
+                <button onClick={v.signOut} className={hover(`color:${MARK}`)} style={{ ...actionBtn(false), border: 'none', padding: '0 6px' }}>Sign out</button>
               </>
             )}
             {v.pfPreviewing && <button onClick={v.togglePreview} className={hoverMark} style={actionBtn(true)}>Exit preview</button>}
@@ -360,7 +361,10 @@ export function Settings({ v }: { v: V }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button onClick={v.closeSettings} className={hoverText} style={{ alignSelf: 'flex-start', padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(INK) }}>← Your profile</button>
           <h1 style={{ margin: 0, ...serif(mob ? 44 : 64, 1, '-.02em') }}>Account <em>settings</em></h1>
-          <span style={{ fontSize: 14, color: MUTED }}>Signed in as {v.acEmail}</span>
+          <span style={{ display: 'flex', gap: 14, alignItems: 'baseline', flexWrap: 'wrap', fontSize: 14, color: MUTED }}>
+            Signed in as {v.acEmail}
+            <button onClick={v.signOut} className={hoverLine} style={underlineBtn(14)}>Sign out</button>
+          </span>
         </div>
         {(v.acErr || v.acInfo) && <Notice err={v.acErr} info={v.acInfo} />}
         <SettingsSection title="Email" note={v.acVerified ? 'Your email is confirmed.' : <>Not confirmed yet. Open the link we sent to <b style={{ fontWeight: 600 }}>{v.acEmail}</b>.</>}>
