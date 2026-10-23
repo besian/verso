@@ -147,6 +147,28 @@ export default class App extends Component<object, State> {
     }).catch(e => console.error(e));
   }
   community(): OtherBook[] { return this.state.community || []; }
+  /** Decoded images kept alive so turns, zooms and the focus backdrop never wait on a download. */
+  preloaded = new Map<string, HTMLImageElement>();
+  preload(urls: (string | null | undefined)[]) {
+    for (const u of urls) {
+      if (!u || this.preloaded.has(u)) continue;
+      if (this.preloaded.size > 400) this.preloaded.delete(this.preloaded.keys().next().value!);
+      const im = new Image(); im.decoding = 'async'; im.src = this.blobUrl(u);
+      im.decode?.().catch(() => {});
+      this.preloaded.set(u, im);
+    }
+  }
+  componentDidUpdate(_: object, prev: State) {
+    const s = this.state;
+    // Pages of the open book, nearest to the current spread first.
+    if (s.images !== prev.images || s.other !== prev.other) {
+      const at = Math.max(0, 2 * Math.round(this.target) - 2);
+      this.preload([...s.images].map((u, i) => [u, Math.abs(i - at)] as const).sort((x, y) => x[1] - y[1]).map(x => x[0]));
+      this.preload([(s.other || s.books[s.active])?.coverImg]);
+    }
+    if (s.books !== prev.books) this.preload(s.books.map(b => b.coverImg));
+    if (s.community !== prev.community) this.preload((s.community || []).flatMap(b => [b.coverImg, b.images[0]]));
+  }
   componentWillUnmount() {
     removeEventListener('resize', this.onResize); removeEventListener('keydown', this.onKey);
     this.unAuth?.(); this.ro?.disconnect(); cancelAnimationFrame(this.raf); cancelAnimationFrame(this.exRaf);

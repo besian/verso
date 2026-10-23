@@ -153,7 +153,7 @@ function Book3D({ v }: { v: V }) {
         <div style={{ position: 'absolute', top: 3, bottom: -3, left: v.bodyBack ? -4 : 4, right: v.bodyBack ? 4 : -4, borderRadius: v.bodyBack ? '9px 2px 2px 9px' : '2px 9px 9px 2px', background: PAGE_EDGES }} />
       </div>
       {v.leaves.map((leaf: V) => (
-        <div key={leaf.key} style={{ position: 'absolute', left: 0, top: 0, width: v.W, height: v.H, transformOrigin: '0 50%', transformStyle: 'preserve-3d', transform: leaf.transform }}>
+        <div key={leaf.key} style={{ position: 'absolute', left: 0, top: 0, width: v.W, height: v.H, transformOrigin: '0 50%', transformStyle: 'preserve-3d', transform: leaf.transform, willChange: 'transform' }}>
           {leaf.curl
             ? <CurledLeaf leaf={leaf} W={v.W} H={v.H} />
             : <><FrontFace leaf={leaf} onClick={leaf.openFront} /><BackFace leaf={leaf} onClick={leaf.openBack} /></>}
