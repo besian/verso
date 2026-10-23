@@ -9,6 +9,8 @@ import * as sound from './sound';
 import * as themeMode from './themeMode';
 import * as installer from './install';
 import { COVER_INSIDE, pageWear } from './wear';
+import { ADJUSTERS, NO_ADJUST, applyToCanvas, feValues, isAdjusted } from './adjust';
+import type { Adjust } from './adjust';
 import type { Wear } from './wear';
 import { INK, MARK, PAPER, STONE } from './theme';
 import Stage from './views/Stage';
@@ -29,6 +31,8 @@ export type V = Record<string, any>;
 interface EditState {
   queue: string[]; i: number; replaceIdx: number | null; target?: 'cover';
   scale: number; rot: number; skx: number; sky: number; tx: number; ty: number; nw: number; nh: number;
+  /** Brightness, contrast and the rest (see adjust.ts), and which set of controls is showing. */
+  adj: Adjust; mode: 'fit' | 'adjust';
 }
 
 interface State {
@@ -50,7 +54,7 @@ interface State {
   vw: number; vh: number; sw?: number; sh?: number;
   switching?: boolean; car?: number; swT?: number;
   focus?: boolean; fz?: number; fside?: 'L' | 'R'; fsx?: number; ctrlShow?: boolean; menuOpen?: boolean;
-  edit?: EditState | null; edTool?: string;
+  edit?: EditState | null; edTool?: string; edAdjTool?: string; edPeek?: boolean;
   newPick?: boolean; pickShape?: ShapeKey;
   /** Sign-in page: which form, and the screen to return to. */
   authFrom?: Mode; suMode?: 'join' | 'signin' | 'reset'; su?: { name: string; handle: string; email: string; pw: string } | null; suHT?: boolean;
@@ -743,7 +747,7 @@ export default class App extends Component<object, State> {
 
   // ---------- fit-your-page editor ----------
   startEdit(queue: string[], replaceIdx: number | null, target?: 'cover') {
-    this.setState({ edit: { queue, i: 0, replaceIdx, target, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0 } });
+    this.setState({ edit: { queue, i: 0, replaceIdx, target, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, adj: NO_ADJUST, mode: 'fit' } });
     this.loadEditImg(queue[0]);
   }
   loadEditImg(src: string) {
@@ -777,6 +781,7 @@ export default class App extends Component<object, State> {
     ctx.translate(outW / 2 + e.tx * k, outH / 2 + e.ty * k); ctx.rotate(e.rot * r); ctx.scale(e.scale, e.scale);
     ctx.transform(1, Math.tan(e.sky * r), Math.tan(e.skx * r), 1, 0, 0);
     ctx.drawImage(im, -bw * k / 2, -bh * k / 2, bw * k, bh * k);
+    applyToCanvas(c, e.adj);
     const url = c.toDataURL('image/jpeg', 0.9), images = [...this.state.images];
     if (e.target === 'cover') { this.updateBook({ coverImg: url }); this.setState({ edit: null }); return; }
     let patch: Partial<Book> = {};
@@ -791,6 +796,7 @@ export default class App extends Component<object, State> {
   nextEdit() {
     const e = this.state.edit; if (!e) return; const i = e.i + 1;
     if (i >= e.queue.length || e.replaceIdx != null) { this.setState({ edit: null }); cancelAnimationFrame(this.raf); this.target = Math.round(this.target); this.setState({ p: this.target }); return; }
+    // The next image keeps the same adjustments: a batch of scans usually needs the same fix.
     this.setState({ edit: { ...e, i, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0 } }); this.loadEditImg(e.queue[i]);
   }
 
@@ -1192,7 +1198,13 @@ export default class App extends Component<object, State> {
       scaleLbl: `${Math.round(ed.scale * 100)}%`, rotLbl: `${ed.rot}°`, skxLbl: `${ed.skx}°`, skyLbl: `${ed.sky}°`,
       onScale: num('scale'), onRot: num('rot'), onSkx: num('skx'), onSky: num('sky'),
       rot90: () => this.setEd({ rot: ((ed.rot + 90 + 180) % 360) - 180 }),
-      resetEd: () => this.setEd({ scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0 }),
+      resetEd: () => ed.mode === 'adjust' ? this.setEd({ adj: NO_ADJUST }) : this.setEd({ scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0 }),
+      edMode: ed.mode, setEdMode: (mode: 'fit' | 'adjust') => this.setEd({ mode }),
+      edAdjTool: this.state.edAdjTool || 'white', setEdAdjTool: (t: string) => this.setState({ edAdjTool: t }),
+      edPeek: !!this.state.edPeek, peekOn: () => this.setState({ edPeek: true }), peekOff: () => this.state.edPeek && this.setState({ edPeek: false }),
+      edFx: feValues(ed.adj), edAdjusted: isAdjusted(ed.adj),
+      edAdj: ADJUSTERS.map(([k, label, min, max]) => ({ key: k, label, min, max, value: ed.adj[k], lbl: (ed.adj[k] > 0 && min < 0 ? '+' : '') + ed.adj[k],
+        onChange: (e: ChangeEvent<HTMLInputElement>) => { const v = Math.round(parseFloat(e.target.value)); this.setState(s => s.edit ? { edit: { ...s.edit, adj: { ...s.edit.adj, [k]: Math.abs(v) < 3 ? 0 : v } } } : null); } })),
       applyEdit: () => this.applyEdit(), skipEdit: () => this.nextEdit(), cancelEdit: () => this.setState({ edit: null }),
       applyLbl: ed.target === 'cover' ? 'Save cover' : ed.replaceIdx != null ? 'Save page' : 'Add to sketchbook',
       // One pointer drags the image; two pinch to zoom and twist to rotate.
