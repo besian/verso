@@ -95,7 +95,7 @@ export async function signUp(email: string, pw: string, name: string, handle: st
   const { auth: a } = need();
   if (!(await handleFree(handle))) throw Object.assign(new Error('handle taken'), { code: 'handle-taken' });
   const cred = await createUserWithEmailAndPassword(a, email, pw);
-  sendEmailVerification(cred.user).catch(() => {});
+  sendVerification(cred.user).catch(e => console.warn('verification email', e));
   const profile: Omit<Account, 'uid' | 'email'> = { name, handle, bio: '', loc: '', web: '', accent: '#C9C3B4', av: null, joined: Date.now() };
   try {
     await writeProfile(cred.user.uid, profile, null);
@@ -517,7 +517,13 @@ async function reauth(pw: string) {
   return u;
 }
 
-export async function resendVerification() { const u = need().auth.currentUser; if (u) await sendEmailVerification(u); }
+/** Sends the confirmation email; its link leads back to verso. (Falls back to Firebase's own page
+ *  if this domain isn't in Authentication → Settings → Authorized domains.) */
+async function sendVerification(u: User) {
+  try { await sendEmailVerification(u, { url: location.origin + '/settings' }); }
+  catch (e) { if ((e as { code?: string }).code !== 'auth/unauthorized-continue-uri') throw e; await sendEmailVerification(u); }
+}
+export async function resendVerification() { const u = need().auth.currentUser; if (u) await sendVerification(u); }
 
 /** Reloads the signed-in user and reports whether their email is confirmed. */
 export async function refreshVerified(): Promise<boolean> { const u = need().auth.currentUser; if (!u) return false; await u.reload(); return u.emailVerified; }

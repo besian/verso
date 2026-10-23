@@ -137,6 +137,7 @@ export default class App extends Component<object, State> {
     this.onResize();
     requestAnimationFrame(this.onResize);
     addEventListener('resize', this.onResize); addEventListener('keydown', this.onKey); addEventListener('popstate', this.onPop);
+    document.addEventListener('visibilitychange', this.onFocus); addEventListener('focus', this.onFocus);
     this.unAuth = api.watchAuth(u => { if (!this.signingUp) this.loadUser(u); });
     this.loadCommunity();
     api.bannedUsers().then(banned => this.setState({ banned }));
@@ -158,6 +159,7 @@ export default class App extends Component<object, State> {
       if (fresh) books = [{ id: api.newBookId(), name: 'sketchbook', color: '#b8243a', images: [], createdAt: Date.now() }];
       this.target = 0;
       // Signed-in visitors start on their own sketchbooks rather than the home page.
+      if (!u.verified && !acct) this.checkVerified();
       this.setState(s => ({ acct: a, verified: acct ? false : !!u.verified, follows, saved, blocked, books, active: 0, images: books[0].images, p: 0, authReady: true, mode: this.routed && (s.mode === 'home' || s.mode === 'auth') ? 'mine' : s.mode }),
         () => { if (fresh || legacy) this.persist(books); this.backfillThumbs(); this.loadFollowFeed(); api.mirrorFollows(u.uid, follows).catch(e => console.warn('follower backfill', e));
           api.isAdmin(u.uid).then(admin => this.setState({ admin }, () => { if (admin && this.state.mode === 'admin') this.loadReports(); })); });
@@ -168,6 +170,12 @@ export default class App extends Component<object, State> {
   }
   /** Explore loads public books a page at a time; `more` fetches the next page. */
   exCursor: api.Cursor = null; exGen = 0;
+  /** The saved sign-in doesn't learn about a confirmed email until it's reloaded, so check quietly. */
+  checkVerified = () => {
+    if (!this.state.acct || this.state.verified === true) return;
+    api.refreshVerified().then(ok => { if (ok) this.setState({ verified: true }); }).catch(() => {});
+  };
+  onFocus = () => { if (document.visibilityState === 'visible') this.checkVerified(); };
   loadCommunity(more = false) {
     const s = this.state, sort = s.exSort || 'trending';
     if (more && (s.exBusy || !s.exMore)) return;
@@ -296,6 +304,7 @@ export default class App extends Component<object, State> {
   componentWillUnmount() {
     this.watches.forEach(stop => stop());
     removeEventListener('resize', this.onResize); removeEventListener('keydown', this.onKey); removeEventListener('popstate', this.onPop);
+    document.removeEventListener('visibilitychange', this.onFocus); removeEventListener('focus', this.onFocus);
     this.unAuth?.(); this.ro?.disconnect(); cancelAnimationFrame(this.raf); cancelAnimationFrame(this.exRaf);
   }
   stageRef = (el: HTMLDivElement | null) => {
@@ -768,7 +777,6 @@ export default class App extends Component<object, State> {
         const stats = [...p.stats, [fol, fol === 1 ? 'follower' : 'followers'], [lk, lk === 1 ? 'like' : 'likes']] as [number, string][];
         return {
           pfStats: stats.map(([n, l]) => ({ n: fmtK(n), l })),
-          pfGoals: mine && !pv ? [['Likes', lk], ['Followers', fol]].map(([l, n]) => ({ key: l as string, label: l as string, n: n as number, goal: GOAL, pct: Math.min(100, Math.round((n as number) / GOAL * 100)), done: (n as number) >= GOAL })) : null,
         };
       })(), pfBooks: list, pfCount: String(list.length), pfBooksLbl: mine && !pv ? 'Your sketchbooks' : 'Sketchbooks',
       pfMine: mine && !pv, pfPreviewing: pv, pfOther: !mine, pfShowNew: mine && !pv && (s.pfTab || 'books') === 'books',
