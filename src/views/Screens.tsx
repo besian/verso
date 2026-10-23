@@ -401,6 +401,14 @@ export function Settings({ v }: { v: V }) {
             <button type="submit" disabled={v.acBusy === 'password'} style={{ ...formBtn(), opacity: v.acBusy === 'password' ? 0.6 : 1 }}>{v.acBusy === 'password' ? 'Saving…' : 'Change password'}</button>
           </form>
         </SettingsSection>
+        <SettingsSection title="Appearance" note="Dark keeps your sketchbooks on paper, on a desk at night.">
+          <div role="radiogroup" aria-label="Theme" style={{ display: 'flex', gap: 2, padding: 3, border: '1px solid rgba(var(--ink-rgb),.2)', alignSelf: 'flex-start' }}>
+            {([['light', 'Light'], ['dark', 'Dark']] as const).map(([k, l]) => {
+              const on = (k === 'dark') === v.isDark;
+              return <button key={k} role="radio" aria-checked={on} onClick={() => v.setTheme(k)} style={{ height: 36, padding: '0 20px', border: 'none', borderRadius: 2, background: on ? INK : 'transparent', color: on ? PAPER : INK, font: `500 14px ${SANS}`, cursor: 'pointer' }}>{l}</button>;
+            })}
+          </div>
+        </SettingsSection>
         <SettingsSection title="App" note="Install verso to open it from your home screen or dock, full screen, like any other app.">
           {v.inInstalled ? <span style={{ fontSize: 14, color: MUTED }}>You’re using the installed app.</span>
             : v.inCanPrompt ? <button onClick={v.inInstall} style={formBtn()}>Install verso</button>

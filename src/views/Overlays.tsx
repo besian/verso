@@ -103,73 +103,142 @@ export function NewBookPicker({ v }: { v: V }) {
   );
 }
 
-const smallBtn: CSSProperties = { height: 28, borderRadius: 2, border: 'none', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' };
-const arrowSm: CSSProperties = { ...smallBtn, width: 28, borderRadius: '50%', fontSize: 14 };
-const hoverSm = hover('background:rgba(var(--ink-rgb),.12)');
+const chip = (on: boolean): CSSProperties => ({ height: 32, padding: '0 13px', borderRadius: 16, border: `1px solid ${on ? INK : 'rgba(var(--ink-rgb),.25)'}`, background: on ? INK : 'transparent', color: on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 });
+const sectionLbl: CSSProperties = { fontSize: 13, fontWeight: 500, color: INK };
+const hint: CSSProperties = { fontSize: 13, lineHeight: 1.45, color: 'rgba(var(--ink-rgb),.6)' };
+const Row = ({ label, note, children }: { label: string; note?: ReactNode; children: ReactNode }) => (
+  <section style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 22, borderBottom: '1px solid rgba(var(--ink-rgb),.1)' }}>
+    <span style={sectionLbl}>{label}</span>
+    {children}
+    {note && <span style={hint}>{note}</span>}
+  </section>
+);
 
-/** The Pages screen: every page as a thumbnail to edit, remove, reorder or add to, plus name and cover. */
+/** Edit a sketchbook. Changes stay a draft until Save; Cancel puts everything back.
+ *  Pages: the drawings (tap one for its caption, date and actions). Details: cover, visibility,
+ *  mediums, tags. Share: draw together with one other person. */
 export function Manager({ v }: { v: V }) {
+  const tabs = ([['pages', 'Pages'], ['details', 'Details'], ...(v.canShare ? [['share', 'Share']] : [])] as [string, string][]);
+  const pad = v.notMob ? 40 : 16, pg = v.mgPage != null ? v.pagesList[v.mgPage] : null;
   return (
-    <div onDragOver={v.onDragOver} onDrop={v.onDrop} style={{ position: 'absolute', inset: 0, background: PAPER, zIndex: 15, overflow: 'auto' }}>
-      {/* Same side padding and full width as Explore. */}
-      <div style={{ boxSizing: 'border-box', padding: `${v.notMob ? 28 : 18}px ${v.notMob ? 40 : 16}px 40px`, display: 'flex', flexDirection: 'column', gap: v.notMob ? 28 : 22 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
-          <button onClick={v.closeManager} style={{ height: 36, padding: '0 16px', borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer' }}>← Done</button>
-          {v.isCollab
-            ? <button onClick={v.shLeave} disabled={v.shBusy} className={hover(`background:${MARK};color:${PAPER}`)} style={{ height: 36, padding: '0 14px', borderRadius: 2, border: `1.5px solid ${MARK}`, background: 'none', color: MARK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Leave sketchbook</button>
-            : <button onClick={v.deleteBook} className={hover(`background:${MARK};color:${PAPER}`)} style={{ height: 36, padding: '0 14px', borderRadius: 2, border: `1.5px solid ${MARK}`, background: 'none', color: MARK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Delete sketchbook</button>}
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 340px', minWidth: 'min(100%, 280px)' }}>
-            <input value={v.bookName} onChange={v.onName} readOnly={v.isCollab} style={{ background: 'none', border: 'none', borderBottom: '1.5px solid rgba(var(--ink-rgb),.25)', color: INK, font: `500 ${v.notMob ? 34 : 28}px ${SANS}`, letterSpacing: '-.02em', padding: '0 0 4px', outline: 'none', boxSizing: 'border-box', width: '100%', maxWidth: 480 }} />
-            <div style={{ fontSize: 13, color: 'rgba(var(--ink-rgb),.7)' }}>{v.blankNote} · drag to reorder</div>
-            {v.isCollab
-              ? <div style={{ marginTop: 8, fontSize: 13, color: 'rgba(var(--ink-rgb),.7)' }}>{v.shOwner}’s sketchbook ({v.shOwnerHandle}), shared with you. You can add, edit and caption pages; {v.shOwner} looks after the rest.</div>
-              : <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
-              <div role="radiogroup" aria-label="Who can see this sketchbook" style={{ display: 'flex', gap: 2, padding: 3, border: '1px solid rgba(var(--ink-rgb),.2)', opacity: v.bookHidden ? 0.45 : 1 }}>
-                {([[true, 'Public'], [false, 'Private']] as const).map(([on, name]) => (
-                  <button key={name} role="radio" aria-checked={v.bookPublic === on} disabled={v.bookHidden} onClick={() => v.setPublic(on)} style={{ height: 30, padding: '0 14px', border: 'none', borderRadius: 2, background: v.bookPublic === on ? INK : 'transparent', color: v.bookPublic === on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: v.bookHidden ? 'not-allowed' : 'pointer' }}>{name}</button>
-                ))}
-              </div>
-              <span style={{ fontSize: 13, color: v.bookHidden ? MARK : 'rgba(var(--ink-rgb),.7)' }}>{v.bookHidden ? 'Hidden by moderators for breaking the terms. Only you can see it.' : v.bookPublic ? 'Anyone can find it in Explore and on your profile.' : 'Only you can see it.'}</span>
-            </div>}
+    <div onDragOver={v.onDragOver} onDrop={v.onDrop} style={{ position: 'absolute', inset: 0, background: PAPER, zIndex: 15, display: 'flex', flexDirection: 'column' }}>
+      <header style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 12, padding: `${v.notMob ? 18 : 12}px ${pad}px`, borderBottom: '1px solid rgba(var(--ink-rgb),.12)' }}>
+        <button onClick={v.mgCancel} className={hover(`color:${MARK}`)} style={{ justifySelf: 'start', height: 40, padding: '0 4px', border: 'none', background: 'none', color: INK, font: `500 15px ${SANS}`, cursor: 'pointer' }}>Cancel</button>
+        <span style={{ font: `400 ${v.notMob ? 24 : 20}px/1 ${SERIF}` }}>Edit sketchbook</span>
+        <button onClick={v.mgSave} className={hover(`background:${MARK}`)} style={{ justifySelf: 'end', height: 40, padding: '0 22px', borderRadius: 2, border: 'none', background: v.mgChanged ? MARK : INK, color: PAPER, font: `500 15px ${SANS}`, cursor: 'pointer', transition: 'background .2s' }}>Save</button>
+      </header>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto', boxSizing: 'border-box', padding: `${v.notMob ? 28 : 18}px ${pad}px 48px`, display: 'flex', flexDirection: 'column', gap: v.notMob ? 24 : 18 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <input value={v.bookName} onChange={v.onName} readOnly={v.isCollab} aria-label="Sketchbook name" className={v.isCollab ? undefined : focus(`border-color:${INK}`)} style={{ background: 'none', border: 'none', borderBottom: `1.5px solid ${v.isCollab ? 'transparent' : 'rgba(var(--ink-rgb),.2)'}`, color: INK, font: `400 ${v.notMob ? 48 : 36}px/1.1 ${SERIF}`, letterSpacing: '-.01em', padding: '0 0 4px', outline: 'none', width: '100%', maxWidth: 560, boxSizing: 'border-box' }} />
+            <span style={hint}>{v.mgSummary}</span>
           </div>
-          {!v.isCollab && <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13, color: 'rgba(var(--ink-rgb),.7)' }}>Cover</span>
-            {v.swatches.map((s: V) => <button key={s.key} onClick={s.pick} aria-label={`Cover colour ${s.c}`} style={{ width: 24, height: 24, borderRadius: '50%', border: 'none', background: s.c, boxShadow: s.ring, cursor: 'pointer', padding: 0 }} />)}
-            <button onClick={v.pickCover} className={hoverTint} style={{ ...ghostBtn, height: 30, padding: '0 12px', marginLeft: 6 }}>Upload cover</button>
-            {v.hasCoverImg && <button onClick={v.removeCover} style={{ ...linkBtn(MARK), padding: '0 4px' }}>Remove</button>}
-            <input ref={v.coverRef} type="file" accept="image/*" onChange={v.onCoverFile} style={{ display: 'none' }} />
-          </div>}
+          <div role="tablist" style={{ display: 'flex', gap: 24, borderBottom: '1px solid rgba(var(--ink-rgb),.15)' }}>
+            {tabs.map(([k, l]) => (
+              <button key={k} role="tab" aria-selected={v.mgTab === k} onClick={() => v.setMgTab(k)} style={{ padding: '0 0 10px', marginBottom: -1, border: 'none', borderBottom: `2px solid ${v.mgTab === k ? INK : 'transparent'}`, background: 'none', color: v.mgTab === k ? INK : 'rgba(var(--ink-rgb),.5)', font: `500 15px ${SANS}`, cursor: 'pointer' }}>{l}</button>
+            ))}
+          </div>
+
+          {v.mgTab === 'pages' && (
+            <>
+              <span style={hint}>Tap a page to caption or change it. Drag to reorder.</span>
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill,minmax(${v.notMob ? 160 : 120}px,1fr))`, gap: v.notMob ? 22 : 14 }}>
+                {v.pagesList.map((p: V, i: number) => (
+                  <div key={i} draggable onDragStart={p.dragStart} onDragOver={p.dragOver} onDrop={p.drop} onClick={() => v.openPage(i)} style={{ display: 'flex', flexDirection: 'column', gap: 8, cursor: 'pointer', minWidth: 0 }}>
+                    <div className={hover(`box-shadow:0 0 0 2px ${INK},0 10px 24px rgba(10,10,30,.3)`)} style={{ position: 'relative', aspectRatio: v.pgAspect, borderRadius: '2px 8px 8px 2px', background: p.bg, boxShadow: '0 10px 24px rgba(10,10,30,.3)' }}>
+                      <span style={{ position: 'absolute', left: 8, top: 8, minWidth: 22, height: 22, padding: '0 6px', boxSizing: 'border-box', borderRadius: 11, background: 'rgba(246,242,233,.92)', color: '#222320', font: `500 12px/22px ${SANS}`, textAlign: 'center' }}>{p.num}</span>
+                    </div>
+                    <span style={{ fontSize: 13, color: p.caption ? INK : 'rgba(var(--ink-rgb),.45)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontStyle: p.caption ? 'italic' : 'normal' }}>{p.caption || 'Add a caption'}</span>
+                  </div>
+                ))}
+                <button onClick={v.pick} className={hover(`border-color:${INK};color:${INK}`)} style={{ aspectRatio: v.pgAspect, borderRadius: '2px 8px 8px 2px', border: '2px dashed rgba(var(--ink-rgb),.3)', background: 'none', display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', justifyContent: 'center', color: 'rgba(var(--ink-rgb),.7)', font: `500 14px ${SANS}`, cursor: 'pointer', padding: 12 }}>
+                  <span style={{ fontSize: 28, fontWeight: 300, lineHeight: 1 }}>+</span>Add pages
+                  <span style={{ fontSize: 12, fontWeight: 400, color: 'rgba(var(--ink-rgb),.55)' }}>or drop images</span>
+                </button>
+              </div>
+            </>
+          )}
+
+          {v.mgTab === 'details' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 22, maxWidth: 640 }}>
+              {v.isCollab ? (
+                <Row label="Shared with you">
+                  <span style={{ fontSize: 14, lineHeight: 1.5 }}>This is {v.shOwner}’s sketchbook ({v.shOwnerHandle}). You can add, caption and change pages; {v.shOwner} looks after the rest.</span>
+                  <button onClick={v.shLeave} disabled={v.shBusy} style={{ ...linkBtn(MARK), alignSelf: 'flex-start' }}>Leave sketchbook</button>
+                </Row>
+              ) : (
+                <>
+                  <Row label="Cover">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      {v.swatches.map((c: V) => <button key={c.key} onClick={c.pick} aria-label={`Cover colour ${c.c}`} style={{ width: 28, height: 28, borderRadius: '50%', border: 'none', background: c.c, boxShadow: c.ring, cursor: 'pointer', padding: 0 }} />)}
+                      <button onClick={v.pickCover} className={hoverTint} style={{ ...ghostBtn, height: 32, padding: '0 12px', marginLeft: 4 }}>{v.hasCoverImg ? 'Change image' : 'Use an image'}</button>
+                      {v.hasCoverImg && <button onClick={v.removeCover} style={linkBtn(MARK)}>Remove image</button>}
+                      <input ref={v.coverRef} type="file" accept="image/*" onChange={v.onCoverFile} style={{ display: 'none' }} />
+                    </div>
+                  </Row>
+                  <Row label="Who can see it" note={v.bookHidden ? <span style={{ color: MARK }}>Hidden by moderators for breaking the terms. Only you can see it.</span> : v.bookPublic ? 'Anyone can find it in Explore and on your profile.' : 'Only you can see it.'}>
+                    <div role="radiogroup" aria-label="Who can see this sketchbook" style={{ display: 'flex', gap: 2, padding: 3, border: '1px solid rgba(var(--ink-rgb),.2)', alignSelf: 'flex-start', opacity: v.bookHidden ? 0.45 : 1 }}>
+                      {([[true, 'Public'], [false, 'Private']] as const).map(([on, name]) => (
+                        <button key={name} role="radio" aria-checked={v.bookPublic === on} disabled={v.bookHidden} onClick={() => v.setPublic(on)} style={{ height: 32, padding: '0 16px', border: 'none', borderRadius: 2, background: v.bookPublic === on ? INK : 'transparent', color: v.bookPublic === on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: v.bookHidden ? 'not-allowed' : 'pointer' }}>{name}</button>
+                      ))}
+                    </div>
+                  </Row>
+                  <Row label="Mediums" note="Pick up to four. People can filter Explore by medium.">
+                    <div role="group" aria-label="Mediums" onWheel={wheelSideways} style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 2, maskImage: 'linear-gradient(90deg,#000 calc(100% - 32px),transparent)' } as CSSProperties}>
+                      {v.mgMediums.map((m: V) => <button key={m.key} onClick={m.pick} aria-pressed={m.on} className={m.on ? undefined : hover('border-color:rgba(var(--ink-rgb),.6)')} style={chip(m.on)}>{m.label}</button>)}
+                    </div>
+                  </Row>
+                  <Row label="Tags" note="Up to 8, e.g. portraits, lisbon, figure-drawing. Press Enter or a comma to add one.">
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, minHeight: 44, padding: '6px 8px', border: '1.5px solid rgba(var(--ink-rgb),.14)', background: 'rgba(var(--ink-rgb),.06)', boxSizing: 'border-box' }}>
+                      {v.mgTags.map((t: V) => (
+                        <span key={t.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, height: 28, padding: '0 4px 0 10px', borderRadius: 14, background: PAPER, border: '1px solid rgba(var(--ink-rgb),.2)', fontSize: 13 }}>
+                          {t.label}<button onClick={t.remove} aria-label={`Remove ${t.label}`} className={hover(`color:${MARK}`)} style={{ width: 22, height: 22, padding: 0, border: 'none', background: 'none', color: 'rgba(var(--ink-rgb),.6)', font: `500 15px/1 ${SANS}`, cursor: 'pointer' }}>×</button>
+                        </span>
+                      ))}
+                      {!v.mgTagFull && <input value={v.tagDraft} onChange={v.onTagDraft} onKeyDown={v.onTagKey} onBlur={v.commitTag} placeholder={v.mgTags.length ? 'Add a tag' : 'Add tags'} aria-label="Add a tag" style={{ flex: 1, minWidth: 120, height: 30, border: 'none', outline: 'none', background: 'none', color: INK, font: `500 14px ${SANS}` }} />}
+                    </div>
+                  </Row>
+                  <button onClick={v.deleteBook} className={hover('text-decoration:underline')} style={{ ...linkBtn(MARK), alignSelf: 'flex-start', padding: '4px 0' }}>Delete this sketchbook</button>
+                </>
+              )}
+            </div>
+          )}
+
+          {v.mgTab === 'share' && <div style={{ maxWidth: 640 }}><SharePanel v={v} /></div>}
         </div>
-        {!v.isCollab && <Labels v={v} />}
-        {v.canShare && <SharePanel v={v} />}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 20 }}>
-          {v.pagesList.map((pg: V, i: number) => (
-            <div key={i} draggable onDragStart={pg.dragStart} onDragOver={pg.dragOver} onDrop={pg.drop} style={{ display: 'flex', flexDirection: 'column', gap: 8, cursor: 'grab' }}>
-              <div onClick={pg.edit} className={hover(`box-shadow:0 0 0 2px ${INK},0 10px 24px rgba(10,10,30,.35)`)} style={{ aspectRatio: v.pgAspect, borderRadius: '2px 8px 8px 2px', background: pg.bg, boxShadow: '0 10px 24px rgba(10,10,30,.35)', cursor: 'pointer' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: 'rgba(var(--ink-rgb),.7)' }}>{pg.num}</span>
-                <div style={{ display: 'flex', gap: 2 }}>
-                  <button onClick={pg.left} title="Move earlier" className={hoverSm} style={arrowSm}>‹</button>
-                  <button onClick={pg.right} title="Move later" className={hoverSm} style={arrowSm}>›</button>
-                  <button onClick={pg.edit} className={hoverSm} style={{ ...smallBtn, padding: '0 8px' }}>Edit</button>
-                  <button onClick={pg.remove} className={hover('background:rgba(255,120,120,.15)')} style={{ ...smallBtn, padding: '0 8px', color: MARK }}>Remove</button>
-                </div>
-              </div>
-              {/* Written in the page's margin in the book. */}
-              <div draggable onDragStart={e => { e.preventDefault(); e.stopPropagation(); }} style={{ display: 'flex', flexDirection: 'column', gap: 4, cursor: 'auto' }}>
-                <input value={pg.caption} onChange={pg.onCaption} maxLength={140} placeholder="Caption" aria-label={`Caption for page ${pg.num}`} className={focusMark} style={noteField} />
-                <input type="date" value={pg.date} onChange={pg.onDate} aria-label={`Date for page ${pg.num}`} className={focusMark} style={{ ...noteField, color: pg.date ? INK : 'rgba(var(--ink-rgb),.5)' }} />
-              </div>
-            </div>
-          ))}
-          <div onClick={v.pick} style={{ display: 'flex', flexDirection: 'column', gap: 8, cursor: 'pointer' }}>
-            <div className={hover(`border-color:${INK}`)} style={{ aspectRatio: v.pgAspect, borderRadius: '2px 8px 8px 2px', border: '2px dashed rgba(var(--ink-rgb),.35)', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', color: 'rgba(var(--ink-rgb),.8)', fontSize: 14, fontWeight: 500, textAlign: 'center', padding: 12 }}>
-              <span style={{ fontSize: 28, fontWeight: 400 }}>+</span>
-              <span>Add pages</span>
-              <span style={{ fontSize: 12, color: 'rgba(var(--ink-rgb),.6)' }}>or drop images</span>
-            </div>
+      </div>
+      {pg && <PageSheet v={v} pg={pg} />}
+    </div>
+  );
+}
+
+/** One page: bigger preview, its caption and date, and what you can do with it. */
+function PageSheet({ v, pg }: { v: V; pg: V }) {
+  const act: CSSProperties = { ...ghostBtn, height: 40, padding: '0 14px', fontSize: 14 };
+  return (
+    <div onClick={e => { if (e.target === e.currentTarget) v.closePage(); }} style={{ position: 'absolute', inset: 0, zIndex: 2, background: 'rgba(var(--canvas-rgb),.88)', display: 'flex', alignItems: v.notMob ? 'center' : 'flex-end', justifyContent: 'center', padding: v.notMob ? 24 : 0 }}>
+      <div role="dialog" aria-label={`Page ${pg.num}`} style={{ background: PAPER, border: v.notMob ? `1px solid ${INK}` : 'none', borderTop: `1px solid ${INK}`, width: '100%', maxWidth: 720, maxHeight: '100%', overflowY: 'auto', boxSizing: 'border-box', padding: v.notMob ? 28 : '20px 16px calc(20px + env(safe-area-inset-bottom))', display: 'flex', gap: 24, flexDirection: v.notMob ? 'row' : 'column' }}>
+        <div style={{ flexShrink: 0, width: v.notMob ? 220 : '42%', alignSelf: v.notMob ? 'flex-start' : 'center', aspectRatio: v.pgAspect, borderRadius: '2px 8px 8px 2px', background: pg.bg, boxShadow: '0 10px 24px rgba(10,10,30,.3)' }} />
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <span style={{ font: `400 28px/1 ${SERIF}` }}>Page {pg.num}</span>
+            <span style={hint}>{v.mgPage + 1} of {v.pagesList.length}</span>
+          </div>
+          <label style={fieldLabel}>Caption
+            <input value={pg.caption} onChange={pg.onCaption} maxLength={140} placeholder="Where, what, who" autoFocus={v.notMob} className={focusMark} style={field} />
+          </label>
+          <label style={fieldLabel}>Date
+            <input type="date" value={pg.date} onChange={pg.onDate} className={focusMark} style={{ ...field, color: pg.date ? INK : 'rgba(var(--ink-rgb),.5)' }} />
+          </label>
+          <span style={hint}>Written in the page’s margin in the book.</span>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => { v.closePage(); pg.edit(); }} className={hoverTint} style={act}>Re-fit image</button>
+            <button onClick={pg.left} disabled={v.mgPage === 0} className={hoverTint} style={{ ...act, opacity: v.mgPage === 0 ? 0.4 : 1 }}>← Earlier</button>
+            <button onClick={pg.right} disabled={v.mgPage === v.pagesList.length - 1} className={hoverTint} style={{ ...act, opacity: v.mgPage === v.pagesList.length - 1 ? 0.4 : 1 }}>Later →</button>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: 8 }}>
+            <button onClick={() => { v.closePage(); pg.remove(); }} style={linkBtn(MARK)}>Remove page</button>
+            <button onClick={v.closePage} style={{ height: 44, padding: '0 24px', borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer' }}>Done</button>
           </div>
         </div>
       </div>
@@ -177,15 +246,11 @@ export function Manager({ v }: { v: V }) {
   );
 }
 
-const noteField: CSSProperties = { ...field, height: 32, padding: '0 8px', font: `500 13px ${SANS}`, borderWidth: 1 };
-const chip = (on: boolean): CSSProperties => ({ height: 30, padding: '0 12px', borderRadius: 15, border: `1px solid ${on ? INK : 'rgba(var(--ink-rgb),.25)'}`, background: on ? INK : 'transparent', color: on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' });
-
 /** Invite one other person to add pages, see who's drawing in it, or stop sharing. */
 function SharePanel({ v }: { v: V }) {
   const who = (m: V) => <><b style={{ fontWeight: 600 }}>{m.name}</b> <span style={{ color: 'rgba(var(--ink-rgb),.6)' }}>{m.handle}</span></>;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 16, borderTop: '1px solid rgba(var(--ink-rgb),.12)' }}>
-      <span style={{ fontSize: 13, color: 'rgba(var(--ink-rgb),.7)' }}>Draw together <span style={{ color: 'rgba(var(--ink-rgb),.5)' }}>· share this sketchbook with one other person, who can add and caption pages</span></span>
+    <Row label="Draw together" note="One other person can add and caption pages. Invitations are sent straight away, without needing Save.">
       {v.shCollab ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', fontSize: 14 }}>
           <span>Drawing with {who(v.shCollab)}</span>
@@ -197,39 +262,13 @@ function SharePanel({ v }: { v: V }) {
           <button onClick={v.shCancel} disabled={v.shBusy} style={linkBtn(MARK)}>Cancel invitation</button>
         </div>
       ) : (
-        <form onSubmit={v.shInviteSend} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', maxWidth: 480 }}>
+        <form onSubmit={v.shInviteSend} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div style={{ flex: '1 1 220px' }}><HandleField value={v.shDraft} onChange={v.onShDraft} placeholder="their handle" /></div>
-          <button type="submit" disabled={v.shBusy || !v.shDraft} style={{ alignSelf: 'flex-end', height: 44, padding: '0 20px', borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer', opacity: v.shBusy || !v.shDraft ? 0.5 : 1 }}>{v.shBusy ? 'Inviting…' : 'Invite'}</button>
+          <button type="submit" disabled={v.shBusy || !v.shDraft} style={{ height: 44, padding: '0 20px', borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer', opacity: v.shBusy || !v.shDraft ? 0.5 : 1 }}>{v.shBusy ? 'Inviting…' : 'Invite'}</button>
         </form>
       )}
       <Notice err={v.shErr} />
-    </div>
-  );
-}
-
-/** Mediums (pick up to four) and free-form tags, which Explore can filter by. */
-function Labels({ v }: { v: V }) {
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,320px),1fr))', gap: '16px 40px', alignItems: 'start', paddingTop: 16, borderTop: '1px solid rgba(var(--ink-rgb),.12)' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <span style={{ fontSize: 13, color: 'rgba(var(--ink-rgb),.7)' }}>Mediums</span>
-        {/* One row that scrolls sideways, so the list doesn't push the pages down. */}
-        <div role="group" aria-label="Mediums" onWheel={wheelSideways} style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 2, maskImage: 'linear-gradient(90deg,#000 calc(100% - 32px),transparent)' } as CSSProperties}>
-          {v.mgMediums.map((m: V) => <button key={m.key} onClick={m.pick} aria-pressed={m.on} className={m.on ? undefined : hover('border-color:rgba(var(--ink-rgb),.6)')} style={{ ...chip(m.on), flexShrink: 0 }}>{m.label}</button>)}
-        </div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <span style={{ fontSize: 13, color: 'rgba(var(--ink-rgb),.7)' }}>Tags <span style={{ color: 'rgba(var(--ink-rgb),.5)' }}>· up to 8, e.g. portraits, lisbon, figure-drawing</span></span>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, minHeight: 40, padding: '5px 8px', border: '1.5px solid rgba(var(--ink-rgb),.14)', background: 'rgba(var(--ink-rgb),.06)', boxSizing: 'border-box' }}>
-          {v.mgTags.map((t: V) => (
-            <span key={t.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, height: 26, padding: '0 4px 0 10px', borderRadius: 13, background: PAPER, border: '1px solid rgba(var(--ink-rgb),.2)', fontSize: 13 }}>
-              {t.label}<button onClick={t.remove} aria-label={`Remove ${t.label}`} className={hover(`color:${MARK}`)} style={{ width: 20, height: 20, padding: 0, border: 'none', background: 'none', color: 'rgba(var(--ink-rgb),.6)', font: `500 14px/1 ${SANS}`, cursor: 'pointer' }}>×</button>
-            </span>
-          ))}
-          {!v.mgTagFull && <input value={v.tagDraft} onChange={v.onTagDraft} onKeyDown={v.onTagKey} onBlur={v.commitTag} placeholder={v.mgTags.length ? 'Add a tag' : 'Add tags, separated by commas'} aria-label="Add a tag" style={{ flex: 1, minWidth: 120, height: 28, border: 'none', outline: 'none', background: 'none', color: INK, font: `500 14px ${SANS}` }} />}
-        </div>
-      </div>
-    </div>
+    </Row>
   );
 }
 

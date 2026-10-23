@@ -1,19 +1,15 @@
-// Light / dark theme: follows the system unless the visitor picks one (remembered per browser).
+// Light or dark theme: light unless the visitor picks dark in Settings (remembered per browser).
 import * as store from './storage';
 
-const dark = matchMedia('(prefers-color-scheme: dark)');
 let pref = store.loadTheme();
 
-export const isDark = () => pref === 'dark' || (pref === 'system' && dark.matches);
+export const isDark = () => pref === 'dark';
 function apply() {
   const root = document.documentElement;
-  if (pref === 'system') delete root.dataset.theme; else root.dataset.theme = pref;
+  if (pref === 'dark') root.dataset.theme = 'dark'; else delete root.dataset.theme;
   document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', isDark() ? '#1A1B18' : '#F4F1E9'));
-  // The tab icon follows the theme in use, including one picked here rather than by the system.
-  const icon = `/icons/favicon-${isDark() ? 'dark' : 'light'}-64.png`;
-  document.querySelectorAll<HTMLLinkElement>('link[rel="icon"]').forEach(l => { l.href = icon; l.removeAttribute('media'); });
+  // The tab icon matches the theme in use.
+  document.querySelectorAll<HTMLLinkElement>('link[rel="icon"]').forEach(l => { l.href = `/icons/favicon-${isDark() ? 'dark' : 'light'}-64.png`; });
 }
 apply();
-export function onSystemChange(cb: () => void) { dark.addEventListener?.('change', () => { apply(); cb(); }); }
-/** Switches to the opposite of what's showing now. */
-export function toggleTheme() { pref = isDark() ? 'light' : 'dark'; if ((pref === 'dark') === dark.matches) pref = 'system'; store.saveTheme(pref); apply(); }
+export function setTheme(t: 'light' | 'dark') { pref = t; store.saveTheme(t); apply(); }

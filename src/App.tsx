@@ -64,6 +64,8 @@ interface State {
   tagDraft?: string; soundOn?: boolean; dark?: boolean; welcome?: boolean;
   /** Shared sketchbooks: invitations waiting for an answer, and the invite form on the Pages screen. */
   invites?: BookDoc[]; shDraft?: string; shBusy?: boolean; shErr?: string;
+  /** Edit screen: which tab, and the page whose details sheet is open. */
+  mgTab?: 'pages' | 'details' | 'share'; mgPage?: number | null;
 }
 
 const ini = (n?: string) => (n || '').trim().split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
@@ -130,7 +132,10 @@ export default class App extends Component<object, State> {
     if (e.key === 'Escape') {
       if (s.newPick) return this.setState({ newPick: false });
       if (!s.edit && !s.managing && s.focus) return this.setFocus(false);
-      return s.edit ? this.setState({ edit: null }) : this.setState({ managing: false });
+      if (s.edit) return this.setState({ edit: null });
+      if (s.managing && s.mgPage != null) return this.setState({ mgPage: null });
+      if (s.managing && this.mgChanged() && !window.confirm('Discard your changes to this sketchbook?')) return;
+      return this.setState({ managing: false });
     }
     const t = e.target as HTMLElement;
     if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || s.managing || s.edit) return;
@@ -144,7 +149,6 @@ export default class App extends Component<object, State> {
     addEventListener('resize', this.onResize); addEventListener('keydown', this.onKey); addEventListener('popstate', this.onPop);
     document.addEventListener('visibilitychange', this.onFocus); addEventListener('focus', this.onFocus);
     installer.onChange(() => this.forceUpdate());
-    themeMode.onSystemChange(() => this.setState({ dark: themeMode.isDark() }));
     this.unAuth = api.watchAuth(u => { if (!this.signingUp) this.loadUser(u); });
     this.loadCommunity();
     api.bannedUsers().then(banned => this.setState({ banned }));
@@ -259,6 +263,9 @@ export default class App extends Component<object, State> {
   }
   componentDidUpdate(_: object, prev: State) {
     const s = this.state;
+    // The edit screen works on a draft: it's saved with Save, and closing it any other way puts the book back.
+    if (!prev.managing && s.managing) { const b = s.books[s.active]; this.mgSnap = b; this.mgHold = b?.id ?? null; this.setState({ mgTab: 'pages', mgPage: null }); }
+    if (prev.managing && !s.managing && this.mgHold) this.revertEdits();
     this.syncWatches();
     // The first route is applied once we know who's signed in; after that the URL follows the screen.
     if (s.authReady && !this.routed) { this.routed = true; this.applyRoute(); }
@@ -434,7 +441,7 @@ export default class App extends Component<object, State> {
   persist(books: Book[]) {
     if (!this.state.acct) return;
     const prev = new Map(this.state.books.map(b => [b.id, b]));
-    for (const b of books) if (prev.get(b.id) !== b || !this.synced.has(b.id)) { this.dirty.add(b.id); this.editedAt.set(b.id, Date.now()); }
+    for (const b of books) if (b.id !== this.mgHold && (prev.get(b.id) !== b || !this.synced.has(b.id))) { this.dirty.add(b.id); this.editedAt.set(b.id, Date.now()); }
     clearTimeout(this.syncT);
     this.syncT = setTimeout(() => { for (const id of this.dirty) this.enqueue(id, () => this.syncBook(id)); this.dirty.clear(); }, 400);
   }
@@ -443,6 +450,26 @@ export default class App extends Component<object, State> {
     const next = (this.syncQ.get(id) || Promise.resolve()).then(job).catch(e => console.error('sync failed', e))
       .finally(() => this.busy.set(id, (this.busy.get(id) || 1) - 1));
     this.syncQ.set(id, next);
+  }
+  // ---------- edit screen drafts ----------
+  mgSnap?: Book; mgHold: string | null = null;
+  mgChanged() { return !!this.mgHold && this.findBook(this.mgHold) !== this.mgSnap; }
+  saveEdits() {
+    const id = this.mgHold; this.mgHold = null;
+    if (id && this.findBook(id) && this.findBook(id) !== this.mgSnap) {
+      this.dirty.add(id); this.editedAt.set(id, Date.now());
+      clearTimeout(this.syncT); this.syncT = setTimeout(() => { for (const d of this.dirty) this.enqueue(d, () => this.syncBook(d)); this.dirty.clear(); }, 50);
+      this.toast('Saved');
+    }
+    this.setState({ managing: false, mgPage: null });
+  }
+  revertEdits() {
+    const id = this.mgHold, snap = this.mgSnap; this.mgHold = null; if (!id || !snap) return;
+    this.setState(s => {
+      // Sharing changes take effect straight away, so they survive a Cancel.
+      const books = s.books.map(b => b.id === id ? { ...snap, collab: b.collab, invite: b.invite, owner: b.owner } : b), mine = s.books[s.active]?.id === id;
+      return { books, images: mine ? snap.images : s.images, mgPage: null, tagDraft: '' };
+    });
   }
   // ---------- shared sketchbooks ----------
   editedAt = new Map<string, number>(); busy = new Map<string, number>();
@@ -457,7 +484,7 @@ export default class App extends Component<object, State> {
       return this.toast(`You’re no longer drawing in “${cur.name}”`);
     }
     const share = { collab: d.collab, invite: d.invite, owner: { uid: d.ownerId, name: d.ownerName, handle: d.ownerHandle } };
-    const busy = this.dirty.has(id) || (this.busy.get(id) || 0) > 0 || bookUrls(cur).some(isData) || (this.editedAt.get(id) || 0) > d.updatedAt;
+    const busy = this.mgHold === id || this.dirty.has(id) || (this.busy.get(id) || 0) > 0 || bookUrls(cur).some(isData) || (this.editedAt.get(id) || 0) > d.updatedAt;
     const fresh = api.toBook(d, me);
     const next: Book = busy ? { ...cur, ...share } : { ...cur, ...share, images: fresh.images, thumbs: fresh.thumbs, notes: fresh.notes,
       ...(cur.role === 'collab' ? { name: fresh.name, color: fresh.color, coverImg: fresh.coverImg, mediums: fresh.mediums, tags: fresh.tags, isPublic: fresh.isPublic, hidden: fresh.hidden, shape: fresh.shape } : {}) };
@@ -510,6 +537,8 @@ export default class App extends Component<object, State> {
   /** Uploads any new images of a book, swaps in their URLs, then writes the book and removes files it no longer uses. */
   async syncBook(id: string) {
     const acct = this.state.acct; let b = this.findBook(id); if (!acct || !b) return;
+    // A book open on the edit screen is saved with Save, not before (saveEdits queues it again).
+    if (id === this.mgHold) return;
     const pending = bookUrls(b).filter(isData);
     if (pending.length) {
       const m = await api.uploadImages(acct.uid, id, pending);
@@ -940,7 +969,7 @@ export default class App extends Component<object, State> {
       welcomeLater: () => { this.setState({ welcome: false }); this.goMode('explore'); },
       inInstalled: installer.installed(), inCanPrompt: installer.canPrompt(), inIOS: installer.isIOS(),
       inInstall: () => installer.install().then(ok => ok && this.toast('verso is on your home screen')),
-      isDark: !!s.dark, toggleTheme: () => { themeMode.toggleTheme(); this.setState({ dark: themeMode.isDark() }); },
+      isDark: !!s.dark, setTheme: (t: 'light' | 'dark') => { themeMode.setTheme(t); this.setState({ dark: t === 'dark' }); },
       openPrivacy: () => this.openLegal('privacy'), openTerms: () => this.openLegal('terms'),
       isLegal: s.mode === 'legal', legalDoc: s.legal || 'privacy', isNotFound: s.mode === 'notfound', nfWhat: s.nf || 'page',
       ...this.settingsVals(),
@@ -1258,7 +1287,8 @@ export default class App extends Component<object, State> {
       onCaption: (e: ChangeEvent<HTMLInputElement>) => setNote(u, { c: e.target.value.slice(0, 140) }),
       onDate: (e: ChangeEvent<HTMLInputElement>) => setNote(u, { d: e.target.value }),
       edit: () => this.startEdit([images[i]], i), remove: () => this.setImages(images.filter((_, k) => k !== i)),
-      left: () => this.movePage(i, i - 1), right: () => this.movePage(i, i + 1),
+      left: () => { this.movePage(i, i - 1); if (s.mgPage === i && i > 0) this.setState({ mgPage: i - 1 }); },
+      right: () => { this.movePage(i, i + 1); if (s.mgPage === i && i < images.length - 1) this.setState({ mgPage: i + 1 }); },
       dragStart: (e: DragEvent) => { this.dragIdx = i; e.dataTransfer.effectAllowed = 'move'; },
       dragOver: (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); },
       drop: (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); if (e.dataTransfer.files?.length) return this.addFiles(e.dataTransfer.files); if (this.dragIdx != null) this.movePage(this.dragIdx, i); this.dragIdx = null; },
@@ -1310,6 +1340,10 @@ export default class App extends Component<object, State> {
           ring: on ? `0 0 0 2px ${MARK}` : '0 0 0 1px rgba(var(--ink-rgb),.18)', bg: on ? 'rgba(var(--ink-rgb),.08)' : 'transparent', pick: () => this.setState({ pickShape: k }) };
       }),
       managing: s.managing, openManager: () => this.setState({ managing: true }), closeManager: () => this.setState({ managing: false }),
+      mgTab: s.mgTab || 'pages', setMgTab: (t: State['mgTab']) => this.setState({ mgTab: t, mgPage: null }),
+      mgPage: s.mgPage != null && s.mgPage < images.length ? s.mgPage : null, openPage: (i: number) => this.setState({ mgPage: i }), closePage: () => this.setState({ mgPage: null }),
+      mgChanged: s.managing && this.mgChanged(), mgSave: () => this.saveEdits(), mgCancel: () => this.setState({ managing: false }),
+      mgSummary: `${images.length} ${images.length === 1 ? 'page' : 'pages'} · ${(book as Book).isPublic === false || (book as Book).hidden ? 'Private' : 'Public'}${(book as Book).collab ? ' · with ' + (book as Book).collab!.name : (book as Book).role === 'collab' ? ' · ' + (book as Book).owner?.name + '’s, shared with you' : ''}`,
       ...(() => {
         const o = other as OtherBook | null, mineB = books[active];
         return {

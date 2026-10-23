@@ -13,15 +13,6 @@
   --stone: #8E8F85; --muted: #AEADA2; --mark: #D7705B;
   color-scheme: dark;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #1A1B18; --paper-rgb: 26,27,24;
-    --canvas: #10110F; --canvas-rgb: 16,17,15;
-    --ink: #ECE7DB; --ink-rgb: 236,231,219;
-    --stone: #8E8F85; --muted: #AEADA2; --mark: #D7705B;
-    color-scheme: dark;
-  }
-}
 html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); overflow: hidden; }
 a { color: var(--ink); }
 a:hover { color: var(--mark); }
