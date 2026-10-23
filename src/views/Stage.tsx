@@ -4,7 +4,7 @@ import ClosedBook from '../ClosedBook';
 import { hover } from '../pseudo';
 import { earClip } from '../wear';
 import type { Wear } from '../wear';
-import { INK, MARK, PAGE_EDGES, PAPER, SANS, SERIF, SPINE, label, spineStyle } from '../theme';
+import { INK, MARK, PAGE_EDGES, PAPER, SANS, SERIF, SPINE, SPINE_R, SPINE_W, label } from '../theme';
 
 const navLink: CSSProperties = { border: 'none', background: 'none', padding: '4px 0', cursor: 'pointer', ...label() };
 const textBtn: CSSProperties = { height: 34, padding: 0, border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap', ...label(INK) };
@@ -98,18 +98,17 @@ function Book3D({ v }: { v: V }) {
     <div style={{ position: 'relative', width: 0, height: v.H, transformStyle: 'preserve-3d', transform: v.bookTransform, opacity: v.bookOp }}>
       <div style={{ position: 'absolute', left: v.shadowLeft, top: 0, width: v.shadowW, height: v.H, transform: 'translateZ(-2px) translateY(26px)', background: 'rgba(34,35,32,.16)', filter: 'blur(22px)', borderRadius: 2, opacity: v.openShadowOp }} />
       <div style={{ position: 'absolute', left: v.bodyLeft, top: 0, width: v.W, height: v.H, transform: 'translateZ(-1px)', opacity: v.bodyOp, pointerEvents: 'none' }}>
-        <div style={spineStyle(v.boardColor, v.bodyBack ? 'r' : 'l', 9, 6)} />
         <div style={{ ...fill, transform: v.bodyBack ? 'translate(-7px,6px)' : 'translate(7px,6px)', borderRadius: v.bodyBack ? '11px 3px 3px 11px' : '3px 11px 11px 3px', background: v.boardColor, filter: 'brightness(.6)', boxShadow: '0 24px 40px rgba(34,35,32,.16)' }} />
         <div style={{ position: 'absolute', top: 3, bottom: -3, left: v.bodyBack ? -4 : 4, right: v.bodyBack ? 4 : -4, borderRadius: v.bodyBack ? '9px 2px 2px 9px' : '2px 9px 9px 2px', background: PAGE_EDGES }} />
       </div>
       {v.leaves.map((leaf: V) => (
         <div key={leaf.key} style={{ position: 'absolute', left: 0, top: 0, width: v.W, height: v.H, transformOrigin: '0 50%', transformStyle: 'preserve-3d', transform: leaf.transform }}>
-          <div onClick={leaf.openFront} style={{ ...fill, backfaceVisibility: 'hidden', borderRadius: '2px 10px 10px 2px', overflow: 'hidden', background: leaf.frontBg, boxShadow: 'inset 6px 0 10px -6px rgba(0,0,0,.35)', clipPath: earClip(leaf.wearF?.ear) }}>
+          <div onClick={leaf.openFront} style={{ ...fill, backfaceVisibility: 'hidden', borderRadius: leaf.isCoverAny ? '5px 10px 10px 5px' : '2px 10px 10px 2px', overflow: 'hidden', background: leaf.frontBg, boxShadow: 'inset 6px 0 10px -6px rgba(0,0,0,.35)', clipPath: earClip(leaf.wearF?.ear) }}>
             <PageWear overlay={leaf.overlayF} />
             <DogEar ear={leaf.wearF?.ear} />
             {leaf.isCoverAny && (
               <>
-                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '7%', background: SPINE, pointerEvents: 'none' }} />
+                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: SPINE_W, background: SPINE, pointerEvents: 'none' }} />
                 <div style={{ position: 'absolute', right: '13%', top: 0, bottom: 0, width: 8, background: '#1d1d26', boxShadow: '-2px 0 3px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.25)', pointerEvents: 'none' }} />
               </>
             )}
@@ -117,12 +116,12 @@ function Book3D({ v }: { v: V }) {
             <div style={{ ...fill, background: '#000', opacity: leaf.shadeF, pointerEvents: 'none' }} />
             <div style={{ ...leafNum, right: 14 }}>{leaf.numF}</div>
           </div>
-          <div onClick={leaf.openBack} style={{ ...fill, backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', borderRadius: '10px 2px 2px 10px', overflow: 'hidden', background: leaf.backBg, boxShadow: 'inset -6px 0 10px -6px rgba(0,0,0,.35)', clipPath: earClip(leaf.wearB?.ear) }}>
+          <div onClick={leaf.openBack} style={{ ...fill, backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', borderRadius: leaf.isBackCover ? '10px 5px 5px 10px' : '10px 2px 2px 10px', overflow: 'hidden', background: leaf.backBg, boxShadow: 'inset -6px 0 10px -6px rgba(0,0,0,.35)', clipPath: earClip(leaf.wearB?.ear) }}>
             <PageWear overlay={leaf.overlayB} />
             <DogEar ear={leaf.wearB?.ear} />
             {leaf.isBackCover && (
               <>
-                <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '7%', background: 'linear-gradient(270deg,rgba(0,0,0,.28),rgba(0,0,0,.08))', pointerEvents: 'none' }} />
+                <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: SPINE_W, background: SPINE_R, pointerEvents: 'none' }} />
                 <div style={{ position: 'absolute', left: '13%', top: 0, bottom: 0, width: 8, background: '#1d1d26', boxShadow: '-2px 0 3px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.25)', pointerEvents: 'none' }} />
               </>
             )}
