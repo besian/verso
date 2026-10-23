@@ -119,23 +119,24 @@ function BackFace({ leaf, onClick, style }: { leaf: V; onClick?: () => void; sty
   );
 }
 
-const CURL_SEGS = 10;
+const CURL_SEGS = 12;
 /**
  * A leaf mid-turn, bent like paper: split into vertical strips, each rotated a little more than
  * the one before it (nested, so the bends add up toward the outer edge). Each strip shows its
  * slice of the full front and back faces, with a soft shadow that deepens along the curl.
  */
 function CurledLeaf({ leaf, W, H }: { leaf: V; W: number; H: number }) {
-  const n = CURL_SEGS, s = W / n;
+  // Bend grows toward the outer edge (strip k turns by k/Σk of the total), so the curve is flat at the spine.
+  const n = CURL_SEGS, s = W / n, step = leaf.curl * 2 / (n * (n - 1));
   const seg = (k: number): ReactNode => (
-    <div style={{ position: 'absolute', left: k ? s : 0, top: 0, width: s + 0.75, height: H, transformOrigin: '0 50%', transformStyle: 'preserve-3d', transform: k ? `rotateY(${leaf.curl}deg)` : undefined }}>
+    <div style={{ position: 'absolute', left: k ? s : 0, top: 0, width: s + 0.75, height: H, transformOrigin: '0 50%', transformStyle: 'preserve-3d', transform: k ? `rotateY(${(step * k).toFixed(3)}deg)` : undefined }}>
       <div style={{ ...fill, overflow: 'hidden', backfaceVisibility: 'hidden' }}>
         <div style={{ position: 'absolute', top: 0, left: -k * s, width: W, height: H }}><FrontFace leaf={leaf} style={{ backfaceVisibility: 'visible' }} /></div>
-        <div style={{ ...fill, background: `rgba(30,24,16,${(leaf.curlAmt * 0.16 * k / n).toFixed(3)})`, pointerEvents: 'none' }} />
+        <div style={{ ...fill, background: `rgba(30,24,16,${(leaf.curlAmt * 0.22 * (k / n) ** 2).toFixed(3)})`, pointerEvents: 'none' }} />
       </div>
       <div style={{ ...fill, overflow: 'hidden', backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
         <div style={{ position: 'absolute', top: 0, left: -(W - (k + 1) * s), width: W, height: H }}><BackFace leaf={leaf} style={{ transform: 'none', backfaceVisibility: 'visible' }} /></div>
-        <div style={{ ...fill, background: `rgba(30,24,16,${(leaf.curlAmt * 0.12 * k / n).toFixed(3)})`, pointerEvents: 'none' }} />
+        <div style={{ ...fill, background: `rgba(30,24,16,${(leaf.curlAmt * 0.16 * (k / n) ** 2).toFixed(3)})`, pointerEvents: 'none' }} />
       </div>
       {k < n - 1 && seg(k + 1)}
     </div>
