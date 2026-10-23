@@ -850,9 +850,9 @@ export default class App extends Component<object, State> {
     const { vw, vh } = this.state, mob = vw < 640;
     // Signed in and following someone: the shelf shows their latest books first.
     const feed = this.state.acct ? (this.state.followFeed || []).filter(b => !(this.state.blocked || []).includes(b.ownerId || '')) : [];
-    // Books from people you follow come first; the rest of the shelf is filled from the community.
-    const seen = new Set(feed.map(b => b.id));
-    const list = [...feed, ...[...this.community()].filter(b => !seen.has(b.id) && b.ownerId !== this.state.acct?.uid).sort((a, b) => b.likes - a.likes)];
+    // Books from people you follow come first, then the community; your own public books only fill spots left over.
+    const seen = new Set(feed.map(b => b.id)), me = this.state.acct?.uid, rest = [...this.community()].filter(b => !seen.has(b.id)).sort((a, b) => b.likes - a.likes);
+    const list = [...feed, ...rest.filter(b => b.ownerId !== me), ...rest.filter(b => !!me && b.ownerId === me)];
     // One screen: the shelf takes what height is left after the headline block, and its books
     // shrink further if they'd be wider than the page.
     const sel = list.slice(0, mob ? 5 : 10), gap = mob ? 10 : 16, shapes = sel.map(b => this.shapeOf(b)), sumW = shapes.reduce((t, sh) => t + sh.s * sh.a, 0);
