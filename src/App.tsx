@@ -803,6 +803,7 @@ export default class App extends Component<object, State> {
       prevOp: active > 0 ? 1 : 0.3, nextOp: active < books.length - 1 ? 1 : 0.3,
       sideBooks, sbBase: `rotateX(${tilt}deg)`, ghostT: sideT(books.length), ghostW: ghostD.W, ghostH: ghostD.H, ghostTop: -ghostD.H / 2,
       newBook: this.openNewPick, stopPD: (e: PointerEvent) => e.stopPropagation(),
+      vw: s.vw,
       navMineLbl: m ? 'Yours' : 'Your sketchbooks', mNavGap: m ? 14 : 40, notMob: !m, mPad: m ? 14 : 24, mTop: m ? 14 : 20, mGap: m ? 14 : 24,
       newLbl: m ? '+ New' : '+ New sketchbook', mTitleTop: m ? 72 : 76, mTitleSize: m ? 32 : 46, mBottom: m ? 16 : 36, mModalPad: m ? 18 : 28, mOptMin: m ? 92 : 120, mOptH: m ? 130 : 170,
       newPick: !!s.newPick, closePick: (e: MouseEvent) => { if (e.target === e.currentTarget) this.setState({ newPick: false }); }, cancelPick: () => this.setState({ newPick: false }),

@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { V } from '../App';
 import ClosedBook from '../ClosedBook';
@@ -173,17 +174,18 @@ function Controls({ v }: { v: V }) {
 
 const kbd: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 22, height: 22, padding: '0 5px', boxSizing: 'border-box', border: '1px solid rgba(34,35,32,.28)', borderBottomWidth: 2, borderRadius: 4, background: 'rgba(244,241,233,.85)', color: INK, font: `500 13px/1 ${SANS}`, letterSpacing: 0 };
 
-/** Quiet key reference in the corner of the book view (desktop only). */
+/** Quiet key reference in the corner of the book view; compact labels on mid-size windows so it clears the controls. */
 function KeyGuide({ v }: { v: V }) {
-  const rows: [string[], string][] = [[['←', '→'], 'Turn pages'], [['↑'], 'Open · zoom in'], [['↓'], 'Zoom out · close']];
-  if (v.multi) rows.push([['⇧', '←', '→'], 'Switch sketchbook']);
+  const full = v.vw >= 1000;
+  const rows: [string[], string, string][] = [[['←', '→'], 'Turn pages', 'Turn'], [['↑'], 'Open · zoom in', 'Open · zoom'], [['↓'], 'Zoom out · close', 'Zoom out · close']];
+  if (v.multi) rows.push([['⇧', '←', '→'], 'Switch sketchbook', 'Switch book']);
   return (
-    <div aria-label="Keyboard shortcuts" style={{ position: 'absolute', left: 24, bottom: 24, zIndex: 2, display: 'flex', flexDirection: 'column', gap: 7, opacity: v.uiOp, pointerEvents: 'none', ...label(STONE, 10) }}>
-      {rows.map(([keys, what]) => (
-        <div key={what} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ display: 'flex', gap: 3, minWidth: 74 }}>{keys.map(k => <span key={k} style={kbd}>{k}</span>)}</span>
-          <span>{what}</span>
-        </div>
+    <div aria-label="Keyboard shortcuts" style={{ position: 'absolute', left: full ? 24 : 16, bottom: full ? 24 : 18, zIndex: 2, display: 'grid', gridTemplateColumns: 'auto auto', columnGap: full ? 14 : 10, rowGap: full ? 7 : 5, alignItems: 'center', opacity: v.uiOp, pointerEvents: 'none', ...label(STONE, full ? 10 : 9) }}>
+      {rows.map(([keys, long, short]) => (
+        <Fragment key={long}>
+          <span style={{ display: 'flex', gap: 3 }}>{keys.map(k => <span key={k} style={full ? kbd : { ...kbd, minWidth: 18, height: 18, fontSize: 11 }}>{k}</span>)}</span>
+          <span style={{ whiteSpace: 'nowrap' }}>{full ? long : short}</span>
+        </Fragment>
       ))}
     </div>
   );
