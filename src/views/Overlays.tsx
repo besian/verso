@@ -111,12 +111,20 @@ export function Manager({ v }: { v: V }) {
       <div style={{ maxWidth: 1080, margin: '0 auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 28 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
           <button onClick={v.closeManager} style={{ height: 36, padding: '0 16px', borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer' }}>← Done</button>
-          <button onClick={v.deleteBook} className={hover(`color:${MARK}`)} style={{ ...linkBtn('rgba(34,35,32,.7)'), padding: undefined }}>Delete sketchbook</button>
+          <button onClick={v.deleteBook} className={hover(`background:${MARK};color:${PAPER}`)} style={{ height: 36, padding: '0 14px', borderRadius: 2, border: `1.5px solid ${MARK}`, background: 'none', color: MARK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Delete sketchbook</button>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, flex: 1 }}>
             <input value={v.bookName} onChange={v.onName} style={{ background: 'none', border: 'none', borderBottom: '1.5px solid rgba(34,35,32,.25)', color: INK, font: `500 34px ${SANS}`, letterSpacing: '-.02em', padding: '0 0 4px', outline: 'none', width: '100%', maxWidth: 480 }} />
             <div style={{ fontSize: 13, color: 'rgba(34,35,32,.7)' }}>{v.blankNote} · drag to reorder</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
+              <div role="radiogroup" aria-label="Who can see this sketchbook" style={{ display: 'flex', gap: 2, padding: 3, border: '1px solid rgba(34,35,32,.2)' }}>
+                {([[true, 'Public'], [false, 'Private']] as const).map(([on, name]) => (
+                  <button key={name} role="radio" aria-checked={v.bookPublic === on} onClick={() => v.setPublic(on)} style={{ height: 30, padding: '0 14px', border: 'none', borderRadius: 2, background: v.bookPublic === on ? INK : 'transparent', color: v.bookPublic === on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>{name}</button>
+                ))}
+              </div>
+              <span style={{ fontSize: 13, color: 'rgba(34,35,32,.7)' }}>{v.bookPublic ? 'Anyone can find it in Explore and on your profile.' : 'Only you can see it.'}</span>
+            </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, color: 'rgba(34,35,32,.7)' }}>Cover</span>

@@ -39,12 +39,14 @@ service cloud.firestore {
 
     match /books/{bookId} {
       function valid(d) {
-        return d.keys().hasOnly(['ownerId', 'ownerName', 'ownerHandle', 'name', 'color', 'shape', 'cover', 'pages', 'pageCount', 'createdAt', 'updatedAt'])
+        return d.keys().hasOnly(['ownerId', 'ownerName', 'ownerHandle', 'name', 'color', 'shape', 'cover', 'pages', 'pageCount', 'createdAt', 'updatedAt', 'isPublic'])
+          && (!('isPublic' in d) || d.isPublic is bool)
           && str(d.name, 120)
           && d.shape in ['pocket', 'portrait', 'square', 'landscape', 'panorama']
           && d.pages is list && d.pages.size() <= 1000 && d.pageCount == d.pages.size();
       }
-      allow read: if true;
+      // Private books are readable only by their owner; books without the field are public.
+      allow read: if resource.data.get('isPublic', true) == true || (signedIn() && resource.data.ownerId == request.auth.uid);
       allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid && valid(request.resource.data);
       allow update: if signedIn() && resource.data.ownerId == request.auth.uid
         && request.resource.data.ownerId == resource.data.ownerId && valid(request.resource.data);

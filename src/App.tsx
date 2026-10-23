@@ -124,13 +124,15 @@ export default class App extends Component<object, State> {
       const a = acct || await api.ensureProfile(u);
       const [docs, follows] = await Promise.all([api.userBooks(u.uid), api.following(u.uid)]);
       let books = docs.map(api.toBook);
-      books.forEach(b => this.synced.set(b.id, bookUrls(b)));
+      // Books saved before visibility existed are re-saved once so they get the field (and stay in Explore).
+      const legacy = docs.some(d => d.legacy);
+      books.forEach((b, k) => { if (!docs[k].legacy) this.synced.set(b.id, bookUrls(b)); });
       const fresh = !books.length;
       if (fresh) books = [{ id: api.newBookId(), name: 'sketchbook', color: '#b8243a', images: [], createdAt: Date.now() }];
       this.target = 0;
       // Signed-in visitors start on their own sketchbooks rather than the home page.
       this.setState(s => ({ acct: a, follows, books, active: 0, images: books[0].images, p: 0, authReady: true, mode: !s.mode || s.mode === 'home' || s.mode === 'auth' ? 'mine' : s.mode }),
-        () => { if (fresh) this.persist(books); });
+        () => { if (fresh || legacy) this.persist(books); });
     } catch (e) {
       console.error(e);
       this.setState({ authReady: true });
@@ -175,7 +177,7 @@ export default class App extends Component<object, State> {
     cancelAnimationFrame(this.raf); cancelAnimationFrame(this.exRaf); this.target = 0;
     this.setState(s => ({ mode: 'profile', profileOf: who, pf: null, pfPreview: false, other: null, images: s.books[s.active].images, p: 0, focus: false, fz: 0, managing: false }));
     const uid = who?.uid;
-    if (uid) Promise.all([api.getProfile(uid), api.userBooks(uid)]).then(([profile, docs]) => {
+    if (uid) Promise.all([api.getProfile(uid), api.userBooks(uid, true)]).then(([profile, docs]) => {
       if (this.state.profileOf?.uid === uid) this.setState({ pf: { uid, profile, books: docs.filter(b => b.pageCount > 0).map(toOther) } });
     }).catch(e => console.error(e));
   }
@@ -246,11 +248,13 @@ export default class App extends Component<object, State> {
   }
   deleteBook() {
     const { books, active } = this.state;
-    if (!window.confirm(`Delete “${books[active].name}”? This can’t be undone.`)) return;
-    if (books.length === 1) { this.setImages([]); return; }
-    const nb = books.filter((_, k) => k !== active), j = Math.max(0, active - 1), gone = books[active];
+    if (!window.confirm(`Delete “${books[active].name}” and all its pages? This can’t be undone.`)) return;
+    const gone = books[active], j = Math.max(0, active - 1);
+    // Deleting the only sketchbook leaves a fresh blank one in its place.
+    let nb = books.filter((_, k) => k !== active);
+    if (!nb.length) nb = [{ id: this.state.acct ? api.newBookId() : 'local-' + Date.now(), name: 'sketchbook', color: '#b8243a', images: [], createdAt: Date.now() }];
     if (this.state.acct) this.enqueue(gone.id, async () => { await api.deleteBook(gone.id, [...new Set([...bookUrls(gone), ...(this.synced.get(gone.id) || [])])]); this.synced.delete(gone.id); });
-    this.target = 0; this.setState({ books: nb, active: j, images: nb[j].images, p: 0, managing: false }); this.persist(nb);
+    const k = Math.min(j, nb.length - 1); this.target = 0; this.setState({ books: nb, active: k, images: nb[k].images, p: 0, managing: false }); this.persist(nb);
   }
   movePage(from: number, to: number) {
     const im = [...this.state.images]; if (to < 0 || to >= im.length || from === to) return;
@@ -461,7 +465,7 @@ export default class App extends Component<object, State> {
     const s = this.state, vw = s.vw, mob = vw < 640, mine = !s.profileOf, pv = mine && !!s.pfPreview, a = (s.acct || {}) as Partial<Account>, follows = s.follows || [];
     const card = (b: AnyBook, bg: string, showLabel: boolean, pages: number, open: () => void) => ({
       key: b.id, name: b.name, color: b.color, bg, showLabel, ar: String(this.shapeOf(b).a), wp: String((b.shape && GRID_WIDTH[b.shape]) || 78),
-      count: `${pages} pages · ${this.shapeOf(b).label || 'Portrait'}`, open,
+      count: `${pages} pages · ${this.shapeOf(b).label || 'Portrait'}${(b as Book).isPublic === false ? ' · Private' : ''}`, open,
     });
     let p: { name?: string; handle?: string; bio?: string; loc?: string; web?: string; accent?: string; av?: string | null; joined: string; stats: [number, string][] };
     let list: ReturnType<typeof card>[], folOn = false;
@@ -788,7 +792,7 @@ export default class App extends Component<object, State> {
       bookOp: sw ? 0 : 1, titleName: other ? other.name : (books[Math.round(car)] || book).name,
       titleOp: ((sw ? 1 - Math.sin(Math.PI * (s.swT || 0)) * 0.85 : 1) * (1 - fz)).toFixed(3),
       bookName: book.name,
-      bookMeta: other ? `by ${(other as OtherBook).artist} · ${(other as OtherBook).pages} pages` : books.length > 1 ? `${images.length} ${images.length === 1 ? 'page' : 'pages'} · ${active + 1} of ${books.length}` : `${images.length} ${images.length === 1 ? 'page' : 'pages'}`,
+      bookMeta: (other ? `by ${(other as OtherBook).artist} · ${(other as OtherBook).pages} pages` : books.length > 1 ? `${images.length} ${images.length === 1 ? 'page' : 'pages'} · ${active + 1} of ${books.length}` : `${images.length} ${images.length === 1 ? 'page' : 'pages'}`) + (!other && (book as Book).isPublic === false ? ' · Private' : ''),
       multi: !other && books.length > 1, prevBook: () => this.switchBook(active - 1), nextBook: () => this.switchBook(active + 1),
       prevOp: active > 0 ? 1 : 0.3, nextOp: active < books.length - 1 ? 1 : 0.3,
       sideBooks, sbBase: `rotateX(${tilt}deg)`, ghostT: sideT(books.length), ghostW: ghostD.W, ghostH: ghostD.H, ghostTop: -ghostD.H / 2,
@@ -803,6 +807,7 @@ export default class App extends Component<object, State> {
           ring: on ? `0 0 0 2px ${MARK}` : '0 0 0 1px rgba(34,35,32,.18)', bg: on ? 'rgba(34,35,32,.08)' : 'transparent', pick: () => this.setState({ pickShape: k }) };
       }),
       managing: s.managing, openManager: () => this.setState({ managing: true }), closeManager: () => this.setState({ managing: false }),
+      bookPublic: (book as Book).isPublic !== false, setPublic: (on: boolean) => this.updateBook({ isPublic: on }),
       pagesList, blankNote: blanks > 0 ? `${blanks} blank pages follow your drawings` : 'Book grows as you add pages',
       onName: (e: ChangeEvent<HTMLInputElement>) => this.updateBook({ name: e.target.value }),
       swatches: PALETTE.map(c => ({ key: c, c, ring: c === book.color ? `0 0 0 2px ${PAPER}, 0 0 0 4px ${INK}` : 'none', pick: () => this.updateBook({ color: c }) })),

@@ -30,6 +30,8 @@ export interface Book {
   shape?: ShapeKey;
   coverImg?: string | null;
   createdAt?: number;
+  /** Defaults to public. */
+  isPublic?: boolean;
 }
 
 /** Someone else's sketchbook: read-only. `likes` drives the Featured sort. */

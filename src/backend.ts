@@ -10,7 +10,7 @@ import {
 import type { User } from 'firebase/auth';
 import {
   collection, connectFirestoreEmulator, deleteDoc, doc, getDoc, getDocs, getFirestore, limit,
-  orderBy, query, runTransaction, setDoc, where, writeBatch,
+  query, runTransaction, setDoc, where, writeBatch,
 } from 'firebase/firestore';
 import type { DocumentData } from 'firebase/firestore';
 import { connectStorageEmulator, deleteObject, getStorage, ref, uploadBytes } from 'firebase/storage';
@@ -167,29 +167,33 @@ export interface BookDoc {
   id: string; ownerId: string; ownerName: string; ownerHandle: string;
   name: string; color: string; shape: ShapeKey; cover: string | null; pages: string[]; pageCount: number;
   createdAt: number; updatedAt: number;
+  /** Private books are visible only to their owner. Books saved before this field existed count as public. */
+  isPublic: boolean; legacy: boolean;
 }
 
 const bookDoc = (id: string, d: DocumentData): BookDoc => ({
   id, ownerId: d.ownerId, ownerName: d.ownerName || '', ownerHandle: d.ownerHandle || '', name: d.name || 'sketchbook',
   color: d.color || '#b8243a', shape: d.shape || 'portrait', cover: d.cover || null, pages: d.pages || [], pageCount: d.pageCount || 0,
-  createdAt: d.createdAt || 0, updatedAt: d.updatedAt || 0,
+  createdAt: d.createdAt || 0, updatedAt: d.updatedAt || 0, isPublic: d.isPublic !== false, legacy: d.isPublic === undefined,
 });
 
-export const toBook = (b: BookDoc): Book => ({ id: b.id, name: b.name, color: b.color, shape: b.shape, coverImg: b.cover, images: b.pages, createdAt: b.createdAt });
+export const toBook = (b: BookDoc): Book => ({ id: b.id, name: b.name, color: b.color, shape: b.shape, coverImg: b.cover, images: b.pages, createdAt: b.createdAt, isPublic: b.isPublic });
 
 export function newBookId(): string { return doc(collection(need().db, 'books')).id; }
 
-/** All books owned by a user, oldest first. */
-export async function userBooks(uid: string): Promise<BookDoc[]> {
-  const s = await getDocs(query(collection(need().db, 'books'), where('ownerId', '==', uid)));
+/** Books owned by a user, oldest first: all of them for the owner, otherwise only public ones. */
+export async function userBooks(uid: string, publicOnly = false): Promise<BookDoc[]> {
+  const c = collection(need().db, 'books');
+  const s = await getDocs(publicOnly ? query(c, where('ownerId', '==', uid), where('isPublic', '==', true)) : query(c, where('ownerId', '==', uid)));
   return s.docs.map(x => bookDoc(x.id, x.data())).sort((a, b) => a.createdAt - b.createdAt);
 }
 
 /** Recently updated books from everyone that have at least one page. */
 export async function communityBooks(): Promise<BookDoc[]> {
   if (!db) return [];
-  const s = await getDocs(query(collection(db, 'books'), orderBy('updatedAt', 'desc'), limit(60)));
-  return s.docs.map(x => bookDoc(x.id, x.data())).filter(b => b.pageCount > 0);
+  // Equality-only filter so no composite index is needed; newest first is sorted here.
+  const s = await getDocs(query(collection(db, 'books'), where('isPublic', '==', true), limit(300)));
+  return s.docs.map(x => bookDoc(x.id, x.data())).filter(b => b.pageCount > 0).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 60);
 }
 
 /** Uploads data URLs for a book's pages/cover; returns data URL → download URL. */
@@ -207,7 +211,7 @@ export async function writeBook(owner: Account, b: Book) {
   await setDoc(doc(d, 'books', String(b.id)), {
     ownerId: owner.uid, ownerName: owner.name, ownerHandle: owner.handle,
     name: b.name, color: b.color, shape: b.shape || 'portrait', cover: b.coverImg && !b.coverImg.startsWith('data:') ? b.coverImg : null,
-    pages, pageCount: pages.length, createdAt: b.createdAt || Date.now(), updatedAt: Date.now(),
+    pages, pageCount: pages.length, createdAt: b.createdAt || Date.now(), updatedAt: Date.now(), isPublic: b.isPublic !== false,
   });
 }
 
@@ -232,7 +236,10 @@ async function upload(path: string, dataUrl: string): Promise<string> {
 /** Best-effort removal of files that are no longer referenced. */
 export function removeFiles(urls: string[]) {
   if (!storage) return;
-  for (const u of urls) if (/^https?:/.test(u)) deleteObject(ref(storage, u)).catch(() => {});
+  for (const u of urls) {
+    if (!/^https?:/.test(u)) continue;
+    try { deleteObject(ref(storage, u)).catch(() => {}); } catch { /* not a Storage URL */ }
+  }
 }
 
 // ---------- people ----------
