@@ -23,17 +23,16 @@ function rng(seed: number) {
 const grain = (alpha: number) => `url("data:image/svg+xml,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 .55  0 0 0 0 .47  0 0 0 0 .36  0 0 0 ${alpha} 0"/></filter><rect width="100%" height="100%" filter="url(#n)"/></svg>`,
 )}")`;
-const GRAIN = grain(0.05), GRAIN_LIGHT = grain(0.03);
+const GRAIN = grain(0.05);
 const PAPERS = ['#f3efe6', '#f1ece1', '#f4f0e7', '#efe9dc', '#f2ede3'];
 
 /**
  * Wear for one page. `outer` is the side away from the spine ('r' for right-hand pages,
- * 'l' for left-hand ones); `w` is the page width in px. Pages with a drawing get a lighter
- * touch so the wear never competes with the artwork.
+ * 'l' for left-hand ones); `w` is the page width in px. Applied the same over drawings.
  */
-export function pageWear(seed: string, outer: 'l' | 'r', w: number, drawn = false): Wear {
+export function pageWear(seed: string, outer: 'l' | 'r', w: number): Wear {
   const r = rng(hash(seed)), pct = (a: number, b: number) => (a + r() * (b - a)).toFixed(1) + '%';
-  const k = drawn ? 0.45 : 0.75, a = (v: number) => (v * k).toFixed(3);
+  const a = (v: number) => (v * 0.75).toFixed(3);
   const layers: string[] = [];
   // Thumb smudge near the outer edge, where the page gets turned.
   if (r() < 0.5) layers.push(`radial-gradient(ellipse 16% 10% at ${outer === 'r' ? pct(88, 96) : pct(4, 12)} ${pct(78, 92)}, rgba(70,58,44,${a(0.05)}), transparent 70%)`);
@@ -47,9 +46,9 @@ export function pageWear(seed: string, outer: 'l' | 'r', w: number, drawn = fals
   if (r() < 0.2) layers.push(`radial-gradient(circle at ${pct(10, 90)} ${pct(10, 90)}, rgba(140,100,50,${a(0.08)}), transparent 1.6%)`);
   // Yellowing toward the edges, a little stronger on the outer side.
   layers.push(`radial-gradient(ellipse 85% 80% at ${outer === 'r' ? '42%' : '58%'} 50%, transparent 64%, rgba(150,118,62,${a(0.07 + r() * 0.05)}) 100%)`);
-  layers.push(drawn ? GRAIN_LIGHT : GRAIN);
-  // Dog-ear on the top outer corner (the bottom corners carry the page numbers); smaller and rarer on drawn pages.
-  const ear = r() < (drawn ? 0.1 : 0.18) ? { corner: ('t' + outer) as Corner, size: Math.round(w * (drawn ? 0.05 + r() * 0.03 : 0.06 + r() * 0.04)) } : null;
+  layers.push(GRAIN);
+  // Dog-ear on the top outer corner (the bottom corners carry the page numbers).
+  const ear = r() < 0.18 ? { corner: ('t' + outer) as Corner, size: Math.round(w * (0.06 + r() * 0.04)) } : null;
   return { paper: PAPERS[Math.floor(r() * PAPERS.length)], overlay: layers.join(','), ear };
 }
 
