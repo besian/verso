@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,800&display=swap" rel="stylesheet">
+<style>html,body{margin:0;height:100%;background:#363955;overflow:hidden}a{color:#fff}a:hover{color:#d9dbf0}</style>
+</helmet>
+<div onDragOver="{{ onDragOver }}" onDrop="{{ onDrop }}" onMouseMove="{{ wake }}" onPointerDown="{{ wake }}" style="position:fixed;inset:0;background:#363955;color:#fff;font-family:'DM Sans',sans-serif;display:flex;flex-direction:column;align-items:center;user-select:none">
+  <div style="position:absolute;inset:0;overflow:hidden;pointer-events:none;opacity:{{ fz }}">
+    <div ref="{{ bgRefA }}" style="position:absolute;inset:-25%;background:{{ focusBg }};filter:blur(80px) saturate(1.5);transition:background .9s"></div>
+    <div ref="{{ bgRefB }}" style="position:absolute;inset:-25%;background:{{ focusBg }};filter:blur(110px) saturate(1.3);opacity:.55;mix-blend-mode:screen;transition:background .9s"></div>
+    <div style="position:absolute;inset:0;background:rgba(28,30,48,.38)"></div>
+  </div>
+  <div style="position:absolute;top:{{ mTop }}px;left:{{ mPad }}px;right:{{ mPad }}px;display:flex;justify-content:space-between;align-items:center;gap:10px;z-index:5;opacity:{{ uiOp }};pointer-events:{{ uiPE }}">
+    <div style="display:flex;align-items:center;gap:{{ mGap }}px">
+      <div style="width:34px;height:34px;flex-shrink:0;border-radius:50%;border:1.5px solid rgba(255,255,255,.7);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800">sb</div>
+      <div style="display:flex;gap:2px;padding:3px;border-radius:17px;background:rgba(255,255,255,.1)">
+        <button onClick="{{ goMine }}" style="height:28px;padding:0 12px;border-radius:14px;border:none;background:{{ navMineBg }};color:{{ navMineFg }};font:500 13px 'DM Sans',sans-serif;cursor:pointer">Mine</button>
+        <button onClick="{{ goExplore }}" style="height:28px;padding:0 12px;border-radius:14px;border:none;background:{{ navExBg }};color:{{ navExFg }};font:500 13px 'DM Sans',sans-serif;cursor:pointer">Explore</button>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+    <sc-if value="{{ isOther }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button onClick="{{ openArtist }}" title="View profile" style="display:flex;align-items:center;gap:10px;padding:0;border:none;background:none;color:#fff;font:500 13px 'DM Sans',sans-serif;cursor:pointer" style-hover="opacity:.8">
+        <div style="width:30px;height:30px;border-radius:50%;background:#fff;color:#363955;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800">{{ artistInitials }}</div>
+        <sc-if value="{{ notMob }}" hint-placeholder-val="{{ true }}"><span style="font-size:13px;font-weight:500">{{ artist }}</span></sc-if>
+        </button>
+        <button onClick="{{ goExplore }}" style="height:34px;padding:0 14px;margin-left:6px;border-radius:17px;border:1.5px solid rgba(255,255,255,.5);background:none;color:#fff;font:500 13px 'DM Sans',sans-serif;cursor:pointer" style-hover="background:rgba(255,255,255,.1)">← Explore</button>
+      </div>
+    </sc-if>
+    <sc-if value="{{ isMine }}" hint-placeholder-val="{{ true }}">
+    <button onClick="{{ newBook }}" style="height:34px;padding:0 14px;border-radius:17px;border:1.5px solid rgba(255,255,255,.5);background:none;color:#fff;font:500 13px 'DM Sans',sans-serif;cursor:pointer;white-space:nowrap" style-hover="background:rgba(255,255,255,.1)">{{ newLbl }}</button>
+    </sc-if>
+    <sc-if value="{{ hasAcct }}" hint-placeholder-val="{{ false }}">
+      <button onClick="{{ openMe }}" title="Your profile" style="width:34px;height:34px;flex-shrink:0;border-radius:50%;border:none;padding:0;background:{{ meAvBg }};color:#363955;font:800 11px 'DM Sans',sans-serif;cursor:pointer;box-shadow:{{ meRing }}" style-hover="transform:scale(1.06)">{{ meInit }}</button>
+    </sc-if>
+    <sc-if value="{{ noAcct }}" hint-placeholder-val="{{ true }}">
+      <button onClick="{{ openMe }}" style="height:34px;padding:0 14px;border-radius:17px;border:none;background:#fff;color:#363955;font:800 13px 'DM Sans',sans-serif;cursor:pointer;white-space:nowrap" style-hover="background:#ffb547">Sign up</button>
+    </sc-if>
+    </div>
+  </div>
+  <div style="position:relative;margin-top:{{ mTitleTop }}px;max-width:100%;box-sizing:border-box;padding:0 {{ mPad }}px;display:flex;align-items:center;gap:{{ mGap }}px;opacity:{{ uiOp }};pointer-events:{{ uiPE }}">
+    <sc-if value="{{ multi }}" hint-placeholder-val="{{ false }}">
+      <button onClick="{{ prevBook }}" title="Previous sketchbook" style="width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.12);color:#fff;font:800 16px 'DM Sans',sans-serif;cursor:pointer;opacity:{{ prevOp }}">‹</button>
+    </sc-if>
+    <div style="text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center;min-width:0;opacity:{{ titleOp }}">
+      <div style="font-size:{{ mTitleSize }}px;font-weight:800;letter-spacing:-.02em;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ titleName }}</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.75)">{{ bookMeta }}</div>
+    </div>
+    <sc-if value="{{ multi }}" hint-placeholder-val="{{ false }}">
+      <button onClick="{{ nextBook }}" title="Next sketchbook" style="width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.12);color:#fff;font:800 16px 'DM Sans',sans-serif;cursor:pointer;opacity:{{ nextOp }}">›</button>
+    </sc-if>
+  </div>
+  <div ref="{{ stageRef }}" onPointerDown="{{ onDown }}" onPointerMove="{{ onMove }}" onPointerUp="{{ onUp }}" onPointerCancel="{{ onUp }}" onWheel="{{ onWheel }}" style="position:relative;flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;perspective:2200px;cursor:grab;touch-action:none">
+    <div style="position:absolute;left:50%;top:50%;width:0;height:0;transform-style:preserve-3d;transform:{{ sbBase }};opacity:{{ uiOp }};pointer-events:{{ uiPE }}">
+      <sc-for list="{{ sideBooks }}" as="sb" hint-placeholder-count="0">
+        <div onPointerDown="{{ sb.stop }}" onClick="{{ sb.open }}" style="position:absolute;left:0;top:{{ sb.top }}px;width:{{ sb.w }}px;height:{{ sb.h }}px;transform:{{ sb.transform }};opacity:{{ sb.opacity }};cursor:pointer">
+          <div style="position:absolute;inset:0;transform:translate(7px,6px);border-radius:3px 11px 11px 3px;background:{{ sb.board }};filter:brightness(.6);box-shadow:0 24px 40px rgba(15,16,35,.45)"></div>
+          <div style="position:absolute;top:3px;bottom:-3px;left:4px;right:-4px;border-radius:2px 9px 9px 2px;background:repeating-linear-gradient(180deg,#f3efe6 0 2px,#d8d1c1 2px 3px)"></div>
+          <div style="position:absolute;inset:0;border-radius:2px 10px 10px 2px;overflow:hidden;background:{{ sb.bg }};box-shadow:0 1px 2px rgba(0,0,0,.3)">
+            <div style="position:absolute;left:0;top:0;bottom:0;width:7%;background:linear-gradient(90deg,rgba(0,0,0,.28),rgba(0,0,0,.08))"></div>
+            <div style="position:absolute;right:13%;top:0;bottom:0;width:8px;background:#1d1d26;box-shadow:-2px 0 3px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.25)"></div>
+            <sc-if value="{{ sb.showLabel }}" hint-placeholder-val="{{ true }}">
+              <div style="position:absolute;left:16%;right:26%;top:14%;padding:10px 12px;background:#f6f2e9;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.2);color:#2b2d45;font-size:15px;font-weight:800">{{ sb.name }}</div>
+            </sc-if>
+          </div>
+          <div style="position:absolute;inset:0;border-radius:2px 10px 10px 2px;background:#1c1d30;opacity:{{ sb.shade }};pointer-events:none"></div>
+          <div style="position:absolute;top:calc(100% + 18px);left:0;right:0;text-align:center;display:flex;flex-direction:column;gap:2px;opacity:{{ sb.labelOp }}">
+            <div style="font-size:18px;font-weight:800">{{ sb.name }}</div>
+            <div style="font-size:14px;color:rgba(255,255,255,.7)">{{ sb.count }}</div>
+          </div>
+        </div>
+      </sc-for>
+      <sc-if value="{{ showGhost }}" hint-placeholder-val="{{ true }}">
+      <div onPointerDown="{{ stopPD }}" onClick="{{ newBook }}" style="position:absolute;left:0;top:{{ sbTop }}px;width:{{ W }}px;height:{{ H }}px;transform:{{ ghostT }};border:2px dashed rgba(255,255,255,.35);border-radius:4px 12px 12px 4px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:500;color:rgba(255,255,255,.75);cursor:pointer;box-sizing:border-box" style-hover="border-color:rgba(255,255,255,.7)">+ New sketchbook</div>
+      </sc-if>
+    </div>
+    <div style="position:relative;width:0;height:{{ H }}px;transform-style:preserve-3d;transform:{{ bookTransform }};opacity:{{ bookOp }}">
+      <div style="position:absolute;left:{{ shadowLeft }}px;top:0;width:{{ shadowW }}px;height:{{ H }}px;transform:translateZ(-2px) translateY(26px);background:rgba(15,16,35,.45);filter:blur(22px);border-radius:12px;opacity:{{ openShadowOp }}"></div>
+      <div style="position:absolute;left:{{ bodyLeft }}px;top:0;width:{{ W }}px;height:{{ H }}px;transform:translateZ(-1px);opacity:{{ bodyOp }};pointer-events:none">
+        <div style="position:absolute;inset:0;transform:translate(7px,6px);border-radius:3px 11px 11px 3px;background:{{ boardColor }};filter:brightness(.6);box-shadow:0 24px 40px rgba(15,16,35,.45)"></div>
+        <div style="position:absolute;top:3px;bottom:-3px;left:4px;right:-4px;border-radius:2px 9px 9px 2px;background:repeating-linear-gradient(180deg,#f3efe6 0 2px,#d8d1c1 2px 3px)"></div>
+      </div>
+      <sc-for list="{{ leaves }}" as="leaf" hint-placeholder-count="0">
+        <div style="position:absolute;left:0;top:0;width:{{ W }}px;height:{{ H }}px;transform-origin:0 50%;transform-style:preserve-3d;transform:{{ leaf.transform }}">
+          <div onClick="{{ leaf.openFront }}" style="position:absolute;inset:0;backface-visibility:hidden;border-radius:2px 10px 10px 2px;overflow:hidden;background:{{ leaf.frontBg }};box-shadow:inset 6px 0 10px -6px rgba(0,0,0,.35)">
+            <sc-if value="{{ leaf.isCoverAny }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;left:0;top:0;bottom:0;width:7%;background:linear-gradient(90deg,rgba(0,0,0,.28),rgba(0,0,0,.08));pointer-events:none"></div>
+              <div style="position:absolute;right:13%;top:0;bottom:0;width:8px;background:#1d1d26;box-shadow:-2px 0 3px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.25);pointer-events:none"></div>
+            </sc-if>
+            <sc-if value="{{ leaf.isCover }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;left:16%;right:26%;top:14%;padding:10px 12px;background:#f6f2e9;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.2);color:#2b2d45;font-size:15px;font-weight:800;letter-spacing:-.01em;pointer-events:none">{{ leaf.label }}</div>
+            </sc-if>
+            <div style="position:absolute;inset:0;background:#000;opacity:{{ leaf.shadeF }};pointer-events:none"></div>
+            <div style="position:absolute;bottom:12px;right:14px;font-size:11px;color:rgba(40,40,60,.45)">{{ leaf.numF }}</div>
+          </div>
+          <div onClick="{{ leaf.openBack }}" style="position:absolute;inset:0;backface-visibility:hidden;transform:rotateY(180deg);border-radius:10px 2px 2px 10px;overflow:hidden;background:{{ leaf.backBg }};box-shadow:inset -6px 0 10px -6px rgba(0,0,0,.35)">
+            <div style="position:absolute;inset:0;background:#000;opacity:{{ leaf.shadeB }};pointer-events:none"></div>
+            <div style="position:absolute;bottom:12px;left:14px;font-size:11px;color:rgba(40,40,60,.45)">{{ leaf.numB }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="margin-bottom:14px;font-size:13px;color:rgba(255,255,255,.75);opacity:{{ emptyOp }};transition:opacity .3s;pointer-events:none">Open pages to add your drawings, or drop images here</div>
+  <div style="position:relative;z-index:2;display:flex;gap:12px;margin-bottom:calc({{ mBottom }}px + env(safe-area-inset-bottom));flex-shrink:0;padding:6px;border-radius:30px;background:rgba(28,30,48,{{ fz }});opacity:{{ ctrlOp }};transform:translateY({{ ctrlY }}px);pointer-events:{{ ctrlPE }};transition:opacity .35s,transform .35s cubic-bezier(.2,.8,.2,1)">
+    <button onClick="{{ zoomOut }}" title="Zoom out" style="width:44px;height:44px;border-radius:50%;border:none;background:#fff;color:#363955;font:800 22px 'DM Sans',sans-serif;cursor:pointer" style-hover="transform:scale(1.08)">−</button>
+    <sc-if value="{{ notOther }}" hint-placeholder-val="{{ true }}">
+    <button onClick="{{ openManager }}" title="Pages" style="width:88px;height:44px;border-radius:22px;border:none;background:#ffb547;color:#363955;font:800 20px 'DM Sans',sans-serif;cursor:pointer" style-hover="transform:scale(1.06)">✎</button>
+    </sc-if>
+    <button onClick="{{ zoomIn }}" title="Zoom in" style="width:44px;height:44px;border-radius:50%;border:none;background:#fff;color:#363955;font:800 22px 'DM Sans',sans-serif;cursor:pointer" style-hover="transform:scale(1.08)">+</button>
+  </div>
+  <sc-if value="{{ isExplore }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;z-index:4;background:#363955;overflow-x:hidden;overflow-y:{{ exOvY }}">
+      <div style="max-width:none;height:{{ exInnerH }};min-height:100%;box-sizing:border-box;margin:0 auto;padding:{{ exPadT }}px {{ exPadX }}px 28px;display:flex;flex-direction:column;gap:{{ exGap }}px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div style="flex:1 1 {{ exSearchBasis }};min-width:200px;max-width:{{ exSearchMax }};height:40px;display:flex;align-items:center;gap:10px;padding:0 16px;border-radius:20px;background:rgba(255,255,255,.1);box-sizing:border-box">
+            <span style="font-size:15px;color:rgba(255,255,255,.6)">⌕</span>
+            <input value="{{ exQ }}" onChange="{{ onExQ }}" placeholder="Search sketchbooks or artists" style="flex:1;min-width:0;height:100%;border:none;outline:none;background:none;color:#fff;font:500 14px 'DM Sans',sans-serif"></input>
+          </div>
+          <div style="flex:1;min-width:0"></div>
+          <div style="display:flex;gap:2px;padding:4px;border-radius:20px;background:rgba(255,255,255,.1)">
+            <button onClick="{{ sortTrend }}" style="height:32px;padding:0 14px;border-radius:16px;border:none;background:{{ sTrBg }};color:{{ sTrFg }};font:500 13px 'DM Sans',sans-serif;cursor:pointer">Trending</button>
+            <button onClick="{{ sortNew }}" style="height:32px;padding:0 14px;border-radius:16px;border:none;background:{{ sNewBg }};color:{{ sNewFg }};font:500 13px 'DM Sans',sans-serif;cursor:pointer">New</button>
+          </div>
+          <div style="display:flex;gap:2px;padding:4px;border-radius:20px;background:rgba(255,255,255,.1)">
+            <button onClick="{{ viewGrid }}" title="Grid" style="width:32px;height:32px;border-radius:16px;border:none;background:{{ vGridBg }};color:{{ vGridFg }};font:500 16px 'DM Sans',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center">▦</button>
+            <button onClick="{{ viewStack }}" title="Stack" style="width:32px;height:32px;border-radius:16px;border:none;background:{{ vStackBg }};color:{{ vStackFg }};font:500 16px 'DM Sans',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center">≡</button>
+          </div>
+        </div>
+        <sc-if value="{{ exNone }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:14px;color:rgba(255,255,255,.7)">No sketchbooks match “{{ exQ }}”</div>
+        </sc-if>
+        <sc-if value="{{ exGrid }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;justify-content:center">
+        <div style="display:grid;grid-template-columns:repeat({{ exCols }},minmax(0,1fr));gap:28px 18px;width:100%;align-items:end">
+          <sc-for list="{{ exploreList }}" as="xb" hint-placeholder-count="8">
+            <div onClick="{{ xb.open }}" style="display:flex;flex-direction:column;gap:8px;cursor:pointer;min-width:0">
+              <div style="position:relative;aspect-ratio:{{ xb.ar }};width:calc({{ xb.wp }}% - 7px);margin-right:7px;transition:transform .35s cubic-bezier(.2,.8,.2,1)" style-hover="transform:translateY(-8px)">
+                <div style="position:absolute;inset:0;transform:translate(7px,6px);border-radius:3px 11px 11px 3px;background:{{ xb.color }};filter:brightness(.6);box-shadow:0 20px 32px rgba(15,16,35,.45)"></div>
+                <div style="position:absolute;top:3px;bottom:-3px;left:4px;right:-4px;border-radius:2px 9px 9px 2px;background:repeating-linear-gradient(180deg,#f3efe6 0 2px,#d8d1c1 2px 3px)"></div>
+                <div style="position:absolute;inset:0;border-radius:2px 10px 10px 2px;overflow:hidden;background:{{ xb.color }};box-shadow:0 1px 2px rgba(0,0,0,.3)">
+                  <div style="position:absolute;left:0;top:0;bottom:0;width:7%;background:linear-gradient(90deg,rgba(0,0,0,.28),rgba(0,0,0,.08))"></div>
+                  <div style="position:absolute;right:13%;top:0;bottom:0;width:7px;background:#1d1d26;box-shadow:-2px 0 3px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.25)"></div>
+                  <div style="position:absolute;left:16%;right:26%;top:14%;padding:8px 10px;background:#f6f2e9;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.2);color:#2b2d45;font-size:13px;font-weight:800">{{ xb.name }}</div>
+                </div>
+              </div>
+              <div onClick="{{ xb.openArtist }}" title="View profile" style="display:flex;align-items:center;gap:10px;min-width:0">
+                <div style="width:28px;height:28px;flex-shrink:0;border-radius:50%;background:#fff;color:#363955;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800">{{ xb.initials }}</div>
+                <div style="display:flex;flex-direction:column;min-width:0;flex:1">
+                  <span style="font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ xb.name }}</span>
+                  <span style="font-size:13px;color:rgba(255,255,255,.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ xb.artist }} · {{ xb.count }}</span>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        </div>
+        </sc-if>
+        <sc-if value="{{ exStack }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;min-height:0;display:flex;flex-direction:{{ stDir }};align-items:center;justify-content:center;gap:{{ stGap }}px">
+            <div onWheel="{{ stackWheel }}" onPointerDown="{{ stDown0 }}" onPointerUp="{{ stUp0 }}" style="position:relative;width:440px;max-width:{{ stMaxW }};flex:{{ stFlex }};height:min(560px,100%);min-height:0;perspective:1300px;touch-action:none">
+              <div style="position:absolute;left:50%;top:70%;width:380px;height:110px;transform:translate(-50%,-50%);background:radial-gradient(ellipse at center,rgba(15,16,35,.55),transparent 70%);pointer-events:none"></div>
+              <div style="position:absolute;left:50%;top:38%;width:0;height:0;transform-style:preserve-3d;transform:{{ stackT }}">
+                <sc-for list="{{ stackList }}" as="sk" hint-placeholder-count="6">
+                  <div onClick="{{ sk.click }}" style="position:absolute;left:{{ sk.l }}px;top:{{ sk.tp }}px;width:{{ sk.w }}px;height:{{ sk.h }}px;transform-style:preserve-3d;transform:{{ sk.t }};opacity:{{ sk.op }};cursor:pointer">
+                    <div style="position:absolute;inset:0;transform:translateZ(-14px);border-radius:2px 10px 10px 2px;background:{{ sk.color }};filter:brightness(.55)"></div>
+                    <div style="position:absolute;left:0;right:0;top:100%;height:14px;transform-origin:top;transform:rotateX(-90deg);background:repeating-linear-gradient(180deg,#f3efe6 0 2px,#d8d1c1 2px 3px)"></div>
+                    <div style="position:absolute;left:0;right:0;bottom:100%;height:14px;transform-origin:bottom;transform:rotateX(90deg);background:repeating-linear-gradient(180deg,#f3efe6 0 2px,#d8d1c1 2px 3px)"></div>
+                    <div style="position:absolute;top:0;bottom:0;left:100%;width:14px;transform-origin:left;transform:rotateY(90deg);background:repeating-linear-gradient(90deg,#f3efe6 0 2px,#d8d1c1 2px 3px)"></div>
+                    <div style="position:absolute;top:0;bottom:0;right:100%;width:14px;transform-origin:right;transform:rotateY(-90deg);background:{{ sk.color }};filter:brightness(.7)"></div>
+                    <div style="position:absolute;inset:0;border-radius:2px 10px 10px 2px;overflow:hidden;background:{{ sk.color }}">
+                      <div style="position:absolute;left:0;top:0;bottom:0;width:7%;background:linear-gradient(90deg,rgba(0,0,0,.28),rgba(0,0,0,.08))"></div>
+                      <div style="position:absolute;right:13%;top:0;bottom:0;width:8px;background:#1d1d26"></div>
+                      <div style="position:absolute;left:16%;right:26%;top:14%;padding:10px 12px;background:#f6f2e9;border-radius:2px;color:#2b2d45;font-size:15px;font-weight:800">{{ sk.name }}</div>
+                      <div style="position:absolute;inset:0;background:#1c1d30;opacity:{{ sk.shade }}"></div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:{{ stInfoGap }}px;min-width:220px;max-width:280px;align-items:{{ stAlign }};text-align:{{ stTA }}">
+              <div style="font-size:12px;font-weight:800;color:#ffb547;letter-spacing:.04em">{{ stRank }} · {{ stLikes }}</div>
+              <div style="font-size:{{ stTitle }}px;font-weight:800;letter-spacing:-.02em;line-height:1.05">{{ stName }}</div>
+              <div style="font-size:14px;color:rgba(255,255,255,.75)"><span onClick="{{ stArtistOpen }}" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(255,255,255,.35)" style-hover="color:#fff">{{ stArtist }}</span> · {{ stPages }}</div>
+              <div style="display:flex;gap:10px;align-items:center;margin-top:{{ stBtnTop }}px">
+                <button onClick="{{ stOpen }}" style="height:44px;padding:0 22px;border-radius:22px;border:none;background:#ffb547;color:#363955;font:800 14px 'DM Sans',sans-serif;cursor:pointer" style-hover="transform:scale(1.05)">Open</button>
+                <button onClick="{{ stUp }}" title="Put back" style="width:44px;height:44px;border-radius:50%;border:none;background:#fff;color:#363955;font:800 18px 'DM Sans',sans-serif;cursor:pointer;opacity:{{ stUpOp }}">↓</button>
+                <button onClick="{{ stDown }}" title="Lift off" style="width:44px;height:44px;border-radius:50%;border:none;background:#fff;color:#363955;font:800 18px 'DM Sans',sans-serif;cursor:pointer;opacity:{{ stDownOp }}">↑</button>
+              </div>
+              <div style="font-size:12px;color:rgba(255,255,255,.6)">{{ stPos }} · {{ stHint }}</div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isProfile }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;z-index:4;background:#363955;overflow-x:hidden;overflow-y:auto">
+      <div style="position:relative;height:{{ pfBanH }}px;background:{{ pfAccent }};overflow:hidden">
+        <div style="position:absolute;inset:0;background:repeating-linear-gradient(180deg,transparent 0 27px,rgba(255,255,255,.1) 27px 28px)"></div>
+        <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(54,57,85,0) 30%,#363955)"></div>
+        <sc-if value="{{ pfPreviewing }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;left:50%;top:{{ pfNoteTop }}px;transform:translateX(-50%);padding:8px 14px;border-radius:16px;background:rgba(28,30,48,.8);font-size:13px;font-weight:500;white-space:nowrap">Previewing your profile as others see it</div>
+        </sc-if>
+      </div>
+      <div style="position:relative;max-width:1080px;margin:-56px auto 0;padding:0 {{ pfPadX }}px 48px;box-sizing:border-box;display:flex;flex-direction:column;gap:40px">
+        <div style="display:flex;flex-direction:{{ pfDir }};align-items:{{ pfAlign }};gap:{{ pfHeadGap }}px;text-align:{{ pfTA }}">
+          <div style="width:112px;height:112px;flex-shrink:0;border-radius:50%;background:{{ pfAvBg }};color:#363955;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:800;box-shadow:0 0 0 5px #363955">{{ pfInit }}</div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;padding-top:{{ pfInfoTop }}px;align-items:{{ pfAlign }}">
+            <div style="font-size:{{ pfNameSize }}px;font-weight:800;letter-spacing:-.02em;line-height:1.05;text-wrap:balance">{{ pfName }}</div>
+            <div style="display:flex;gap:4px 14px;flex-wrap:wrap;justify-content:{{ pfJust }};font-size:14px;color:rgba(255,255,255,.7)">
+              <span>{{ pfHandle }}</span>
+              <sc-if value="{{ pfHasLoc }}" hint-placeholder-val="{{ false }}"><span>{{ pfLoc }}</span></sc-if>
+              <sc-if value="{{ pfHasWeb }}" hint-placeholder-val="{{ false }}"><a href="{{ pfWebHref }}" target="_blank" style="color:#ffb547;text-decoration:none">{{ pfWeb }}</a></sc-if>
+              <span>{{ pfJoined }}</span>
+            </div>
+            <sc-if value="{{ pfHasBio }}" hint-placeholder-val="{{ true }}">
+              <div style="font-size:15px;line-height:1.5;max-width:560px;text-wrap:pretty;opacity:{{ pfBioOp }}">{{ pfBio }}</div>
+            </sc-if>
+            <div style="display:flex;gap:6px 20px;flex-wrap:wrap;justify-content:{{ pfJust }};margin-top:4px">
+              <sc-for list="{{ pfStats }}" as="st" hint-placeholder-count="4">
+                <span style="font-size:14px;color:rgba(255,255,255,.7)"><b style="color:#fff;font-weight:800">{{ st.n }}</b> {{ st.l }}</span>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;flex-shrink:0;padding-top:{{ pfInfoTop }}px">
+            <sc-if value="{{ pfMine }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ editProfile }}" style="height:44px;padding:0 20px;border-radius:22px;border:none;background:#ffb547;color:#363955;font:800 14px 'DM Sans',sans-serif;cursor:pointer" style-hover="transform:scale(1.04)">Edit profile</button>
+              <button onClick="{{ togglePreview }}" style="height:44px;padding:0 18px;border-radius:22px;border:1.5px solid rgba(255,255,255,.5);background:none;color:#fff;font:500 14px 'DM Sans',sans-serif;cursor:pointer" style-hover="background:rgba(255,255,255,.1)">View as public</button>
+            </sc-if>
+            <sc-if value="{{ pfPreviewing }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ togglePreview }}" style="height:44px;padding:0 20px;border-radius:22px;border:none;background:#fff;color:#363955;font:800 14px 'DM Sans',sans-serif;cursor:pointer" style-hover="background:#ffb547">Exit preview</button>
+            </sc-if>
+            <sc-if value="{{ pfOther }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ toggleFollow }}" style="height:44px;min-width:120px;padding:0 20px;border-radius:22px;border:1.5px solid {{ folBd }};background:{{ folBg }};color:{{ folFg }};font:800 14px 'DM Sans',sans-serif;cursor:pointer">{{ folLbl }}</button>
+            </sc-if>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:20px">
+          <div style="display:flex;align-items:baseline;gap:10px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,.12)">
+            <span style="font-size:17px;font-weight:800">{{ pfBooksLbl }}</span>
+            <span style="font-size:14px;color:rgba(255,255,255,.6)">{{ pfCount }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat({{ pfCols }},minmax(0,1fr));gap:28px 18px;align-items:end">
+            <sc-for list="{{ pfBooks }}" as="pb" hint-placeholder-count="3">
+              <div onClick="{{ pb.open }}" style="display:flex;flex-direction:column;gap:10px;cursor:pointer;min-width:0">
+                <div style="position:relative;aspect-ratio:{{ pb.ar }};width:calc({{ pb.wp }}% - 7px);margin-right:7px;transition:transform .35s cubic-bezier(.2,.8,.2,1)" style-hover="transform:translateY(-8px)">
+                  <div style="position:absolute;inset:0;transform:translate(7px,6px);border-radius:3px 11px 11px 3px;background:{{ pb.color }};filter:brightness(.6);box-shadow:0 20px 32px rgba(15,16,35,.45)"></div>
+                  <div style="position:absolute;top:3px;bottom:-3px;left:4px;right:-4px;border-radius:2px 9px 9px 2px;background:repeating-linear-gradient(180deg,#f3efe6 0 2px,#d8d1c1 2px 3px)"></div>
+                  <div style="position:absolute;inset:0;border-radius:2px 10px 10px 2px;overflow:hidden;background:{{ pb.bg }};box-shadow:0 1px 2px rgba(0,0,0,.3)">
+                    <div style="position:absolute;left:0;top:0;bottom:0;width:7%;background:linear-gradient(90deg,rgba(0,0,0,.28),rgba(0,0,0,.08))"></div>
+                    <div style="position:absolute;right:13%;top:0;bottom:0;width:7px;background:#1d1d26;box-shadow:-2px 0 3px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.25)"></div>
+                    <sc-if value="{{ pb.showLabel }}" hint-placeholder-val="{{ true }}">
+                      <div style="position:absolute;left:16%;right:26%;top:14%;padding:8px 10px;background:#f6f2e9;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.2);color:#2b2d45;font-size:13px;font-weight:800">{{ pb.name }}</div>
+                    </sc-if>
+                  </div>
+                </div>
+                <div style="display:flex;flex-direction:column;min-width:0">
+                  <span style="font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ pb.name }}</span>
+                  <span style="font-size:13px;color:rgba(255,255,255,.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ pb.count }}</span>
+                </div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ pfShowNew }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ pfNew }}" style="display:flex;flex-direction:column;gap:10px;cursor:pointer;min-width:0">
+                <div style="aspect-ratio:.72;width:calc(78% - 7px);box-sizing:border-box;border:2px dashed rgba(255,255,255,.35);border-radius:2px 10px 10px 2px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:rgba(255,255,255,.8)" style-hover="border-color:#ffb547;color:#ffb547">+ New</div>
+                <div style="height:38px"></div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ signup }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeSignup }}" style="position:absolute;inset:0;z-index:20;background:rgba(28,30,48,.82);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box">
+      <div style="background:#2b2d45;border-radius:20px;padding:{{ mModalPad }}px;display:flex;flex-direction:column;gap:18px;max-width:420px;width:100%;box-sizing:border-box;max-height:100%;overflow:auto">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="font-size:24px;font-weight:800;letter-spacing:-.02em">Create your account</div>
+          <div style="font-size:14px;line-height:1.45;color:rgba(255,255,255,.7);text-wrap:pretty">Get a profile page where others can browse your sketchbooks.</div>
+        </div>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:rgba(255,255,255,.75)">Name
+          <input value="{{ suName }}" onChange="{{ onSuName }}" placeholder="Your name" style="height:44px;padding:0 14px;border-radius:12px;border:1.5px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;font:500 14px 'DM Sans',sans-serif;outline:none;width:100%;box-sizing:border-box" style-focus="border-color:#ffb547"></input>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:rgba(255,255,255,.75)">Handle
+          <div style="display:flex;align-items:center;height:44px;padding:0 14px;border-radius:12px;border:1.5px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);box-sizing:border-box"><span style="font-size:14px;color:rgba(255,255,255,.5)">@</span><input value="{{ suHandle }}" onChange="{{ onSuHandle }}" placeholder="handle" style="flex:1;min-width:0;height:100%;padding:0 0 0 2px;border:none;outline:none;background:none;color:#fff;font:500 14px 'DM Sans',sans-serif"></input></div>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:rgba(255,255,255,.75)">Email
+          <input value="{{ suEmail }}" onChange="{{ onSuEmail }}" type="email" placeholder="you@example.com" style="height:44px;padding:0 14px;border-radius:12px;border:1.5px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;font:500 14px 'DM Sans',sans-serif;outline:none;width:100%;box-sizing:border-box" style-focus="border-color:#ffb547"></input>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:rgba(255,255,255,.75)">Password
+          <input value="{{ suPw }}" onChange="{{ onSuPw }}" type="password" placeholder="At least 6 characters" style="height:44px;padding:0 14px;border-radius:12px;border:1.5px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;font:500 14px 'DM Sans',sans-serif;outline:none;width:100%;box-sizing:border-box" style-focus="border-color:#ffb547"></input>
+        </label>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+          <button onClick="{{ createAcct }}" style="height:46px;border-radius:23px;border:none;background:#ffb547;color:#363955;font:800 15px 'DM Sans',sans-serif;cursor:pointer;opacity:{{ suOp }}">Create account</button>
+          <button onClick="{{ cancelSignup }}" style="height:40px;border:none;background:none;color:rgba(255,255,255,.75);font:500 14px 'DM Sans',sans-serif;cursor:pointer" style-hover="color:#fff">Not now</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ pfEditing }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ pfClose }}" style="position:absolute;inset:0;z-index:20;background:rgba(28,30,48,.82);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box">
+      <div style="background:#2b2d45;border-radius:20px;padding:{{ mModalPad }}px;display:flex;flex-direction:column;gap:18px;max-width:520px;width:100%;box-sizing:border-box;max-height:100%;overflow:auto">
+        <div style="font-size:24px;font-weight:800;letter-spacing:-.02em">Edit profile</div>
+        <div style="display:flex;align-items:center;gap:16px">
+          <div style="width:80px;height:80px;flex-shrink:0;border-radius:50%;background:{{ dAvBg }};color:#363955;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800">{{ dInit }}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button onClick="{{ pickAv }}" style="height:36px;padding:0 14px;border-radius:18px;border:1.5px solid rgba(255,255,255,.5);background:none;color:#fff;font:500 13px 'DM Sans',sans-serif;cursor:pointer" style-hover="background:rgba(255,255,255,.1)">Upload photo</button>
+            <sc-if value="{{ dHasAv }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ removeAv }}" style="height:36px;padding:0 8px;border:none;background:none;color:#ff9b9b;font:500 13px 'DM Sans',sans-serif;cursor:pointer">Remove</button>
+            </sc-if>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px">
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:rgba(255,255,255,.75)">Name
+            <input value="{{ dName }}" onChange="{{ onDName }}" style="height:44px;padding:0 14px;border-radius:12px;border:1.5px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;font:500 14px 'DM Sans',sans-serif;outline:none;width:100%;box-sizing:border-box" style-focus="border-color:#ffb547"></input>
+          </label>
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:rgba(255,255,255,.75)">Handle
+            <div style="display:flex;align-items:center;height:44px;padding:0 14px;border-radius:12px;border:1.5px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);box-sizing:border-box"><span style="font-size:14px;color:rgba(255,255,255,.5)">@</span><input value="{{ dHandle }}" onChange="{{ onDHandle }}" style="flex:1;min-width:0;height:100%;padding:0 0 0 2px;border:none;outline:none;background:none;color:#fff;font:500 14px 'DM Sans',sans-serif"></input></div>
+          </label>
+        </div>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:rgba(255,255,255,.75)">
+          <div style="display:flex;justify-content:space-between"><span>Bio</span><span style="color:rgba(255,255,255,.5)">{{ dBioCount }}</span></div>
+          <textarea value="{{ dBio }}" onChange="{{ onDBio }}" maxLength="160" rows="3" placeholder="What do you draw?" style="padding:12px 14px;border-radius:12px;border:1.5px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;font:500 14px/1.45 'DM Sans',sans-serif;outline:none;width:100%;box-sizing:border-box;resize:none" style-focus="border-color:#ffb547"></textarea>
+        </label>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px">
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:rgba(255,255,255,.75)">Location
+            <input value="{{ dLoc }}" onChange="{{ onDLoc }}" placeholder="City" style="height:44px;padding:0 14px;border-radius:12px;border:1.5px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;font:500 14px 'DM Sans',sans-serif;outline:none;width:100%;box-sizing:border-box" style-focus="border-color:#ffb547"></input>
+          </label>
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:rgba(255,255,255,.75)">Website
+            <input value="{{ dWeb }}" onChange="{{ onDWeb }}" placeholder="yoursite.com" style="height:44px;padding:0 14px;border-radius:12px;border:1.5px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;font:500 14px 'DM Sans',sans-serif;outline:none;width:100%;box-sizing:border-box" style-focus="border-color:#ffb547"></input>
+          </label>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:rgba(255,255,255,.75)">Banner color
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <sc-for list="{{ accentOpts }}" as="ac" hint-placeholder-count="7">
+              <button onClick="{{ ac.pick }}" style="width:30px;height:30px;border-radius:50%;border:none;background:{{ ac.c }};cursor:pointer;box-shadow:{{ ac.ring }}"></button>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:14px;border-top:1px solid rgba(255,255,255,.12)">
+          <div style="display:flex;flex-direction:column;flex:1;min-width:160px">
+            <span style="font-size:12px;color:rgba(255,255,255,.6)">Signed in as {{ dEmail }}</span>
+            <button onClick="{{ signOut }}" style="align-self:flex-start;padding:2px 0;border:none;background:none;color:#ff9b9b;font:500 13px 'DM Sans',sans-serif;cursor:pointer">Sign out</button>
+          </div>
+          <button onClick="{{ pfCancel }}" style="height:44px;padding:0 18px;border-radius:22px;border:1.5px solid rgba(255,255,255,.5);background:none;color:#fff;font:500 14px 'DM Sans',sans-serif;cursor:pointer" style-hover="background:rgba(255,255,255,.1)">Cancel</button>
+          <button onClick="{{ pfSave }}" style="height:44px;padding:0 22px;border-radius:22px;border:none;background:#ffb547;color:#363955;font:800 14px 'DM Sans',sans-serif;cursor:pointer">Save</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+  <input ref="{{ avRef }}" type="file" accept="image/*" onChange="{{ onAvFile }}" style="display:none"></input>
+  <sc-if value="{{ showHandle }}" hint-placeholder-val="{{ false }}">
+    <button onClick="{{ toggleMenu }}" style="position:absolute;right:24px;bottom:24px;z-index:3;height:34px;padding:0 14px;border-radius:17px;border:none;background:rgba(28,30,48,.75);color:#fff;font:500 13px 'DM Sans',sans-serif;cursor:pointer;backdrop-filter:blur(8px)" style-hover="background:rgba(28,30,48,.95)">{{ handleLbl }}</button>
+  </sc-if>
+  <sc-if value="{{ showRail }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;right:20px;top:50%;transform:translateY(-50%);z-index:3;display:flex;flex-direction:column;gap:10px;padding:6px;border-radius:30px;background:rgba(28,30,48,.7);backdrop-filter:blur(8px);opacity:{{ railOp }}">
+      <button onClick="{{ zoomOut }}" title="Exit focus" style="width:40px;height:40px;border-radius:50%;border:none;background:#fff;color:#363955;font:800 20px 'DM Sans',sans-serif;cursor:pointer">−</button>
+      <button onClick="{{ openManager }}" title="Pages" style="width:40px;height:40px;border-radius:50%;border:none;background:#fff;color:#363955;font:800 15px 'DM Sans',sans-serif;cursor:pointer">▦</button>
+    </div>
+  </sc-if>
+  <sc-if value="{{ newPick }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closePick }}" style="position:absolute;inset:0;z-index:20;background:rgba(28,30,48,.82);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:24px">
+      <div style="background:#2b2d45;border-radius:20px;padding:{{ mModalPad }}px;display:flex;flex-direction:column;gap:20px;max-width:760px;width:100%;box-sizing:border-box;max-height:100%;overflow:auto;box-shadow:0 30px 60px rgba(10,10,30,.5)">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <div style="font-size:24px;font-weight:800;letter-spacing:-.01em">New sketchbook</div>
+          <div style="font-size:13px;color:rgba(255,255,255,.7)">Pick a shape and size</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax({{ mOptMin }}px,1fr));gap:10px">
+          <sc-for list="{{ shapeOpts }}" as="so" hint-placeholder-count="5">
+            <button onClick="{{ so.pick }}" style="height:{{ mOptH }}px;border:none;border-radius:14px;background:{{ so.bg }};box-shadow:{{ so.ring }};color:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:12px;padding:14px 8px;font:500 13px 'DM Sans',sans-serif">
+              <div style="width:{{ so.w }}px;height:{{ so.h }}px;max-width:100%;border-radius:2px 7px 7px 2px;background:{{ so.c }};box-shadow:4px 4px 0 rgba(0,0,0,.25)"></div>
+              <span>{{ so.label }}</span>
+            </button>
+          </sc-for>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:10px">
+          <button onClick="{{ cancelPick }}" style="height:40px;padding:0 18px;border-radius:20px;border:1.5px solid rgba(255,255,255,.4);background:none;color:#fff;font:500 14px 'DM Sans',sans-serif;cursor:pointer">Cancel</button>
+          <button onClick="{{ createBook }}" style="height:40px;padding:0 22px;border-radius:20px;border:none;background:#ffb547;color:#363955;font:800 14px 'DM Sans',sans-serif;cursor:pointer" style-hover="transform:scale(1.04)">Create</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ managing }}" hint-placeholder-val="{{ false }}">
+    <div onDragOver="{{ onDragOver }}" onDrop="{{ onDrop }}" style="position:absolute;inset:0;background:#2b2d45;z-index:15;overflow:auto">
+      <div style="max-width:1080px;margin:0 auto;padding:24px;display:flex;flex-direction:column;gap:28px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:16px">
+          <button onClick="{{ closeManager }}" style="height:36px;padding:0 16px;border-radius:18px;border:none;background:#fff;color:#363955;font:800 14px 'DM Sans',sans-serif;cursor:pointer">← Done</button>
+          <button onClick="{{ deleteBook }}" style="background:none;border:none;color:rgba(255,255,255,.7);font:500 13px 'DM Sans',sans-serif;cursor:pointer" style-hover="color:#ff9b9b">Delete sketchbook</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:20px">
+          <div style="display:flex;flex-direction:column;gap:6px;min-width:0;flex:1">
+            <input value="{{ bookName }}" onChange="{{ onName }}" style="background:none;border:none;border-bottom:1.5px solid rgba(255,255,255,.25);color:#fff;font:800 34px 'DM Sans',sans-serif;letter-spacing:-.02em;padding:0 0 4px;outline:none;width:100%;max-width:480px"></input>
+            <div style="font-size:13px;color:rgba(255,255,255,.7)">{{ blankNote }} · drag to reorder</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="font-size:13px;color:rgba(255,255,255,.7)">Cover</span>
+            <sc-for list="{{ swatches }}" as="s" hint-placeholder-count="6">
+              <button onClick="{{ s.pick }}" style="width:24px;height:24px;border-radius:50%;border:none;background:{{ s.c }};box-shadow:{{ s.ring }};cursor:pointer;padding:0"></button>
+            </sc-for>
+            <button onClick="{{ pickCover }}" style="height:30px;padding:0 12px;margin-left:6px;border-radius:15px;border:1.5px solid rgba(255,255,255,.5);background:none;color:#fff;font:500 13px 'DM Sans',sans-serif;cursor:pointer" style-hover="background:rgba(255,255,255,.1)">Upload cover</button>
+            <sc-if value="{{ hasCoverImg }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ removeCover }}" style="background:none;border:none;color:#ff9b9b;font:500 13px 'DM Sans',sans-serif;cursor:pointer;padding:0 4px">Remove</button>
+            </sc-if>
+            <input ref="{{ coverRef }}" type="file" accept="image/*" onChange="{{ onCoverFile }}" style="display:none"></input>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:20px">
+          <sc-for list="{{ pagesList }}" as="pg" hint-placeholder-count="0">
+            <div draggable="true" onDragStart="{{ pg.dragStart }}" onDragOver="{{ pg.dragOver }}" onDrop="{{ pg.drop }}" style="display:flex;flex-direction:column;gap:8px;cursor:grab">
+              <div onClick="{{ pg.edit }}" style="aspect-ratio:{{ pgAspect }};border-radius:2px 8px 8px 2px;background:{{ pg.bg }};box-shadow:0 10px 24px rgba(10,10,30,.35);cursor:pointer" style-hover="box-shadow:0 0 0 2px #fff,0 10px 24px rgba(10,10,30,.35)"></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px">
+                <span style="color:rgba(255,255,255,.7)">{{ pg.num }}</span>
+                <div style="display:flex;gap:2px">
+                  <button onClick="{{ pg.left }}" title="Move earlier" style="width:28px;height:28px;border-radius:50%;border:none;background:none;color:#fff;font:800 14px 'DM Sans',sans-serif;cursor:pointer" style-hover="background:rgba(255,255,255,.12)">‹</button>
+                  <button onClick="{{ pg.right }}" title="Move later" style="width:28px;height:28px;border-radius:50%;border:none;background:none;color:#fff;font:800 14px 'DM Sans',sans-serif;cursor:pointer" style-hover="background:rgba(255,255,255,.12)">›</button>
+                  <button onClick="{{ pg.edit }}" style="height:28px;padding:0 8px;border-radius:14px;border:none;background:none;color:#fff;font:500 13px 'DM Sans',sans-serif;cursor:pointer" style-hover="background:rgba(255,255,255,.12)">Edit</button>
+                  <button onClick="{{ pg.remove }}" style="height:28px;padding:0 8px;border-radius:14px;border:none;background:none;color:#ff9b9b;font:500 13px 'DM Sans',sans-serif;cursor:pointer" style-hover="background:rgba(255,120,120,.15)">Remove</button>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+          <div onClick="{{ pick }}" style="display:flex;flex-direction:column;gap:8px;cursor:pointer">
+            <div style="aspect-ratio:{{ pgAspect }};border-radius:2px 8px 8px 2px;border:2px dashed rgba(255,255,255,.35);display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center;box-sizing:border-box;color:rgba(255,255,255,.8);font-size:14px;font-weight:500;text-align:center;padding:12px" style-hover="border-color:#fff">
+              <span style="font-size:28px;font-weight:400">+</span>
+              <span>Add pages</span>
+              <span style="font-size:12px;color:rgba(255,255,255,.6)">or drop images</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ editing }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;background:#2b2d45;z-index:20;display:flex;align-items:center;justify-content:center;gap:48px;padding:24px;flex-wrap:wrap;overflow:auto">
+      <div onPointerDown="{{ edDown }}" onPointerMove="{{ edMove }}" onPointerUp="{{ edUp }}" onPointerCancel="{{ edUp }}" onWheel="{{ edWheel }}" style="position:relative;width:{{ fw }}px;height:{{ fh }}px;flex-shrink:0;overflow:hidden;background:#f3efe6;border-radius:2px 10px 10px 2px;box-shadow:0 30px 70px rgba(10,10,30,.5);cursor:move;touch-action:none">
+        <div style="position:absolute;left:50%;top:50%;width:{{ bw }}px;height:{{ bh }}px;transform:translate(-50%,-50%) {{ edTransform }};background:{{ edBg }};pointer-events:none"></div>
+        <div style="position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,.35) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.35) 1px,transparent 1px);background-size:33.34% 33.34%;mix-blend-mode:difference;opacity:.5"></div>
+      </div>
+      <div style="width:260px;display:flex;flex-direction:column;gap:22px">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <div style="font-size:24px;font-weight:800;letter-spacing:-.02em">Fit your page</div>
+          <div style="font-size:13px;color:rgba(255,255,255,.7)">{{ edTitle }} · drag to move, scroll to zoom</div>
+        </div>
+        <label style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+          <div style="display:flex;justify-content:space-between"><span>Zoom</span><span style="color:rgba(255,255,255,.7)">{{ scaleLbl }}</span></div>
+          <input type="range" min="0.3" max="4" step="0.01" value="{{ scale }}" onChange="{{ onScale }}" style="width:100%;accent-color:#fff"></input>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+          <div style="display:flex;justify-content:space-between"><span>Rotate</span><span style="color:rgba(255,255,255,.7)">{{ rotLbl }}</span></div>
+          <input type="range" min="-180" max="180" step="0.5" value="{{ rot }}" onChange="{{ onRot }}" style="width:100%;accent-color:#fff"></input>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+          <div style="display:flex;justify-content:space-between"><span>Skew horizontal</span><span style="color:rgba(255,255,255,.7)">{{ skxLbl }}</span></div>
+          <input type="range" min="-30" max="30" step="0.5" value="{{ skx }}" onChange="{{ onSkx }}" style="width:100%;accent-color:#fff"></input>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+          <div style="display:flex;justify-content:space-between"><span>Skew vertical</span><span style="color:rgba(255,255,255,.7)">{{ skyLbl }}</span></div>
+          <input type="range" min="-30" max="30" step="0.5" value="{{ sky }}" onChange="{{ onSky }}" style="width:100%;accent-color:#fff"></input>
+        </label>
+        <div style="display:flex;gap:8px">
+          <button onClick="{{ rot90 }}" style="flex:1;height:36px;border-radius:18px;border:1.5px solid rgba(255,255,255,.5);background:none;color:#fff;font:500 13px 'DM Sans',sans-serif;cursor:pointer">Rotate 90°</button>
+          <button onClick="{{ resetEd }}" style="flex:1;height:36px;border-radius:18px;border:1.5px solid rgba(255,255,255,.5);background:none;color:#fff;font:500 13px 'DM Sans',sans-serif;cursor:pointer">Reset</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button onClick="{{ applyEdit }}" style="height:44px;border-radius:22px;border:none;background:#fff;color:#363955;font:800 14px 'DM Sans',sans-serif;cursor:pointer">{{ applyLbl }}</button>
+          <div style="display:flex;justify-content:space-between">
+            <button onClick="{{ skipEdit }}" style="background:none;border:none;color:rgba(255,255,255,.75);font:500 13px 'DM Sans',sans-serif;cursor:pointer;padding:0">Skip image</button>
+            <button onClick="{{ cancelEdit }}" style="background:none;border:none;color:rgba(255,255,255,.75);font:500 13px 'DM Sans',sans-serif;cursor:pointer;padding:0">Cancel all</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+  <input ref="{{ fileRef }}" type="file" accept="image/*" multiple="multiple" onChange="{{ onFiles }}" style="display:none"></input>
+  <sc-if value="{{ viewing }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeView }}" style="position:absolute;inset:0;background:rgba(28,30,48,.94);display:flex;align-items:center;justify-content:center;gap:16px;z-index:10">
+      <button onClick="{{ viewPrev }}" style="width:44px;height:44px;border-radius:50%;border:none;background:#fff;color:#363955;font:800 18px 'DM Sans',sans-serif;cursor:pointer">←</button>
+      <div style="display:flex;gap:4px;max-width:84vw;max-height:84vh;pointer-events:none">
+        <sc-for list="{{ viewImgs }}" as="img" hint-placeholder-count="0">
+          <div style="height:84vh;width:{{ viewW }};background:{{ img.bg }};filter:drop-shadow(0 20px 40px rgba(0,0,0,.4))"></div>
+        </sc-for>
+      </div>
+      <button onClick="{{ viewNext }}" style="width:44px;height:44px;border-radius:50%;border:none;background:#fff;color:#363955;font:800 18px 'DM Sans',sans-serif;cursor:pointer">→</button>
+      <div style="position:absolute;bottom:24px;display:flex;gap:14px;align-items:center;font-size:13px;color:rgba(255,255,255,.75)">
+        <span>{{ viewLabel }}</span>
+        <button onClick="{{ editPage }}" style="height:32px;padding:0 14px;border-radius:16px;border:none;background:#fff;color:#363955;font:500 13px 'DM Sans',sans-serif;cursor:pointer">Edit page</button>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;focusMenu&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;auto-hide&quot;,&quot;options&quot;:[&quot;auto-hide&quot;,&quot;toggle&quot;,&quot;side rail&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Focus view&quot;},&quot;fan&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:7,&quot;min&quot;:0,&quot;max&quot;:16,&quot;step&quot;:1,&quot;unit&quot;:&quot;°&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;tilt&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:14,&quot;min&quot;:0,&quot;max&quot;:35,&quot;step&quot;:1,&quot;unit&quot;:&quot;°&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;aspect&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;portrait&quot;,&quot;options&quot;:[&quot;portrait&quot;,&quot;square&quot;,&quot;landscape&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;minPages&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:12,&quot;min&quot;:4,&quot;max&quot;:40,&quot;step&quot;:2,&quot;tsType&quot;:&quot;number&quot;}}">
+class Component extends DCLogic {
+  explore = [
+    ['Mira Okafor', 'night market', '#e8542f'], ['Jun Park', 'studies 03', '#2f4a7a'], ['Tomás Reyes', 'birds of lisbon', '#3f7a5a'], ['Elif Kaya', 'figure drawing', '#b8243a'],
+    ['Noor Haddad', 'ink only', '#1f1f24'], ['Sam Lindqvist', 'commute', '#d9a42b'], ['Ana Ruiz', 'plants & pots', '#6b4fa0'], ['Kofi Mensah', 'summer 26', '#c8643c']
+  ].map(([artist, name, color], i) => ({ id: 'x' + i, idx: i, shape: ['portrait', 'landscape', 'square', 'pocket', 'portrait', 'panorama', 'square', 'landscape'][i], likes: [2410, 860, 1530, 3120, 640, 1980, 1190, 420][i], artist, name, color, images: [], pages: 12 + (i % 3) * 8, initials: artist.split(' ').map(w => w[0]).join('') }));
+  openOther(i) { cancelAnimationFrame(this.raf); this.target = 0; this.setState({ mode: 'other', other: this.explore[i], images: [], p: 0, focus: false, fz: 0 }); }
+  openOtherBook(b) { cancelAnimationFrame(this.raf); this.target = 0; this.setState({ mode: 'other', other: b, images: [], p: 0, focus: false, fz: 0 }); }
+  artists = {
+    'Mira Okafor': ['miraok', 'Lagos → Berlin', 'Street food, neon and the people who stay up late. Mostly gouache.', ['market mornings', 'lagos 25']],
+    'Jun Park': ['junpark', 'Seoul', 'Daily studies. Hands, folds, light on concrete.', ['studies 02', 'studies 01']],
+    'Tomás Reyes': ['tomasdraws', 'Lisbon', 'Birds, rooftops and tiles from my window.', ['azulejos']],
+    'Elif Kaya': ['elifkaya', 'Istanbul', 'Life drawing every Thursday. Charcoal and red pencil.', ['gesture 60s', 'portraits', 'café regulars']],
+    'Noor Haddad': ['noor.ink', 'Amman', 'One brush pen, no pencils, no undo.', ['ink only ii']],
+    'Sam Lindqvist': ['samlq', 'Stockholm', 'Drawn on the 7:42 every weekday.', ['commute 25', 'platforms']],
+    'Ana Ruiz': ['anaruiz', 'Mexico City', 'Houseplants and the pots they live in. Watercolor.', ['succulents']],
+    'Kofi Mensah': ['kofim', 'Accra', 'Beaches, buses and summer light.', ['harmattan']]
+  };
+  saveAcct(acct) { this.setState({ acct }); try { acct ? localStorage.setItem('sb-account', JSON.stringify(acct)) : localStorage.removeItem('sb-account'); } catch (e) {} }
+  openProfile(artist, force) {
+    if (!artist && !this.state.acct && !force) return this.setState({ signup: true, su: { name: '', handle: '', email: '', pw: '' }, suHT: false });
+    cancelAnimationFrame(this.raf); cancelAnimationFrame(this.exRaf); this.target = 0;
+    this.setState(s => ({ mode: 'profile', profileOf: artist || null, pfPreview: false, other: null, images: s.books[s.active].images, p: 0, focus: false, fz: 0, managing: false, viewing: false }));
+  }
+  ini(n) { return (n || '').trim().split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase(); }
+  slug(v) { return (v || '').toLowerCase().replace(/[^a-z0-9._]+/g, '').slice(0, 24); }
+  profileVals() {
+    const s = this.state, vw = s.vw || window.innerWidth, mob = vw < 640, mine = !s.profileOf, pv = mine && !!s.pfPreview, a = s.acct || {}, follows = s.follows || [];
+    const fmt = v => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v), wpOf = b => String({ pocket: 64, portrait: 78, square: 88, landscape: 100, panorama: 100 }[b.shape] || 78);
+    const card = (b, bg, showLabel, pages, open) => ({ name: b.name, color: b.color, bg, showLabel, ar: String(this.shapeOf(b).a), wp: wpOf(b), count: `${pages} pages · ${this.shapeOf(b).label || 'Portrait'}`, open });
+    let p, list;
+    if (mine) {
+      list = s.books.map((b, j) => card(b, this.coverBg(b), !b.coverImg, b.images.length, () => { cancelAnimationFrame(this.raf); this.target = 0; this.setState({ mode: 'mine', profileOf: null, active: j, images: b.images, p: 0, other: null }); }));
+      p = { name: a.name, handle: a.handle, bio: a.bio, loc: a.loc, web: a.web, accent: a.accent, av: a.av, joined: 'Joined ' + new Date(a.joined || Date.now()).toLocaleDateString('en', { month: 'short', year: 'numeric' }),
+        stats: [[s.books.length, s.books.length === 1 ? 'sketchbook' : 'sketchbooks'], [s.books.reduce((t, b) => t + b.images.length, 0), 'pages'], [0, 'followers'], [follows.length, 'following']] };
+    } else {
+      const nm = s.profileOf, b0 = this.explore.find(b => b.artist === nm) || this.explore[0], info = this.artists[nm] || [this.slug(nm), '', '', []], fol = follows.includes(nm);
+      const bks = [b0, ...info[3].map((n, k) => ({ ...b0, id: b0.id + '-' + k, name: n, color: this.palette[(b0.idx + k + 2) % this.palette.length], shape: Object.keys(this.shapes)[(b0.idx + k + 1) % 5], pages: 16 + k * 8 }))];
+      list = bks.map(b => card(b, b.color, true, b.pages, () => this.openOtherBook(b)));
+      p = { name: nm, handle: info[0], bio: info[2], loc: info[1], accent: b0.color, joined: 'Joined ' + (2021 + b0.idx % 4),
+        stats: [[bks.length, bks.length === 1 ? 'sketchbook' : 'sketchbooks'], [bks.reduce((t, b) => t + b.pages, 0), 'pages'], [Math.round(b0.likes * 1.7) + (fol ? 1 : 0), 'followers'], [40 + b0.idx * 13, 'following']] };
+      var folOn = fol;
+    }
+    const pad = mob ? 16 : 40, web = (p.web || '').trim();
+    return { pfName: p.name, pfHandle: '@' + (p.handle || ''), pfHasBio: !!p.bio || (mine && !pv), pfBio: p.bio || 'Add a short bio so people know what you draw.', pfBioOp: p.bio ? 1 : 0.55,
+      pfHasLoc: !!(p.loc || '').trim(), pfLoc: p.loc, pfHasWeb: !!web, pfWeb: web.replace(/^https?:\/\//, ''), pfWebHref: /^https?:\/\//.test(web) ? web : 'https://' + web, pfJoined: p.joined,
+      pfAccent: p.accent || '#7a7fc0', pfAvBg: p.av ? `url("${p.av}") center/cover no-repeat #fff` : '#fff', pfInit: p.av ? '' : this.ini(p.name),
+      pfStats: p.stats.map(([n, l]) => ({ n: fmt(n), l })), pfBooks: list, pfCount: String(list.length), pfBooksLbl: mine && !pv ? 'Your sketchbooks' : 'Sketchbooks',
+      pfMine: mine && !pv, pfPreviewing: pv, pfOther: !mine, pfShowNew: mine && !pv,
+      pfDir: mob ? 'column' : 'row', pfAlign: mob ? 'center' : 'flex-start', pfTA: mob ? 'center' : 'left', pfJust: mob ? 'center' : 'flex-start', pfHeadGap: mob ? 16 : 28,
+      pfBanH: mob ? 130 : 190, pfInfoTop: mob ? 0 : 68, pfPadX: pad, pfNameSize: mob ? 28 : 36, pfNoteTop: mob ? 62 : 76,
+      pfCols: Math.max(2, Math.min(5, Math.floor((Math.min(vw, 1080) - pad * 2 + 18) / (mob ? 150 : 200)))),
+      editProfile: () => this.setState({ draft: { name: a.name || '', handle: a.handle || '', bio: a.bio || '', loc: a.loc || '', web: a.web || '', accent: a.accent || '#7a7fc0', av: a.av || null } }),
+      togglePreview: () => this.setState(st => ({ pfPreview: !st.pfPreview })),
+      pfNew: () => this.setState({ newPick: true, pickShape: this.state.pickShape || 'portrait' }),
+      folLbl: folOn ? 'Following' : 'Follow', folBg: folOn ? 'transparent' : '#ffb547', folFg: folOn ? '#fff' : '#363955', folBd: folOn ? 'rgba(255,255,255,.5)' : '#ffb547',
+      toggleFollow: () => { const nm = s.profileOf, f = follows.includes(nm) ? follows.filter(x => x !== nm) : [...follows, nm]; this.setState({ follows: f }); try { localStorage.setItem('sb-follows', JSON.stringify(f)); } catch (e) {} } };
+  }
+  avRef = React.createRef();
+  accountVals() {
+    const s = this.state, a = s.acct, su = s.su || {}, d = s.draft || {};
+    const suOk = !!(su.name || '').trim() && /\S+@\S+\.\S+/.test(su.email || '') && (su.pw || '').length >= 6;
+    const setSu = k => e => { const v = e.target.value; this.setState(st => { const n = { ...st.su, [k]: k === 'handle' ? this.slug(v) : v }; if (k === 'name' && !st.suHT) n.handle = this.slug(v); return { su: n, suHT: st.suHT || k === 'handle' }; }); };
+    const setD = k => e => { const v = k === 'handle' ? this.slug(e.target.value) : e.target.value; this.setState(st => ({ draft: { ...st.draft, [k]: v } })); };
+    return { hasAcct: !!a, noAcct: !a, meAvBg: a?.av ? `url("${a.av}") center/cover no-repeat #fff` : '#fff', meInit: a?.av ? '' : this.ini(a?.name),
+      meRing: s.mode === 'profile' && !s.profileOf ? '0 0 0 2px #363955, 0 0 0 4px #ffb547' : 'none', openMe: () => this.openProfile(null),
+      signup: !!s.signup, suName: su.name || '', suHandle: su.handle || '', suEmail: su.email || '', suPw: su.pw || '', suOp: suOk ? 1 : 0.4,
+      onSuName: setSu('name'), onSuHandle: setSu('handle'), onSuEmail: setSu('email'), onSuPw: setSu('pw'),
+      createAcct: () => { if (!suOk) return; this.saveAcct({ name: su.name.trim(), handle: su.handle || this.slug(su.name), email: su.email.trim(), bio: '', loc: '', web: '', accent: '#7a7fc0', av: null, joined: Date.now() }); this.setState({ signup: false, su: null }); this.openProfile(null, true); },
+      cancelSignup: () => this.setState({ signup: false }), closeSignup: e => { if (e.target === e.currentTarget) this.setState({ signup: false }); },
+      pfEditing: !!s.draft, dName: d.name || '', dHandle: d.handle || '', dBio: d.bio || '', dLoc: d.loc || '', dWeb: d.web || '', dEmail: a?.email || '', dBioCount: `${(d.bio || '').length}/160`,
+      onDName: setD('name'), onDHandle: setD('handle'), onDBio: setD('bio'), onDLoc: setD('loc'), onDWeb: setD('web'),
+      dAvBg: d.av ? `url("${d.av}") center/cover no-repeat #fff` : '#fff', dInit: d.av ? '' : this.ini(d.name), dHasAv: !!d.av,
+      avRef: this.avRef, pickAv: () => this.avRef.current?.click(), removeAv: () => this.setState(st => ({ draft: { ...st.draft, av: null } })),
+      onAvFile: e => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; const fr = new FileReader(); fr.onload = () => { const im = new Image(); im.onload = () => {
+        const c = document.createElement('canvas'), z = 256, m = Math.min(im.width, im.height); c.width = c.height = z; c.getContext('2d').drawImage(im, (im.width - m) / 2, (im.height - m) / 2, m, m, 0, 0, z, z);
+        const av = c.toDataURL('image/jpeg', 0.85); this.setState(st => ({ draft: { ...st.draft, av } })); }; im.src = fr.result; }; fr.readAsDataURL(f); },
+      accentOpts: ['#7a7fc0', ...this.palette].map(c => ({ c, ring: c === d.accent ? '0 0 0 2px #2b2d45, 0 0 0 4px #fff' : 'none', pick: () => this.setState(st => ({ draft: { ...st.draft, accent: c } })) })),
+      pfSave: () => { this.saveAcct({ ...a, ...d, name: (d.name || '').trim() || a.name, handle: d.handle || a.handle }); this.setState({ draft: null }); },
+      pfCancel: () => this.setState({ draft: null }), pfClose: e => { if (e.target === e.currentTarget) this.setState({ draft: null }); },
+      signOut: () => { if (!window.confirm('Sign out of your account?')) return; this.saveAcct(null); this.setState({ draft: null }); this.goMode('mine'); } };
+  }
+  goMode(mode) { cancelAnimationFrame(this.raf); this.target = 0; this.setState(s => ({ mode, other: null, images: s.books[s.active].images, p: 0, focus: false, fz: 0, managing: false })); }
+  exView0 = (() => { try { return localStorage.getItem('sb-exview'); } catch (e) { return null; } })();
+  exSorted() { const q = (this.state.exQ || '').trim().toLowerCase(), l = this.explore.filter(b => !q || (b.name + ' ' + b.artist).toLowerCase().includes(q)); return (this.state.exSort || 'trending') === 'trending' ? l.sort((a, b) => b.likes - a.likes) : l.reverse(); }
+  exLoop() {
+    cancelAnimationFrame(this.exRaf);
+    const tick = () => { let s = this.state.stS || 0; const ds = (this.stT || 0) - s, done = Math.abs(ds) <= 0.002; s = done ? this.stT || 0 : s + ds * 0.12;
+      this.setState({ stS: s }); if (!done) this.exRaf = requestAnimationFrame(tick); };
+    tick();
+  }
+  stackStep(d) { this.stT = Math.max(0, Math.min(this.explore.length - 1, (this.stT || 0) + d)); this.exLoop(); }
+  exploreVals() {
+    const view = ['grid', 'stack'].includes(this.state.exView || this.exView0) ? (this.state.exView || this.exView0) : 'grid', sort = this.state.exSort || 'trending', list = this.exSorted(), n = list.length;
+    const fmt = v => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v);
+    const on = v => v ? ['#fff', '#363955'] : ['transparent', '#fff'];
+    const mk = (b, r) => ({ ...b, rankLbl: '#' + (r + 1), likesLbl: '▲ ' + fmt(b.likes), open: () => this.openOther(b.idx) });
+    const sp = this.state.stS || 0, top = Math.max(0, Math.min(n - 1, Math.round(this.stT || 0)));
+    const stackList = list.map((b, i) => { const o = i - sp, jit = (((b.idx * 53) % 11) - 5) * 1.3; if (o < -1.05 || o > 9) return null;
+      const l = Math.max(0, -o), t = o >= 0 ? `translateZ(${(-o * 18).toFixed(1)}px) rotateZ(${jit}deg)` : `translateZ(${(l * 240).toFixed(1)}px) translateY(${(-l * 420).toFixed(1)}px) rotateX(${(-l * 25).toFixed(1)}deg) rotateZ(${(jit * (1 - l)).toFixed(2)}deg)`;
+      const shp = this.shapeOf(b), bh = Math.round(300 * shp.s), bw = Math.round(bh * shp.a);
+      return { ...mk(b, i), w: bw, h: bh, l: -bw / 2, tp: -bh / 2, t, op: (o >= 0 ? Math.min(1, 9 - o) : 1 - l).toFixed(3), shade: (Math.min(0.5, Math.max(0, o) * 0.12)).toFixed(3), click: () => { if (i === top) this.openOther(b.idx); } }; }).filter(Boolean).reverse();
+    const vh = this.state.vh || window.innerHeight || 800, ch = Math.max(60, Math.min(320, (vh - 66 - 50 - 10 - 2 * 48 - 14) / 2)), mob = (this.state.vw || window.innerWidth) < 640, sk = Math.min(1, Math.max(0.4, (vh - (mob ? 360 : 156)) / 640), mob ? (this.state.vw || 390) / 520 : 1);
+    const tb = list[top] || {}, setView = v => { this.setState({ exView: v }); try { localStorage.setItem('sb-exview', v); } catch (e) {} };
+    const setSort = v => { cancelAnimationFrame(this.exRaf); this.stT = 0; this.setState({ exSort: v, stS: 0 }); };
+    const [vGridBg, vGridFg] = on(view === 'grid'), [vStackBg, vStackFg] = on(view === 'stack'), [sTrBg, sTrFg] = on(sort === 'trending'), [sNewBg, sNewFg] = on(sort === 'new');
+    return { stDir: mob ? 'column' : 'row', stGap: mob ? 4 : 48, stMaxW: mob ? '100%' : '60%', stFlex: mob ? '1 1 0' : '0 0 auto', stInfoGap: mob ? 4 : 10, stAlign: mob ? 'center' : 'stretch', stTA: mob ? 'center' : 'left', stTitle: mob ? 22 : 30, stBtnTop: mob ? 6 : 10, stHint: mob ? 'swipe the pile up to lift books off' : 'scroll over the pile to lift books off',
+      stDown0: e => { this.stY = e.clientY; }, stUp0: e => { if (this.stY == null) return; const dy = e.clientY - this.stY; this.stY = null; if (Math.abs(dy) > 40) this.stackStep(dy < 0 ? 1 : -1); },
+      exQ: this.state.exQ || '', onExQ: e => { cancelAnimationFrame(this.exRaf); this.stT = 0; this.setState({ exQ: e.target.value, stS: 0 }); }, exNone: n === 0,
+      exCols: Math.max(2, Math.min(6, Math.floor(((this.state.vw || window.innerWidth || 1200) - (mob ? 32 : 80) + 18) / (mob ? 150 : 200)))), exPadT: mob ? 64 : 76, exPadX: mob ? 16 : 40, exGap: mob ? 14 : 24, exSearchBasis: mob ? '100%' : 'auto', exSearchMax: mob ? 'none' : '380px', exOvY: view === 'grid' ? 'auto' : 'hidden', exInnerH: view === 'grid' ? 'auto' : '100%', stackT: `scale3d(${sk.toFixed(3)},${sk.toFixed(3)},${sk.toFixed(3)}) rotateX(56deg) rotateZ(-12deg)`, exGrid: view === 'grid' && n > 0, exStack: view === 'stack' && n > 0, vGridBg, vGridFg, vStackBg, vStackFg, sTrBg, sTrFg, sNewBg, sNewFg,
+      viewGrid: () => setView('grid'), viewStack: () => setView('stack'), sortTrend: () => setSort('trending'), sortNew: () => setSort('new'),
+      stackList, stRank: '#' + (top + 1), stLikes: '▲ ' + fmt(tb.likes || 0), stName: tb.name, stArtist: tb.artist, stPages: `${tb.pages} pages · ${this.shapeOf(tb).label}`, stPos: `${top + 1} of ${n}`,
+      stOpen: () => this.openOther(tb.idx), stArtistOpen: e => { e.stopPropagation(); this.openProfile(tb.artist); }, stUp: () => this.stackStep(-1), stDown: () => this.stackStep(1), stUpOp: top > 0 ? 1 : 0.35, stDownOp: top < n - 1 ? 1 : 0.35,
+      stackWheel: e => { if (this.stLock || Math.abs(e.deltaY) < 8) return; this.stLock = true; setTimeout(() => this.stLock = false, 380); this.stackStep(e.deltaY > 0 ? 1 : -1); } };
+  }
+  palette = ['#b8243a', '#e8542f', '#2f4a7a', '#3f7a5a', '#d9a42b', '#1f1f24'];
+  state = { acct: (() => { try { return JSON.parse(localStorage.getItem('sb-account')); } catch (e) { return null; } })(), follows: (() => { try { return JSON.parse(localStorage.getItem('sb-follows')) || []; } catch (e) { return []; } })(), books: [{ id: 1, name: 'sketchbook', color: '#b8243a', images: [] }], active: 0, managing: false, images: [], p: 0, zoom: 1, viewing: false, viewIdx: 0, vw: window.innerWidth || 1200, vh: window.innerHeight || 800 };
+  stageRef = el => { if (el && el !== this.stageEl && window.ResizeObserver) { this.ro?.disconnect(); this.stageEl = el;
+      this.ro = new ResizeObserver(([e]) => this.setState({ sh: e.contentRect.height, sw: e.contentRect.width })); this.ro.observe(el); } };
+  fileRef = React.createRef(); coverRef = React.createRef(); target = 0; drag = null;
+  componentDidMount() {
+    this.onResize = () => this.setState({ vw: window.innerWidth || 1200, vh: window.innerHeight || 800 });
+    this.onResize();
+    requestAnimationFrame(this.onResize);
+    this.onKey = e => {
+      if (e.key === 'Escape' && this.state.draft) return this.setState({ draft: null });
+      if (e.key === 'Escape' && this.state.signup) return this.setState({ signup: false });
+      if (e.key !== 'Escape' && (this.state.mode === 'profile' || this.state.mode === 'explore' || this.state.draft || this.state.signup)) return;
+      if (e.key === 'Escape') { if (this.state.newPick) return this.setState({ newPick: false }); if (!this.state.edit && !this.state.viewing && !this.state.managing && this.state.focus) return this.setFocus(false);
+        return this.setState(s => s.edit ? { edit: null } : s.viewing ? { viewing: false } : { managing: false }); }
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || this.state.managing || this.state.edit || this.state.viewing) return;
+      const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0; if (!dir) return;
+      if (e.shiftKey) this.switchBook(this.state.active + dir); else this.go(dir);
+    };
+    addEventListener('resize', this.onResize); addEventListener('keydown', this.onKey);
+    this.db().then(db => { const st = db.transaction('s').objectStore('s'), r = st.get('books');
+      r.onsuccess = () => { if (r.result?.length) this.setState({ books: r.result, images: r.result[0].images });
+        else { const o = st.get('images'); o.onsuccess = () => { if (o.result?.length) { const books = [{ ...this.state.books[0], images: o.result }]; this.setState({ books, images: o.result }); } }; } };
+    }).catch(() => {});
+  }
+  persist(books) { clearTimeout(this.saveT); this.saveT = setTimeout(() => this.db().then(db => db.transaction('s', 'readwrite').objectStore('s').put(books, 'books')).catch(() => {}), 250); }
+  setImages(images) {
+    const books = this.state.books.map((b, k) => k === this.state.active ? { ...b, images } : b); this.setState({ books, images }); this.persist(books);
+    const max = Math.max(this.props.minPages ?? 12, images.length + (images.length % 2)) / 2 + 2;
+    if (this.target > max) { this.target = max; this.setState({ p: max }); }
+  }
+  updateBook(patch) { const books = this.state.books.map((b, k) => k === this.state.active ? { ...b, ...patch } : b); this.setState({ books }); this.persist(books); }
+  switchBook(j) {
+    const books = this.state.books, from = this.state.active; if (this.state.focus || this.state.other) return; if (j < 0 || j >= books.length || j === from || this.state.switching) return;
+    this.setState({ viewing: false });
+    const slide = () => {
+      this.setState({ switching: true, car: from });
+      const dur = 520 + 140 * Math.min(3, Math.abs(j - from)), t0 = performance.now();
+      const tick = now => {
+        const t = Math.min(1, (now - t0) / dur), e = t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        if (t < 1) { this.setState({ car: from + (j - from) * e, swT: t }); this.raf = requestAnimationFrame(tick); }
+        else this.setState({ switching: false, car: j, active: j, images: this.state.books[j].images, p: 0, swT: 0 });
+      };
+      this.raf = requestAnimationFrame(tick);
+    };
+    this.target = 0; if (this.state.p > 0.01) this.animate(slide); else { this.setState({ p: 0 }); slide(); }
+  }
+  newBook(shape) {
+    const books = this.state.books, n = books.length;
+    const nb = [...books, { id: Date.now(), name: `sketchbook ${n + 1}`, color: this.palette[n % this.palette.length], images: [], shape: shape || 'portrait' }];
+    cancelAnimationFrame(this.raf); this.target = 0; this.setState({ books: nb, active: n, images: [], p: 0, managing: true, newPick: false }); this.persist(nb);
+  }
+  deleteBook() {
+    const { books, active } = this.state; if (!window.confirm(`Delete “${books[active].name}”? This can’t be undone.`)) return;
+    if (books.length === 1) { this.setImages([]); return; }
+    const nb = books.filter((_, k) => k !== active), j = Math.max(0, active - 1);
+    this.target = 0; this.setState({ books: nb, active: j, images: nb[j].images, p: 0, managing: false }); this.persist(nb);
+  }
+  movePage(from, to) {
+    const im = [...this.state.images]; if (to < 0 || to >= im.length || from === to) return;
+    const [x] = im.splice(from, 1); im.splice(to, 0, x); this.setImages(im);
+  }
+  componentWillUnmount() { removeEventListener('resize', this.onResize); removeEventListener('keydown', this.onKey); this.ro?.disconnect(); cancelAnimationFrame(this.raf); cancelAnimationFrame(this.exRaf); }
+  db() { return new Promise((res, rej) => { const o = indexedDB.open('sketchbook', 1); o.onupgradeneeded = () => o.result.createObjectStore('s'); o.onsuccess = () => res(o.result); o.onerror = rej; }); }
+  blobs = new Map();
+  blobUrl(d) {
+    if (!d) return d; let u = this.blobs.get(d); if (u) return u;
+    try { const [h, b] = d.split(','); const bin = atob(b); const arr = new Uint8Array(bin.length);
+      for (let k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k);
+      u = URL.createObjectURL(new Blob([arr], { type: h.slice(5).split(';')[0] })); } catch (e) { u = d; }
+    this.blobs.set(d, u); return u;
+  }
+  nPages() { if (this.state.other) return this.state.other.pages; const n = this.state.images.length; return Math.max(this.props.minPages ?? 12, n + (n % 2)); }
+  coverBg(b) { b = b || {}; return b.coverImg ? `url("${this.blobUrl(b.coverImg)}") center/cover no-repeat ${b.color}` : b.color || '#b8243a'; }
+  nLeaves() { return this.nPages() / 2 + 2; }
+  face(leaf, side) {
+    const N = this.nLeaves(), cover = (this.state.other || this.state.books[this.state.active])?.color ?? '#b8243a', inner = '#e9e2d3', paper = '#f3efe6';
+    if (leaf === 0) return side ? { bg: inner, num: '', idx: -1 } : { bg: this.coverBg(this.state.other || this.state.books[this.state.active]), num: '', idx: -1 };
+    if (leaf === N - 1) return side ? { bg: cover, num: '', idx: -1 } : { bg: inner, num: '', idx: -1 };
+    const pi = 2 * (leaf - 1) + side, img = this.state.images[pi];
+    return { bg: img ? `url("${this.blobUrl(img)}") center/cover no-repeat ${paper}` : paper, num: String(pi + 1), idx: img ? pi : -1 };
+  }
+  maxP() { return this.nLeaves(); }
+  animate(onDone) {
+    cancelAnimationFrame(this.raf);
+    const step = () => { const p = this.state.p, d = this.target - p;
+      if (Math.abs(d) < 0.002) { this.setState({ p: this.target }); onDone && onDone(); return; }
+      this.setState({ p: p + d * 0.14 }); this.raf = requestAnimationFrame(step); };
+    this.raf = requestAnimationFrame(step);
+  }
+  go(dir) { this.target = Math.max(0, Math.min(this.maxP(), Math.round(this.target) + dir)); this.animate(); }
+  addFiles(files) {
+    if (this.state.other || this.state.mode === 'explore') return;
+    const list = [...files].filter(f => f.type.startsWith('image/')).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    Promise.all(list.map(f => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(f); })))
+      .then(urls => { if (urls.length) this.startEdit(urls, null); });
+  }
+  shapes = { pocket: { a: 0.62, s: 0.82, label: 'Pocket' }, portrait: { a: 0.72, s: 1, label: 'Portrait' }, square: { a: 1, s: 0.86, label: 'Square' }, landscape: { a: 1.35, s: 0.78, label: 'Landscape' }, panorama: { a: 1.8, s: 0.64, label: 'Panorama' } };
+  shapeOf(b) { const sh = this.shapes[b?.shape]; if (sh) return sh; return { a: this.props.aspect === 'square' ? 1 : this.props.aspect === 'landscape' ? 1.35 : 0.72, s: 1 }; }
+  curBook() { return this.state.other || this.state.books[this.state.active]; }
+  aspect() { return this.shapeOf(this.curBook()).a; }
+  startEdit(queue, replaceIdx, target) {
+    this.setState({ edit: { queue, i: 0, replaceIdx, target, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0 } });
+    this.loadEditImg(queue[0]);
+  }
+  loadEditImg(src) {
+    const im = new Image(); im.onload = () => { this.editImg = im; this.setState(s => s.edit ? { edit: { ...s.edit, nw: im.naturalWidth, nh: im.naturalHeight } } : null); }; im.src = this.blobUrl(src);
+  }
+  frame() { const fh = Math.round(Math.max(200, Math.min(this.state.vh * 0.58, 520))); return { fh, fw: Math.round(fh * this.aspect()) }; }
+  baseSize() { const e = this.state.edit, { fw, fh } = this.frame(); if (!e.nw) return { bw: fw, bh: fh }; const s = Math.min(fw / e.nw, fh / e.nh); return { bw: e.nw * s, bh: e.nh * s }; }
+  setEd(patch) { this.setState(s => ({ edit: { ...s.edit, ...patch } })); }
+  applyEdit() {
+    const e = this.state.edit, im = this.editImg; if (!e || !im) return;
+    const { fw, fh } = this.frame(), { bw, bh } = this.baseSize(), outH = 1600, outW = Math.round(outH * this.aspect()), k = outH / fh, r = Math.PI / 180;
+    const c = document.createElement('canvas'); c.width = outW; c.height = outH; const ctx = c.getContext('2d');
+    ctx.fillStyle = '#f3efe6'; ctx.fillRect(0, 0, outW, outH);
+    ctx.translate(outW / 2 + e.tx * k, outH / 2 + e.ty * k); ctx.rotate(e.rot * r); ctx.scale(e.scale, e.scale);
+    ctx.transform(1, Math.tan(e.sky * r), Math.tan(e.skx * r), 1, 0, 0);
+    ctx.drawImage(im, -bw * k / 2, -bh * k / 2, bw * k, bh * k);
+    const url = c.toDataURL('image/jpeg', 0.9), images = [...this.state.images];
+    if (e.target === 'cover') { this.updateBook({ coverImg: url }); this.setState({ edit: null }); return; }
+    if (e.replaceIdx != null) images[e.replaceIdx] = url; else images.push(url);
+    this.setImages(images); this.nextEdit();
+  }
+  nextEdit() {
+    const e = this.state.edit; if (!e) return; const i = e.i + 1;
+    if (i >= e.queue.length || e.replaceIdx != null) { this.setState({ edit: null }); cancelAnimationFrame(this.raf); this.target = Math.round(this.target); this.setState({ p: this.target }); return; }
+    this.setState({ edit: { ...e, i, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0 } }); this.loadEditImg(e.queue[i]);
+  }
+  dims(b, flat) {
+    const shp = this.shapeOf(b === undefined ? this.curBook() : b), sh = this.state.sh || this.state.vh * 0.5, sw = this.state.sw || this.state.vw, aspect = shp.a, fz = flat ? 0 : this.state.fz || 0;
+    const Hn = Math.max(120, Math.min(sh * 0.7 * shp.s, sw * (sw < 640 ? 0.45 : 0.29) / aspect, 560 * shp.s) || 360) * this.state.zoom;
+    const Hf = Math.max(200, Math.min(this.state.vh * 0.84, this.state.vw * 0.86 / aspect));
+    const H = Hn + (Hf - Hn) * fz; return { H: Math.round(H), W: Math.round(H * aspect) };
+  }
+  focusOn(p, side) {
+    if (this.state.switching) return;
+    this.setState({ fside: side }); cancelAnimationFrame(this.sraf);
+    const from = this.state.fsx || 0, to = side === 'L' ? 1 : 0, t0 = performance.now();
+    const tick = now => { const t = Math.min(1, (now - t0) / 600), e = 1 - Math.pow(1 - t, 3); this.setState({ fsx: from + (to - from) * e }); if (t < 1) this.sraf = requestAnimationFrame(tick); };
+    if (this.state.focus) this.sraf = requestAnimationFrame(tick); else this.setState({ fsx: to });
+    if (Math.abs(this.state.p - p) > 0.01) { this.target = p; this.animate(); }
+    this.setFocus(true);
+  }
+  setFocus(on) {
+    if (on === this.state.focus) return; this.setState({ focus: on, ctrlShow: true, menuOpen: false,  });
+    clearTimeout(this.wakeT); if (on) this.wakeT = setTimeout(() => this.state.focus && this.setState({ ctrlShow: false }), 1800); cancelAnimationFrame(this.fraf);
+    const from = this.state.fz || 0, to = on ? 1 : 0, t0 = performance.now(), dur = 700;
+    const tick = now => { const t = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - t, 3);
+      this.setState({ fz: from + (to - from) * e }); if (t < 1) this.fraf = requestAnimationFrame(tick); };
+    this.fraf = requestAnimationFrame(tick);
+  }
+  drift = (el, kf, dur) => { if (el && !el._anim && el.animate) el._anim = el.animate(kf, { duration: dur, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out' }); };
+  bgRefA = el => this.drift(el, [{ transform: 'translate(-6%,-4%) rotate(0deg) scale(1.1)' }, { transform: 'translate(5%,4%) rotate(10deg) scale(1.3)' }], 16000);
+  bgRefB = el => this.drift(el, [{ transform: 'translate(6%,5%) rotate(0deg) scale(1.3)' }, { transform: 'translate(-5%,-6%) rotate(-14deg) scale(1.1)' }], 21000);
+  renderVals() {
+    const { images, p, viewing, viewIdx } = this.state; const { W, H } = this.dims();
+    const N = this.nLeaves(), fan = this.props.fan ?? 7, paper = '#f3efe6';
+    const fz = this.state.fz || 0, clp = v => Math.max(0, Math.min(1, v));
+    const shiftN = p < 1 ? -W / 2 * (1 - p) : p > N - 1 ? W / 2 * (p - (N - 1)) : 0;
+    const fL = this.state.fside === 'L' && p > 0.5, fsx = (this.state.fsx || 0) * clp(p * 2 - 1);
+    const shiftR = -W / 2 + W * clp(p - (N - 1)), shiftF = shiftR + (W / 2 - shiftR) * fsx;
+    const shift = shiftN + (shiftF - shiftN) * fz;
+    const leaves = Array.from({ length: N }, (_, i) => {
+      const x = p - i, cl = v => Math.max(0, Math.min(1, v)), t = cl(x);
+      const A = fan * 2.5 * cl(Math.min(p, N - p));
+      const ease = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      const a = -(A * cl((x + 2.5) / 2.5) + (180 - 2 * A) * ease + A * cl((x - 1) / 2.5));
+      const rad = -a * Math.PI / 180;
+      const F = this.face(i, 0), B = this.face(i, 1);
+      const openFront = () => { if (!this.moved) this.focusOn(i, 'R'); };
+      const openBack = () => { if (!this.moved) this.focusOn(i + 1, 'L'); };
+      return { label: (this.state.other || this.state.books[this.state.active] || {}).name, isCover: i === 0 && !(this.state.other || this.state.books[this.state.active])?.coverImg, isCoverAny: i === 0,
+        transform: `rotateY(${a}deg) translateZ(${((N - i) * 0.5).toFixed(2)}px)`, frontBg: F.bg, backBg: B.bg,
+        shadeF: (0.35 * Math.sin(rad) * (rad < Math.PI / 2 ? 1 : 0)).toFixed(3), shadeB: (0.3 * Math.max(0, Math.sin(rad)) * (rad > Math.PI / 2 ? 1 : 0)).toFixed(3),
+        numF: F.num, numB: B.num, openFront, openBack };
+    });
+    const vImgs = viewing ? (viewIdx % 2 && images[viewIdx + 1] !== undefined && this.state.vw > 800 ? [images[viewIdx], images[viewIdx + 1]] : viewIdx % 2 === 0 && viewIdx > 0 && this.state.vw > 800 ? [images[viewIdx - 1], images[viewIdx]] : [images[viewIdx]]) : [];
+    const ed = this.state.edit, fr = this.frame(), bs = ed ? this.baseSize() : { bw: 0, bh: 0 };
+    const num = f => e => this.setEd({ [f]: parseFloat(e.target.value) });
+    const editVals = ed ? {
+      editing: true, fw: fr.fw, fh: fr.fh, bw: bs.bw, bh: bs.bh, edBg: `url("${this.blobUrl(ed.queue[ed.i])}") center/100% 100% no-repeat`,
+      edTransform: `translate(${ed.tx}px, ${ed.ty}px) rotate(${ed.rot}deg) scale(${ed.scale}) skew(${ed.skx}deg, ${ed.sky}deg)`,
+      edTitle: ed.target === 'cover' ? 'Cover image' : ed.replaceIdx != null ? `Edit page ${ed.replaceIdx + 1}` : `Image ${ed.i + 1} of ${ed.queue.length}`,
+      scale: ed.scale, rot: ed.rot, skx: ed.skx, sky: ed.sky,
+      scaleLbl: `${Math.round(ed.scale * 100)}%`, rotLbl: `${ed.rot}°`, skxLbl: `${ed.skx}°`, skyLbl: `${ed.sky}°`,
+      onScale: num('scale'), onRot: num('rot'), onSkx: num('skx'), onSky: num('sky'),
+      rot90: () => this.setEd({ rot: ((ed.rot + 90 + 180) % 360) - 180 }),
+      resetEd: () => this.setEd({ scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0 }),
+      applyEdit: () => this.applyEdit(), skipEdit: () => this.nextEdit(), cancelEdit: () => this.setState({ edit: null }),
+      applyLbl: ed.target === 'cover' ? 'Save cover' : ed.replaceIdx != null ? 'Save page' : 'Add to sketchbook',
+      edDown: e => { e.stopPropagation(); this.edDrag = { x: e.clientX, y: e.clientY, tx: ed.tx, ty: ed.ty }; e.currentTarget.setPointerCapture?.(e.pointerId); },
+      edMove: e => { const d = this.edDrag; if (d) this.setEd({ tx: d.tx + e.clientX - d.x, ty: d.ty + e.clientY - d.y }); },
+      edUp: () => { this.edDrag = null; },
+      edWheel: e => { e.stopPropagation(); this.setEd({ scale: Math.max(0.3, Math.min(4, ed.scale * (e.deltaY > 0 ? 0.95 : 1.05))) }); }
+    } : { editing: false };
+    const { books, active } = this.state, other = this.state.other, mode = this.state.mode || 'mine', book = other || books[active] || {}, cl = v => Math.max(0, Math.min(1, v));
+    const ext = W / 2 * (1 + cl(Math.min(p, N - p))), sbw = W * 0.78, gap = W * 0.32;
+    const sw = this.state.switching, car = sw ? this.state.car : active;
+    const pos = d => { const a = Math.abs(d); return Math.sign(d) * (Math.min(1, a) * (ext + gap + sbw / 2) + Math.max(0, a - 1) * (sbw + gap)) - W / 2; };
+    const zTop = b => { const n = (b?.images || []).length; return (Math.max(this.props.minPages ?? 12, n + (n % 2)) / 2 + 2) * 0.5; };
+    const sideT = (d, z0 = 0, bw = W) => { const m = Math.min(1, Math.abs(d)); return `translateX(${(pos(d) + W / 2 - bw / 2).toFixed(1)}px) translateZ(${(-60 * m + z0 * (1 - m)).toFixed(2)}px) scale(${(1 - 0.22 * m).toFixed(3)})`; };
+    const sideBooks = (other ? [] : books).map((b, j) => ({ b, j })).filter(x => sw || x.j !== active).map(({ b, j }) => ({
+      ...(() => { const d = this.dims(b, true); return { w: d.W, h: d.H, top: -d.H / 2, transform: sideT(j - car, zTop(b), d.W) }; })(), opacity: Math.max(0, Math.min(1, 3 - Math.abs(j - car))).toFixed(3), labelOp: Math.min(1, Math.abs(j - car)).toFixed(3),
+      shade: (0.35 * Math.min(1, Math.abs(j - car))).toFixed(3), bg: this.coverBg(b), board: b.color, showLabel: !b.coverImg, name: b.name, count: `${b.images.length} pages`,
+      stop: e => e.stopPropagation(), open: () => this.switchBook(j) }));
+    const pagesList = images.map((u, i) => ({
+      bg: `url("${this.blobUrl(u)}") center/cover no-repeat #f3efe6`, num: String(i + 1),
+      edit: () => this.startEdit([images[i]], i), remove: () => this.setImages(images.filter((_, k) => k !== i)),
+      left: () => this.movePage(i, i - 1), right: () => this.movePage(i, i + 1),
+      dragStart: e => { this.dragIdx = i; e.dataTransfer.effectAllowed = 'move'; },
+      dragOver: e => { e.preventDefault(); e.stopPropagation(); },
+      drop: e => { e.preventDefault(); e.stopPropagation(); if (e.dataTransfer.files?.length) return this.addFiles(e.dataTransfer.files); if (this.dragIdx != null) this.movePage(this.dragIdx, i); this.dragIdx = null; }
+    }));
+    const blanks = this.nPages() - images.length;
+    return {
+      ...editVals,
+      fz: fz.toFixed(3), uiOp: (1 - fz).toFixed(3), uiPE: fz > 0.5 ? 'none' : 'auto', bgRefA: this.bgRefA, bgRefB: this.bgRefB,
+      focusBg: (() => { const r = Math.round(p), f = fL || r >= N - 1 ? this.face(Math.max(1, Math.min(N - 2, r - 1)), 1) : this.face(Math.max(1, r), 0);
+        return f.idx >= 0 ? `url("${this.blobUrl(images[f.idx])}") center/cover no-repeat #363955` : `radial-gradient(circle at 30% 35%, ${book.color} 0, transparent 55%), radial-gradient(circle at 72% 68%, #7a7fc0 0, transparent 55%), #363955`; })(),
+      isMine: mode === 'mine', isOther: mode === 'other', isExplore: mode === 'explore', notOther: !other, showGhost: !other,
+      navMineBg: mode === 'mine' ? '#fff' : 'transparent', navMineFg: mode === 'mine' ? '#363955' : '#fff',
+      navExBg: mode === 'explore' || mode === 'other' ? '#fff' : 'transparent', navExFg: mode === 'explore' || mode === 'other' ? '#363955' : '#fff',
+      isProfile: mode === 'profile', ...(mode === 'profile' ? this.profileVals() : {}), ...this.accountVals(),
+      openArtist: () => other && this.openProfile(other.artist),
+      goMine: () => this.goMode('mine'), goExplore: () => this.goMode('explore'),
+      artist: other?.artist || '', artistInitials: other?.initials || '',
+      coverRef: this.coverRef, pickCover: () => this.coverRef.current?.click(),
+      onCoverFile: e => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; const fr = new FileReader(); fr.onload = () => this.startEdit([fr.result], null, 'cover'); fr.readAsDataURL(f); },
+      hasCoverImg: !!book.coverImg, removeCover: () => this.updateBook({ coverImg: null }),
+      coverLabel: book.name, coverIsPlain: !book.coverImg,
+      ...(mode === 'explore' ? this.exploreVals() : {}),
+      exploreList: this.exSorted().map(b => ({ ...b, count: `${b.pages} pages · ${this.shapeOf(b).label}`, ar: String(this.shapeOf(b).a), wp: String({ pocket: 64, portrait: 78, square: 88, landscape: 100, panorama: 100 }[b.shape] || 78), open: () => this.openOther(b.idx), openArtist: e => { e.stopPropagation(); this.openProfile(b.artist); } })),
+      openShadowOp: clp(Math.min(p, N - p) * 3).toFixed(3), bodyOp: (1 - clp(Math.min(p, N - p) * 4)).toFixed(3),
+      bodyLeft: p > N / 2 ? -W : 0, boardColor: book.color || '#b8243a',
+      bookOp: sw ? 0 : 1, titleName: other ? other.name : (books[Math.round(car)] || book).name, titleOp: ((sw ? 1 - Math.sin(Math.PI * (this.state.swT || 0)) * 0.85 : 1) * (1 - fz)).toFixed(3),
+      bookName: book.name, bookMeta: other ? `by ${other.artist} · ${other.pages} pages` : books.length > 1 ? `${images.length} pages · ${active + 1} of ${books.length}` : `${images.length} pages`,
+      multi: !other && books.length > 1, prevBook: () => this.switchBook(active - 1), nextBook: () => this.switchBook(active + 1),
+      prevOp: active > 0 ? 1 : 0.3, nextOp: active < books.length - 1 ? 1 : 0.3,
+      sideBooks, sbBase: `rotateX(${this.props.tilt ?? 14}deg)`, sbTop: -H / 2, ghostT: sideT(books.length - car),
+      newBook: () => this.setState({ newPick: true, pickShape: this.state.pickShape || 'portrait' }), stopPD: e => e.stopPropagation(),
+      ...(() => { const m = (this.state.vw || window.innerWidth) < 640; return { notMob: !m, mPad: m ? 14 : 24, mTop: m ? 14 : 20, mGap: m ? 8 : 14, newLbl: m ? '+ New' : '+ New sketchbook', mTitleTop: m ? 60 : 56, mTitleSize: m ? 24 : 34, mBottom: m ? 16 : 36, mModalPad: m ? 18 : 28, mOptMin: m ? 92 : 120, mOptH: m ? 130 : 170 }; })(),
+      newPick: !!this.state.newPick, closePick: e => { if (e.target === e.currentTarget) this.setState({ newPick: false }); }, cancelPick: () => this.setState({ newPick: false }),
+      createBook: () => { if (this.state.mode === 'profile') this.setState({ mode: 'mine', profileOf: null }); this.newBook(this.state.pickShape || 'portrait'); }, pgAspect: String(this.aspect()),
+      shapeOpts: Object.entries(this.shapes).map(([k, v]) => { const on = (this.state.pickShape || 'portrait') === k, ph = Math.round(120 * v.s); return { label: v.label, w: Math.round(ph * v.a), h: ph,
+        c: this.palette[books.length % this.palette.length], ring: on ? '0 0 0 2px #ffb547' : '0 0 0 1px rgba(255,255,255,.18)', bg: on ? 'rgba(255,255,255,.08)' : 'transparent', pick: () => this.setState({ pickShape: k }) }; }),
+      managing: this.state.managing, openManager: () => this.setState({ managing: true }), closeManager: () => this.setState({ managing: false }),
+      pagesList, noPages: !images.length && !other, blankNote: blanks > 0 ? `${blanks} blank pages follow your drawings` : 'Book grows as you add pages',
+      onName: e => this.updateBook({ name: e.target.value }),
+      swatches: this.palette.map(c => ({ c, ring: c === book.color ? '0 0 0 2px #2b2d45, 0 0 0 4px #fff' : 'none', pick: () => this.updateBook({ color: c }) })),
+      deleteBook: () => this.deleteBook(),
+      editPage: e => { e.stopPropagation(); this.setState({ viewing: false }); this.startEdit([images[viewIdx]], viewIdx); },
+      W, H, leaves, stageRef: this.stageRef, fileRef: this.fileRef,
+      bookTransform: `rotateX(${((this.props.tilt ?? 14) * (1 - fz) + 3 * fz).toFixed(2)}deg) translateX(${shift}px)`,
+      shadowLeft: -W * Math.max(0, Math.min(1, p)), shadowW: W * (Math.max(0, Math.min(1, p)) + Math.max(0, Math.min(1, N - p))),
+      countLabel: `${images.length} of ${this.nPages()} pages filled`, hasImages: images.length > 0, empty: !images.length && !this.state.other, emptyOp: !images.length && !this.state.other && !sw ? 1 : 0,
+      viewing, viewImgs: vImgs.map(u => ({ bg: `url("${this.blobUrl(u)}") center/contain no-repeat` })), viewW: vImgs.length > 1 ? '42vw' : '84vw', viewLabel: `page ${viewIdx + 1} of ${images.length}`,
+      onDown: e => { this.drag = { x: e.clientX, p0: this.state.p, id: e.pointerId }; this.moved = false; cancelAnimationFrame(this.raf); },
+      onMove: e => { if (!this.drag) return; const dx = e.clientX - this.drag.x; if (Math.abs(dx) > 4 && !this.moved) { this.moved = true; e.currentTarget.setPointerCapture?.(this.drag.id); }
+        const np = Math.max(-0.15, Math.min(N + 0.15, this.drag.p0 - dx / (W * 1.1))); this.setState({ p: np }); },
+      onUp: e => { if (!this.drag) return; const dx = e.clientX - this.drag.x; const p = this.state.p;
+        if (this.drag.p0 === 0 && dx > 90 && active > 0) { this.drag = null; return this.switchBook(active - 1); }
+        if (this.drag.p0 === N && dx < -90 && active < books.length - 1) { this.drag = null; return this.switchBook(active + 1); }
+        this.target = Math.max(0, Math.min(N, Math.abs(dx) > 30 ? (dx < 0 ? Math.ceil(p - 0.1) : Math.floor(p + 0.1)) : Math.round(p)));
+        this.drag = null; this.animate(); setTimeout(() => this.moved = false, 0); },
+      onWheel: e => { const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY; if (this.wheelLock || Math.abs(d) < 8) return; this.wheelLock = true; setTimeout(() => this.wheelLock = false, 380); this.go(d > 0 ? 1 : -1); },
+      zoomIn: () => { if (this.state.focus) return; const r = Math.round(p); this.focusOn(Math.max(1, Math.min(N - 1, r)), r >= N - 1 ? 'L' : 'R'); },
+      zoomOut: () => this.state.focus ? this.setFocus(false) : this.setState(s => ({ zoom: Math.max(0.6, s.zoom - 0.15) })),
+      ...(() => {
+        const mode = this.props.focusMenu ?? 'auto-hide', foc = !!this.state.focus;
+        const vis = !foc || (mode === 'auto-hide' ? this.state.ctrlShow !== false : mode === 'toggle' ? !!this.state.menuOpen : false);
+        return { ctrlOp: vis ? 1 : 0, ctrlY: vis ? 0 : 24, ctrlPE: vis ? 'auto' : 'none',
+          showHandle: foc && mode === 'toggle', handleLbl: this.state.menuOpen ? 'Hide menu' : 'Show menu',
+          toggleMenu: () => this.setState(s => ({ menuOpen: !s.menuOpen })),
+          showRail: foc && mode === 'side rail', railOp: fz.toFixed(3),
+          wake: () => { if (!foc || mode !== 'auto-hide') return; if (this.state.ctrlShow === false) this.setState({ ctrlShow: true });
+            clearTimeout(this.wakeT); this.wakeT = setTimeout(() => this.state.focus && this.setState({ ctrlShow: false }), 1800); } };
+      })(),
+      pick: () => this.fileRef.current?.click(),
+      onFiles: e => { this.addFiles(e.target.files); e.target.value = ''; },
+      onDragOver: e => e.preventDefault(),
+      onDrop: e => { e.preventDefault(); this.addFiles(e.dataTransfer.files); },
+      openView: () => { if (!images.length) return; const r = Math.round(p); const c = [this.face(r - 1, 1).idx, this.face(r, 0).idx].filter(v => v >= 0); this.setState({ viewing: true, viewIdx: c.length ? c[0] : 0 }); },
+      closeView: e => { if (e.target === e.currentTarget || e.target.tagName === 'DIV') this.setState({ viewing: false }); },
+      viewPrev: e => { e.stopPropagation(); this.setState(s => ({ viewIdx: Math.max(0, s.viewIdx - (vImgs.length > 1 ? 2 : 1)) })); },
+      viewNext: e => { e.stopPropagation(); this.setState(s => ({ viewIdx: Math.min(images.length - 1, s.viewIdx + (vImgs.length > 1 ? 2 : 1)) })); }
+    };
+  }
+}
+</script>
+</body>
+</html>
