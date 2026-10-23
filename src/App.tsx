@@ -290,7 +290,26 @@ export default class App extends Component<object, State> {
     };
     this.raf = requestAnimationFrame(step);
   }
-  go(dir: number) { this.target = Math.max(0, Math.min(this.maxP(), Math.round(this.target) + dir)); this.animate(); }
+  go(dir: number) {
+    if (this.state.focus) return this.focusGo(dir);
+    this.target = Math.max(0, Math.min(this.maxP(), Math.round(this.target) + dir)); this.animate();
+  }
+  /** Whether the left / right page of the spread at p has a drawing. */
+  spreadImages(p: number) { const N = this.nLeaves(); return { l: p >= 1 && this.face(p - 1, 1).idx >= 0, r: p <= N - 2 && this.face(p, 0).idx >= 0 }; }
+  /** Which page of the spread at p to centre in focus view: the left one when it has a drawing (or, arriving backwards, the right one when it does). */
+  autoSide(p: number, from: 'L' | 'R' = 'L'): 'L' | 'R' {
+    if (p >= this.nLeaves() - 1) return 'L';
+    const { l, r } = this.spreadImages(p);
+    return from === 'L' ? (l ? 'L' : 'R') : (r || !l ? 'R' : 'L');
+  }
+  /** Focus view steps page by page: across the spread when the other page has a drawing, otherwise to the next spread. */
+  focusGo(dir: number) {
+    const p = Math.round(this.target), N = this.nLeaves(), side = this.state.fside || 'R', { l, r } = this.spreadImages(p);
+    if (dir > 0 && side === 'L' && r) return this.focusOn(p, 'R');
+    if (dir < 0 && side === 'R' && l) return this.focusOn(p, 'L');
+    const np = Math.max(1, Math.min(N - 1, p + dir)); if (np === p) return;
+    this.focusOn(np, this.autoSide(np, dir > 0 ? 'L' : 'R'));
+  }
   /** Book size: normal view (Hn) blended toward the focus view (Hf) by fz. */
   dims(b?: AnyBook, flat?: boolean) {
     const s = this.state, shp = this.shapeOf(b === undefined ? this.curBook() : b), sh = s.sh || s.vh * 0.5, sw = s.sw || s.vw, aspect = shp.a, fz = flat ? 0 : s.fz || 0;
@@ -725,11 +744,18 @@ export default class App extends Component<object, State> {
         // Swiping past the front or back cover moves to the neighbouring sketchbook.
         if (this.drag.p0 === 0 && dx > 90 && active > 0) { this.drag = null; return this.switchBook(active - 1); }
         if (this.drag.p0 === N && dx < -90 && active < books.length - 1) { this.drag = null; return this.switchBook(active + 1); }
-        this.target = Math.max(0, Math.min(N, Math.abs(dx) > 30 ? (dx < 0 ? Math.ceil(pp - 0.1) : Math.floor(pp + 0.1)) : Math.round(pp)));
-        this.drag = null; this.animate(); setTimeout(() => this.moved = false, 0);
+        const tp = Math.max(0, Math.min(N, Math.abs(dx) > 30 ? (dx < 0 ? Math.ceil(pp - 0.1) : Math.floor(pp + 0.1)) : Math.round(pp)));
+        const p0 = Math.round(this.drag.p0), moved = this.moved;
+        this.drag = null; setTimeout(() => this.moved = false, 0);
+        // In focus view a swipe to another spread picks its page the same way the arrow keys do.
+        if (this.state.focus && moved) {
+          const fp = Math.max(1, Math.min(N - 1, tp)); this.target = fp;
+          return this.focusOn(fp, fp === p0 ? this.state.fside || 'R' : this.autoSide(fp, dx < 0 ? 'L' : 'R'));
+        }
+        this.target = tp; this.animate();
       },
       onWheel: (e: WheelEvent) => { const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY; if (this.wheelLock || Math.abs(d) < 8) return; this.wheelLock = true; setTimeout(() => this.wheelLock = false, 380); this.go(d > 0 ? 1 : -1); },
-      zoomIn: () => { if (this.state.focus) return; const r = Math.round(p); this.focusOn(Math.max(1, Math.min(N - 1, r)), r >= N - 1 ? 'L' : 'R'); },
+      zoomIn: () => { if (this.state.focus) return; const fp = Math.max(1, Math.min(N - 1, Math.round(p))); this.focusOn(fp, this.autoSide(fp)); },
       zoomOut: () => this.state.focus ? this.setFocus(false) : this.setState(st => ({ zoom: Math.max(0.6, st.zoom - 0.15) })),
       ctrlOp: vis ? 1 : 0, ctrlY: vis ? 0 : 24, ctrlPE: vis ? 'auto' : 'none',
       showHandle: foc && focusMode === 'toggle', handleLbl: s.menuOpen ? 'Hide menu' : 'Show menu',

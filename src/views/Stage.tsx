@@ -111,9 +111,9 @@ function Book3D({ v }: { v: V }) {
 
 function Controls({ v }: { v: V }) {
   return (
-    <div style={{ position: 'relative', zIndex: 2, display: 'flex', gap: 12, marginBottom: `calc(${v.mBottom}px + env(safe-area-inset-bottom))`, flexShrink: 0, padding: 6, borderRadius: 2, background: `rgba(244,241,233,${v.fz})`, opacity: v.ctrlOp, transform: `translateY(${v.ctrlY}px)`, pointerEvents: v.ctrlPE, transition: 'opacity .35s,transform .35s cubic-bezier(.2,.8,.2,1)' }}>
+    <div style={{ position: 'relative', zIndex: 2, display: 'flex', gap: 12, marginBottom: `calc(${v.mBottom}px + env(safe-area-inset-bottom))`, flexShrink: 0, padding: 6, opacity: v.ctrlOp, transform: `translateY(${v.ctrlY}px)`, pointerEvents: v.ctrlPE, transition: 'opacity .35s,transform .35s cubic-bezier(.2,.8,.2,1)' }}>
       <button onClick={v.zoomOut} title="Zoom out" className={hover('transform:scale(1.08)')} style={roundDark(44, 22)}>−</button>
-      {v.notOther && <button onClick={v.openManager} title="Pages" className={hover('transform:scale(1.06)')} style={{ width: 88, height: 44, borderRadius: 2, border: 'none', background: MARK, color: PAPER, font: `500 20px ${SANS}`, cursor: 'pointer' }}>✎</button>}
+      {v.notOther && <button onClick={v.openManager} title="Pages" className={hover('transform:scale(1.06)')} style={{ width: 88, height: 44, borderRadius: 22, border: 'none', background: MARK, color: PAPER, font: `500 20px ${SANS}`, cursor: 'pointer' }}>✎</button>}
       <button onClick={v.zoomIn} title="Zoom in" className={hover('transform:scale(1.08)')} style={roundDark(44, 22)}>+</button>
     </div>
   );
