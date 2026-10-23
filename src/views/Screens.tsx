@@ -200,61 +200,98 @@ const actionBtn = (filled: boolean): CSSProperties => filled
   ? { height: 44, padding: '0 20px', borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer' }
   : { height: 44, padding: '0 18px', borderRadius: 2, border: '1.5px solid rgba(var(--ink-rgb),.5)', background: 'none', color: INK, font: `500 14px ${SANS}`, cursor: 'pointer' };
 
+/** One sketchbook on the profile shelf: covers share a height scaled by shape (not by column width), sitting on a common line so titles align. */
+function ShelfBook({ pb, zone }: { pb: V; zone: number }) {
+  return (
+    <div onClick={pb.open} style={{ display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer', minWidth: 0 }}>
+      <div style={{ height: zone, display: 'flex', alignItems: 'flex-end' }}>
+        <div className={hover('transform:translateY(-6px)')} style={{ position: 'relative', width: `min(calc(100% - 7px), ${Math.round(zone * 0.94 * pb.s * pb.a)}px)`, aspectRatio: String(pb.a), transition: 'transform .35s cubic-bezier(.2,.8,.2,1)' }}>
+          <ClosedBook bg={pb.bg} board={pb.color} label={pb.showLabel ? pb.name : null} />
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+        <span style={{ ...serif(20, 1.15, 'normal'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pb.name}</span>
+        <span style={{ fontSize: 13, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pb.count}</span>
+      </div>
+    </div>
+  );
+}
+
+const quietBtn: CSSProperties = { padding: '0 4px', border: 'none', background: 'none', color: MUTED, font: `500 14px ${SANS}`, cursor: 'pointer' };
+
 export function Profile({ v }: { v: V }) {
+  const mob = !v.notMob, wide = v.pfWide, zone = mob ? 150 : 200;
+  const stats = (
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${v.pfStats.length}, minmax(0, 1fr))`, gap: mob ? 0 : 20, ...(mob ? { padding: '14px 0', borderTop: '1px solid rgba(var(--ink-rgb),.15)', borderBottom: '1px solid rgba(var(--ink-rgb),.15)', width: '100%' } : {}) }}>
+      {v.pfStats.map((st: V) => (
+        <div key={st.l} style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: mob ? 'center' : 'flex-start', minWidth: 0 }}>
+          <span style={{ ...serif(mob ? 26 : 34, 1), color: INK }}>{st.n}</span>
+          <span style={{ ...label(STONE, 10), whiteSpace: 'nowrap' }}>{st.l}</span>
+        </div>
+      ))}
+    </div>
+  );
+  const actions = (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: mob ? 'center' : 'flex-start', width: mob ? '100%' : undefined }}>
+      {v.pfMine && (
+        <>
+          <button onClick={v.editProfile} className={hoverMark} style={{ ...actionBtn(true), ...(mob ? { flex: '1 1 0' } : {}) }}>Edit profile</button>
+          <button onClick={v.togglePreview} className={hover('background:rgba(var(--ink-rgb),.08)')} style={{ ...actionBtn(false), ...(mob ? { flex: '1 1 0' } : {}) }}>{mob ? 'Preview' : 'View as public'}</button>
+          <button onClick={v.openSettings} className={hover('background:rgba(var(--ink-rgb),.08)')} style={{ ...actionBtn(false), ...(mob ? { flex: '1 1 0' } : {}) }}>Settings</button>
+          {!mob && v.pfAdmin && <button onClick={v.openAdmin} className={'tap ' + hover(`color:${MARK}`)} style={quietBtn}>Moderation</button>}
+          {!mob && <button onClick={v.signOut} className={'tap ' + hover(`color:${MARK}`)} style={quietBtn}>Sign out</button>}
+        </>
+      )}
+      {v.pfPreviewing && <button onClick={v.togglePreview} className={hoverMark} style={actionBtn(true)}>Exit preview</button>}
+      {v.pfOther && <button onClick={v.toggleFollow} style={{ height: 44, minWidth: 128, padding: '0 22px', borderRadius: 2, border: `1.5px solid ${v.folBd}`, background: v.folBg, color: v.folFg, font: `500 14px ${SANS}`, cursor: 'pointer', ...(mob ? { flex: '1 1 0' } : {}) }}>{v.folLbl}</button>}
+      {v.pfOther && <button onClick={v.pfShare} className={hover('background:rgba(var(--ink-rgb),.08)')} style={{ ...actionBtn(false), ...(mob ? { flex: '1 1 0' } : {}) }}>Share</button>}
+      {v.pfOther && <MoreMenu open={v.pfMoreOpen} onToggle={v.pfMore} align="right" items={[{ label: 'Report artist', onClick: v.pfReport }, { label: v.pfBlockLbl, onClick: v.pfBlock, danger: true }]} />}
+    </div>
+  );
   return (
     <div style={screen()}>
-      <div style={{ position: 'relative', height: v.pfBanH }}>
-        {v.pfPreviewing && <div style={{ position: 'absolute', left: '50%', bottom: 20, transform: 'translateX(-50%)', padding: '6px 12px', border: `1px solid ${MARK}`, whiteSpace: 'nowrap', ...label(MARK) }}>Previewing as a visitor</div>}
-      </div>
-      <div style={{ position: 'relative', maxWidth: 1080, margin: '0 auto', padding: `0 ${v.pfPadX}px 48px`, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 40 }}>
+      <div style={{ maxWidth: 1120, margin: '0 auto', padding: `${mob ? 72 : 104}px ${v.pfPadX}px 56px`, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: mob ? 28 : 44 }}>
+        {v.pfPreviewing && <div style={{ alignSelf: 'center', padding: '6px 12px', border: `1px solid ${MARK}`, whiteSpace: 'nowrap', ...label(MARK) }}>Previewing as a visitor</div>}
         {v.pfMine && !v.acVerified && <VerifyBanner v={v} />}
-        <div style={{ display: 'flex', flexDirection: v.pfDir, alignItems: v.pfAlign, gap: v.pfHeadGap, textAlign: v.pfTA }}>
-          <div style={{ width: 112, height: 112, flexShrink: 0, borderRadius: '50%', background: v.pfAvBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 44px ${SERIF}` }}>{v.pfInit}</div>
-          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8, paddingTop: v.pfInfoTop, alignItems: v.pfAlign }}>
-            <div style={label(MARK)}>Artist profile</div>
-            <div style={{ fontSize: v.pfNameSize, fontFamily: SERIF, fontWeight: 400, letterSpacing: '-.01em', lineHeight: 1.05, textWrap: 'balance' } as CSSProperties}>{v.pfName}</div>
-            <div style={{ display: 'flex', gap: '4px 14px', flexWrap: 'wrap', justifyContent: v.pfJust, fontSize: 14, color: 'rgba(var(--ink-rgb),.7)' }}>
-              <span>{v.pfHandle}</span>
-              {v.pfHasLoc && <span>{v.pfLoc}</span>}
-              {v.pfHasWeb && <a href={v.pfWebHref} target="_blank" rel="noopener noreferrer" style={{ color: MARK, textDecoration: 'none' }}>{v.pfWeb}</a>}
-              <span>{v.pfJoined}</span>
+
+        <header style={mob
+          ? { display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 14 }
+          : { display: 'grid', gridTemplateColumns: wide ? 'auto minmax(0,1fr) auto' : 'auto minmax(0,1fr)', columnGap: 32, rowGap: 24, alignItems: 'start' }}>
+          <div style={{ width: mob ? 96 : 120, height: mob ? 96 : 120, flexShrink: 0, borderRadius: '50%', background: v.pfAvBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 ${mob ? 38 : 46}px ${SERIF}` }}>{v.pfInit}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0, alignItems: mob ? 'center' : 'flex-start' }}>
+            <h1 style={{ margin: 0, ...serif(mob ? 44 : 64, 1, '-.015em'), textWrap: 'balance' } as CSSProperties}>{v.pfName}</h1>
+            <div style={{ display: 'flex', gap: '2px 8px', flexWrap: 'wrap', justifyContent: mob ? 'center' : 'flex-start', fontSize: 14, color: MUTED }}>
+              {[<span key="h">{v.pfHandle}</span>, v.pfHasLoc && <span key="l">{v.pfLoc}</span>, v.pfHasWeb && <a key="w" href={v.pfWebHref} target="_blank" rel="noopener noreferrer" style={{ color: MARK, textDecoration: 'none' }}>{v.pfWeb}</a>, v.pfJoined && <span key="j">{v.pfJoined}</span>]
+                .filter(Boolean).flatMap((x, i) => i ? [<span key={'d' + i} aria-hidden="true" style={{ color: 'rgba(var(--ink-rgb),.3)' }}>·</span>, x] : [x])}
             </div>
-            {v.pfHasBio && <div style={{ fontSize: 15, lineHeight: 1.5, maxWidth: 560, textWrap: 'pretty', opacity: v.pfBioOp } as CSSProperties}>{v.pfBio}</div>}
-            <div style={{ display: 'flex', gap: '6px 20px', flexWrap: 'wrap', justifyContent: v.pfJust, marginTop: 4 }}>
-              {v.pfStats.map((st: V) => <span key={st.l} style={{ fontSize: 14, color: 'rgba(var(--ink-rgb),.7)' }}><b style={{ color: INK, fontWeight: 600 }}>{st.n}</b> {st.l}</span>)}
+            {v.pfHasBio && <p style={{ margin: 0, fontSize: 16, lineHeight: 1.5, maxWidth: 520, textWrap: 'pretty', opacity: v.pfBioOp } as CSSProperties}>{v.pfBio}</p>}
+            {!mob && <div style={{ marginTop: 8 }}>{actions}</div>}
+          </div>
+          {!mob && <div style={wide ? { paddingTop: 10 } : { gridColumn: '2 / 3' }}>{stats}</div>}
+          {mob && stats}
+          {mob && actions}
+          {mob && v.pfMine && (
+            <div style={{ display: 'flex', gap: 24, justifyContent: 'center' }}>
+              {v.pfAdmin && <button onClick={v.openAdmin} className="tap" style={quietBtn}>Moderation</button>}
+              <button onClick={v.signOut} className="tap" style={quietBtn}>Sign out</button>
             </div>
-          {/* Actions sit under the details (not in a third column), so they wrap instead of squeezing the name and stats. */}
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: v.pfJust, marginTop: 12 }}>
-            {v.pfMine && (
-              <>
-                <button onClick={v.editProfile} className={hoverMark} style={actionBtn(true)}>Edit profile</button>
-                <button onClick={v.togglePreview} className={hover('background:rgba(var(--ink-rgb),.1)')} style={actionBtn(false)}>View as public</button>
-                <button onClick={v.openSettings} className={hover('background:rgba(var(--ink-rgb),.1)')} style={actionBtn(false)}>Settings</button>
-                {v.pfAdmin && <button onClick={v.openAdmin} className={hover('background:rgba(var(--ink-rgb),.1)')} style={actionBtn(false)}>Moderation</button>}
-                <button onClick={v.signOut} className={'tap ' + hover(`color:${MARK}`)} style={{ padding: '0 4px', border: 'none', background: 'none', color: 'rgba(var(--ink-rgb),.7)', font: `500 14px ${SANS}`, cursor: 'pointer' }}>Sign out</button>
-              </>
-            )}
-            {v.pfPreviewing && <button onClick={v.togglePreview} className={hoverMark} style={actionBtn(true)}>Exit preview</button>}
-            {v.pfOther && <button onClick={v.toggleFollow} style={{ height: 44, minWidth: 120, padding: '0 20px', borderRadius: 2, border: `1.5px solid ${v.folBd}`, background: v.folBg, color: v.folFg, font: `500 14px ${SANS}`, cursor: 'pointer' }}>{v.folLbl}</button>}
-            {v.pfOther && <button onClick={v.pfShare} className={hover('background:rgba(var(--ink-rgb),.1)')} style={actionBtn(false)}>Share</button>}
-            {v.pfOther && <span style={{ alignSelf: 'center' }}><MoreMenu open={v.pfMoreOpen} onToggle={v.pfMore} align={v.notMob ? 'center' : 'right'} items={[{ label: 'Report artist', onClick: v.pfReport }, { label: v.pfBlockLbl, onClick: v.pfBlock, danger: true }]} /></span>}
-          </div>
-          </div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          )}
+        </header>
+
+        <section style={{ display: 'flex', flexDirection: 'column', gap: mob ? 20 : 28 }}>
           {v.pfTabs ? (
-            <div role="tablist" style={{ display: 'flex', alignItems: 'baseline', gap: v.notMob ? 28 : 18, flexWrap: 'wrap', paddingBottom: 12, borderBottom: `1px solid ${INK}` }}>
+            <div role="tablist" style={{ display: 'flex', alignItems: 'baseline', gap: mob ? 20 : 32, borderBottom: '1px solid rgba(var(--ink-rgb),.2)', overflowX: 'auto', scrollbarWidth: 'none' } as CSSProperties}>
               {v.pfTabs.map((t: V) => (
-                <button key={t.key} role="tab" aria-selected={t.on} onClick={t.pick} className={hover(`color:${INK}`)} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: 0, border: 'none', background: 'none', cursor: 'pointer', color: t.on ? INK : 'rgba(var(--ink-rgb),.45)' }}>
-                  <span style={{ ...serif(v.notMob ? 32 : 26, 1), color: 'inherit' }}>{t.label}</span>
+                <button key={t.key} role="tab" aria-selected={t.on} onClick={t.pick} className={hover(`color:${INK}`)} style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexShrink: 0, padding: '0 0 12px', marginBottom: -1, border: 'none', borderBottom: `2px solid ${t.on ? INK : 'transparent'}`, background: 'none', cursor: 'pointer', color: t.on ? INK : 'rgba(var(--ink-rgb),.45)' }}>
+                  <span style={{ ...serif(mob ? 24 : 28, 1), color: 'inherit' }}>{t.label}</span>
                   <span style={{ fontSize: 13 }}>{t.n}</span>
                 </button>
               ))}
             </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, paddingBottom: 12, borderBottom: `1px solid ${INK}` }}>
-              <span style={serif(32, 1)}>{v.pfBooksLbl}</span>
-              <span style={{ fontSize: 14, color: 'rgba(var(--ink-rgb),.6)' }}>{v.pfCount}</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, paddingBottom: 12, borderBottom: '1px solid rgba(var(--ink-rgb),.2)' }}>
+              <span style={serif(mob ? 24 : 28, 1)}>{v.pfBooksLbl}</span>
+              <span style={{ fontSize: 13, color: MUTED }}>{v.pfCount}</span>
             </div>
           )}
           {v.pfSuspended && <div style={{ fontSize: 14, color: MUTED }}>This account has been suspended for breaking the terms.</div>}
@@ -265,36 +302,32 @@ export function Profile({ v }: { v: V }) {
             </div>
           )}
           {v.pfEmptyNote && !v.pfBooks.length && <div style={{ fontSize: 14, color: MUTED }}>{v.pfEmptyNote}</div>}
+          {v.pfOther && !v.pfBooks.length && !v.pfBlocked && !v.pfSuspended && <div style={{ fontSize: 14, color: MUTED }}>No public sketchbooks yet.</div>}
           {v.pfPeople && (v.pfPeople.length ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 32px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 240px), 1fr))', gap: '18px 32px' }}>
               {v.pfPeople.map((p: V) => (
-                <button key={p.key} onClick={p.open} className={hover(`color:${MARK}`)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', textAlign: 'left' }}>
+                <button key={p.key} onClick={p.open} className={hover(`color:${MARK}`)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', textAlign: 'left', minWidth: 0 }}>
                   <span style={{ width: 44, height: 44, flexShrink: 0, borderRadius: '50%', background: p.avBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 18px ${SERIF}` }}>{p.init}</span>
-                  <span style={{ display: 'flex', flexDirection: 'column' }}><span style={{ ...serif(22, 1.1, 'normal'), color: 'inherit' }}>{p.name}</span><span style={{ fontSize: 13, color: MUTED }}>{p.handle}</span></span>
+                  <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}><span style={{ ...serif(22, 1.1, 'normal'), color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span><span style={{ fontSize: 13, color: MUTED }}>{p.handle}</span></span>
                 </button>
               ))}
             </div>
           ) : <div style={{ fontSize: 14, color: MUTED }}>You’re not following anyone yet. Follow artists from their profile to see their new pages on your home shelf.</div>)}
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${v.pfCols},minmax(0,1fr))`, gap: '28px 18px', alignItems: 'end' }}>
-            {v.pfBooks.map((pb: V) => (
-              <div key={pb.key} onClick={pb.open} style={{ display: 'flex', flexDirection: 'column', gap: 20, cursor: 'pointer', minWidth: 0 }}>
-                <div className={hover('transform:translateY(-8px)')} style={{ position: 'relative', aspectRatio: pb.ar, width: `calc(${pb.wp}% - 7px)`, marginRight: 7, transition: 'transform .35s cubic-bezier(.2,.8,.2,1)' }}>
-                  <ClosedBook bg={pb.bg} board={pb.color} label={pb.showLabel ? pb.name : null} />
+          {(v.pfBooks.length > 0 || v.pfShowNew) && (
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${mob ? 140 : 180}px, 1fr))`, gap: mob ? '28px 16px' : '40px 28px' }}>
+              {v.pfBooks.map((pb: V) => <ShelfBook key={pb.key} pb={pb} zone={zone} />)}
+              {v.pfShowNew && (
+                <div onClick={v.pfNew} style={{ display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer', minWidth: 0 }}>
+                  <div style={{ height: zone, display: 'flex', alignItems: 'flex-end' }}>
+                    <div className={hover(`border-color:${MARK};color:${MARK}`)} style={{ width: `min(100%, ${Math.round(zone * 0.94 * 0.72)}px)`, aspectRatio: '.72', boxSizing: 'border-box', border: '1.5px dashed rgba(var(--ink-rgb),.35)', borderRadius: '2px 10px 10px 2px', display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 500, color: MUTED }}>
+                      <span style={{ fontSize: 26, fontWeight: 300, lineHeight: 1 }}>+</span>New
+                    </div>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-                  <span style={{ ...serif(22, 1.1, 'normal'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pb.name}</span>
-                  <span style={{ fontSize: 13, color: 'rgba(var(--ink-rgb),.7)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pb.count}</span>
-                </div>
-              </div>
-            ))}
-            {v.pfShowNew && (
-              <div onClick={v.pfNew} style={{ display: 'flex', flexDirection: 'column', gap: 20, cursor: 'pointer', minWidth: 0 }}>
-                <div className={hover(`border-color:${MARK};color:${MARK}`)} style={{ aspectRatio: '.72', width: 'calc(78% - 7px)', boxSizing: 'border-box', border: '2px dashed rgba(var(--ink-rgb),.35)', borderRadius: '2px 10px 10px 2px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 600, color: 'rgba(var(--ink-rgb),.8)' }}>+ New</div>
-                <div style={{ height: 38 }} />
-              </div>
-            )}
-          </div>
-        </div>
+              )}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );
@@ -347,13 +380,14 @@ export function AuthPage({ v }: { v: V }) {
   );
 }
 
+/** A quiet reminder to confirm the email address (one line on wide screens). */
 function VerifyBanner({ v }: { v: V }) {
   return (
-    <div role="status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 20px', flexWrap: 'wrap', padding: '12px 16px', border: `1px solid ${MARK}`, fontSize: 14, color: INK }}>
-      <span><b style={{ fontWeight: 600 }}>Confirm your email.</b> We sent a link to {v.acEmail}.</span>
+    <div role="status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px 20px', flexWrap: 'wrap', padding: '10px 14px', background: 'rgba(173,73,58,.07)', borderLeft: `2px solid ${MARK}`, fontSize: 13, color: INK }}>
+      <span><b style={{ fontWeight: 600 }}>Confirm your email</b> <span style={{ color: MUTED }}>· we sent a link to {v.acEmail}</span></span>
       <span style={{ display: 'flex', gap: 16 }}>
-        <button onClick={v.resendVerify} disabled={v.acBusy === 'verify'} className={hoverLine} style={underlineBtn(13)}>Resend</button>
-        <button onClick={v.checkVerified} disabled={v.acBusy === 'verify'} className={hoverLine} style={underlineBtn(13)}>I’ve confirmed</button>
+        <button onClick={v.resendVerify} disabled={v.acBusy === 'verify'} className={'tap ' + hoverLine} style={underlineBtn(13)}>Resend</button>
+        <button onClick={v.checkVerified} disabled={v.acBusy === 'verify'} className={'tap ' + hoverLine} style={underlineBtn(13)}>I’ve confirmed</button>
       </span>
     </div>
   );
