@@ -33,6 +33,50 @@ service cloud.firestore {
         allow read: if isUser(uid);
         allow write: if isUser(uid) && target != uid;
       }
+      // Notifications: written by whoever liked/followed (or by you, for reaching a goal); only you read them.
+      match /notifications/{nid} {
+        allow read, delete: if isUser(uid);
+        allow update: if isUser(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+        allow create: if signedIn()
+          && request.resource.data.from == request.auth.uid
+          && request.resource.data.read == false
+          && request.resource.data.keys().hasOnly(['type', 'from', 'fromName', 'fromHandle', 'bookId', 'bookName', 'goal', 'at', 'read'])
+          && (request.resource.data.type in ['like', 'follow'] || (request.resource.data.type == 'goal' && uid == request.auth.uid));
+      }
+    }
+
+    // Like and follower counts. Anyone signed in may move a count by exactly one, and only in the
+    // same write that adds or removes their own like/follow, so counts can't be inflated.
+    function prev(f) { return resource == null ? 0 : resource.data.get(f, 0); }
+    function next(f) { return request.resource.data.get(f, 0); }
+    function changedBy(f, d) { return next(f) == prev(f) + d; }
+    function added(p) { return !exists(p) && existsAfter(p); }
+    function removed(p) { return exists(p) && !existsAfter(p); }
+
+    match /userCounts/{uid} {
+      allow read: if true;
+      allow create, update: if signedIn()
+        && request.resource.data.keys().hasOnly(['followers', 'likes', 'likeBook'])
+        && (followDelta(uid) || likeDelta(uid));
+      function followDelta(uid) {
+        let p = /databases/$(database)/documents/users/$(request.auth.uid)/following/$(uid);
+        return changedBy('likes', 0) && ((changedBy('followers', 1) && added(p)) || (changedBy('followers', -1) && removed(p)));
+      }
+      function likeDelta(uid) {
+        let b = request.resource.data.likeBook;
+        let p = /databases/$(database)/documents/books/$(b)/likes/$(request.auth.uid);
+        return changedBy('followers', 0) && getAfter(/databases/$(database)/documents/books/$(b)).data.ownerId == uid
+          && ((changedBy('likes', 1) && added(p)) || (changedBy('likes', -1) && removed(p)));
+      }
+    }
+
+    match /bookCounts/{bookId} {
+      allow read: if true;
+      allow create, update: if signedIn() && request.resource.data.keys().hasOnly(['likes']) && likeDelta(bookId);
+      function likeDelta(bookId) {
+        let p = /databases/$(database)/documents/books/$(bookId)/likes/$(request.auth.uid);
+        return (changedBy('likes', 1) && added(p)) || (changedBy('likes', -1) && removed(p));
+      }
     }
 
     // Reports can be filed by anyone signed in, and read only in the Firebase console.
@@ -71,6 +115,12 @@ service cloud.firestore {
       allow update: if signedIn() && resource.data.ownerId == request.auth.uid
         && request.resource.data.ownerId == resource.data.ownerId && valid(request.resource.data);
       allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+
+      // One like per person per book; anyone can see who liked it.
+      match /likes/{likerId} {
+        allow read: if true;
+        allow create, delete: if signedIn() && likerId == request.auth.uid;
+      }
     }
   }
 }

@@ -222,6 +222,7 @@ export function Profile({ v }: { v: V }) {
             {v.pfOther && <span style={{ alignSelf: 'center' }}><MoreMenu open={v.pfMoreOpen} onToggle={v.pfMore} align="right" items={[{ label: 'Report artist', onClick: v.pfReport }, { label: v.pfBlockLbl, onClick: v.pfBlock, danger: true }]} /></span>}
           </div>
         </div>
+        {v.pfGoals && <Goals goals={v.pfGoals} />}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {v.pfTabs ? (
             <div role="tablist" style={{ display: 'flex', alignItems: 'baseline', gap: v.notMob ? 28 : 18, flexWrap: 'wrap', paddingBottom: 12, borderBottom: `1px solid ${INK}` }}>
@@ -396,5 +397,21 @@ export function Settings({ v }: { v: V }) {
         </SettingsSection>
       </div>
     </div>
+  );
+}
+
+/** Progress toward the like and follower goals, shown on your own profile. */
+function Goals({ goals }: { goals: V[] }) {
+  return (
+    <section aria-label="Goals" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '16px 40px', padding: '16px 0', borderTop: '1px solid rgba(34,35,32,.25)', borderBottom: '1px solid rgba(34,35,32,.25)' }}>
+      {goals.map(g => (
+        <div key={g.key} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', ...label(g.done ? MARK : STONE) }}>
+            <span>{g.label} goal</span><span>{g.done ? 'Reached' : `${g.n} / ${g.goal}`}</span>
+          </div>
+          <div style={{ height: 4, background: 'rgba(34,35,32,.1)' }}><div style={{ width: g.pct + '%', height: '100%', background: g.done ? MARK : INK, transition: 'width .6s cubic-bezier(.2,.8,.2,1)' }} /></div>
+        </div>
+      ))}
+    </section>
   );
 }

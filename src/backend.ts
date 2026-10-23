@@ -10,8 +10,8 @@ import {
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import {
-  collection, connectFirestoreEmulator, deleteDoc, doc, getDoc, getDocs, getFirestore, limit,
-  query, runTransaction, setDoc, where, writeBatch,
+  collection, connectFirestoreEmulator, deleteDoc, doc, getDoc, getDocs, getFirestore, increment, limit, onSnapshot,
+  orderBy, query, runTransaction, setDoc, where, writeBatch,
 } from 'firebase/firestore';
 import type { DocumentData } from 'firebase/firestore';
 import { connectStorageEmulator, deleteObject, getStorage, listAll, ref, uploadBytes } from 'firebase/storage';
@@ -298,9 +298,55 @@ export async function following(uid: string): Promise<string[]> {
   return s.docs.map(x => x.id);
 }
 
-export async function setFollow(uid: string, target: string, on: boolean) {
-  const r = doc(need().db, 'users', uid, 'following', target);
-  if (on) await setDoc(r, { at: Date.now() }); else await deleteDoc(r);
+/** Follows or unfollows, moving the target's follower count and (on follow) notifying them, all in one write. */
+export async function setFollow(me: Account, target: string, on: boolean) {
+  const { db: d } = need(), batch = writeBatch(d), r = doc(d, 'users', me.uid, 'following', target);
+  if (on) batch.set(r, { at: Date.now() }); else batch.delete(r);
+  batch.set(doc(d, 'userCounts', target), { followers: increment(on ? 1 : -1) }, { merge: true });
+  if (on) batch.set(doc(collection(d, 'users', target, 'notifications')), note(me, 'follow'));
+  await batch.commit();
+}
+
+// ---------- likes, counts, notifications ----------
+
+export interface Notif { id: string; type: 'like' | 'follow' | 'goal'; from: string; fromName: string; fromHandle: string; bookId?: string; bookName?: string; goal?: string; at: number; read: boolean }
+const note = (me: Account, type: 'like' | 'follow', book?: { id: string; name: string }) => ({
+  type, from: me.uid, fromName: me.name, fromHandle: me.handle, ...(book ? { bookId: book.id, bookName: book.name } : {}), at: Date.now(), read: false,
+});
+
+/** Likes or unlikes a sketchbook: the like itself, the book's and owner's like counts, and a notification. */
+export async function setLike(me: Account, book: { id: string; ownerId: string; name: string }, on: boolean) {
+  const { db: d } = need(), batch = writeBatch(d), r = doc(d, 'books', book.id, 'likes', me.uid), by = on ? 1 : -1;
+  if (on) batch.set(r, { at: Date.now() }); else batch.delete(r);
+  batch.set(doc(d, 'bookCounts', book.id), { likes: increment(by) }, { merge: true });
+  batch.set(doc(d, 'userCounts', book.ownerId), { likes: increment(by), likeBook: book.id }, { merge: true });
+  if (on && book.ownerId !== me.uid) batch.set(doc(collection(d, 'users', book.ownerId, 'notifications')), note(me, 'like', book));
+  await batch.commit();
+}
+
+/** Live document listener; returns an unsubscribe function. */
+export function watch(path: string[], cb: (data: DocumentData | null) => void): () => void {
+  if (!db) return () => {};
+  const [c, ...rest] = path;
+  return onSnapshot(doc(db, c, ...rest), s => cb(s.exists() ? s.data() : null), () => cb(null));
+}
+
+export function watchNotifications(uid: string, cb: (n: Notif[]) => void): () => void {
+  if (!db) return () => {};
+  return onSnapshot(query(collection(db, 'users', uid, 'notifications'), orderBy('at', 'desc'), limit(40)),
+    s => cb(s.docs.map(x => ({ ...(x.data() as Omit<Notif, 'id'>), id: x.id }))), () => cb([]));
+}
+
+export async function markRead(uid: string, ids: string[]) {
+  if (!ids.length) return;
+  const { db: d } = need(), batch = writeBatch(d);
+  ids.forEach(id => batch.update(doc(d, 'users', uid, 'notifications', id), { read: true }));
+  await batch.commit();
+}
+
+/** Records reaching a goal once (fixed id, so a second attempt is refused by the rules and ignored). */
+export async function addGoal(me: Account, goal: string) {
+  await setDoc(doc(need().db, 'users', me.uid, 'notifications', 'goal_' + goal), { type: 'goal', goal, from: me.uid, fromName: me.name, fromHandle: me.handle, at: Date.now(), read: false }).catch(() => {});
 }
 
 // ---------- saved, blocked, reports, following shelf ----------
@@ -320,11 +366,12 @@ export async function setSaved(uid: string, b: Saved, on: boolean) {
 export async function blockedUsers(uid: string): Promise<string[]> {
   return (await getDocs(collection(need().db, 'users', uid, 'blocked'))).docs.map(d => d.id);
 }
-export async function setBlocked(uid: string, target: string, on: boolean) {
+export async function setBlocked(uid: string, target: string, on: boolean, wasFollowing = false) {
   const { db: d } = need(), r = doc(d, 'users', uid, 'blocked', target);
   if (!on) return deleteDoc(r);
   const batch = writeBatch(d);
-  batch.set(r, { at: Date.now() }); batch.delete(doc(d, 'users', uid, 'following', target));
+  batch.set(r, { at: Date.now() });
+  if (wasFollowing) { batch.delete(doc(d, 'users', uid, 'following', target)); batch.set(doc(d, 'userCounts', target), { followers: increment(-1) }, { merge: true }); }
   await batch.commit();
 }
 
@@ -391,9 +438,9 @@ async function removeFolder(path: string) {
 export async function deleteAccount(pw: string, acct: Account) {
   const u = await reauth(pw), { db: d } = need();
   const books = await getDocs(query(collection(d, 'books'), where('ownerId', '==', acct.uid)));
-  const [follows, saved, blocked] = await Promise.all(['following', 'saved', 'blocked'].map(c => getDocs(collection(d, 'users', acct.uid, c))));
+  const subs = await Promise.all(['following', 'saved', 'blocked', 'notifications'].map(c => getDocs(collection(d, 'users', acct.uid, c))));
   const batch = writeBatch(d);
-  books.forEach(b => batch.delete(b.ref)); [follows, saved, blocked].forEach(c => c.forEach(f => batch.delete(f.ref)));
+  books.forEach(b => batch.delete(b.ref)); subs.forEach(c => c.forEach(f => batch.delete(f.ref)));
   batch.delete(doc(d, 'handles', acct.handle)); batch.delete(doc(d, 'users', acct.uid));
   await batch.commit();
   await removeFolder(`users/${acct.uid}`).catch(() => {});

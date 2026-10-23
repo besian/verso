@@ -3,7 +3,7 @@ import type { ChangeEvent, DragEvent, MouseEvent, PointerEvent, WheelEvent } fro
 import { CONFIG, GRID_WIDTH, PALETTE, SHAPES } from './data';
 import type { Account, Book, OtherBook, Shape, ShapeKey } from './data';
 import * as api from './backend';
-import type { AuthUser, BookDoc, Person, Saved } from './backend';
+import type { AuthUser, BookDoc, Notif, Person, Saved } from './backend';
 import * as store from './storage';
 import { COVER_INSIDE, pageWear } from './wear';
 import type { Wear } from './wear';
@@ -38,6 +38,7 @@ interface State {
   community?: OtherBook[]; people?: Person[];
   saved?: Saved[]; blocked?: string[]; followFeed?: OtherBook[]; followPeople?: Person[]; pfTab?: 'books' | 'saved' | 'following';
   toast?: string; more?: 'book' | 'profile' | null;
+  counts?: Record<string, number>; liked?: Record<string, boolean>; notifs?: Notif[]; notifOpen?: boolean;
   reportFor?: { kind: 'book' | 'user'; targetId: string; ownerId: string; label: string } | null; reportReason?: string; reportNote?: string; reportBusy?: boolean; reportErr?: string;
   p: number; zoom: number; managing: boolean;
   vw: number; vh: number; sw?: number; sh?: number;
@@ -58,6 +59,8 @@ const fmtK = (v: number) => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v);
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 /** Peak total bend from spine to outer edge of a turning page (degrees). */
 const CURL_DEG = 110;
+/** Likes and followers each artist is working toward. */
+const GOAL = 100;
 const avatarBg = (av?: string | null) => av ? `url("${av}") center/cover no-repeat ${INK}` : INK;
 const isData = (u?: string | null): u is string => !!u && u.startsWith('data:');
 /** Every stored file a book uses: pages, cover and their thumbnails (for cleaning up removed ones). */
@@ -178,11 +181,11 @@ export default class App extends Component<object, State> {
   }
   toggleBlock(uid: string, name: string) {
     const a = this.state.acct; if (!a) return this.openJoin();
-    const on = !(this.state.blocked || []).includes(uid);
+    const on = !(this.state.blocked || []).includes(uid), wasFollowing = (this.state.follows || []).includes(uid);
     if (on && !window.confirm(`Block ${name}? Their sketchbooks will be hidden from you, and you’ll stop following them.`)) return;
     this.setState(s => ({ blocked: on ? [...(s.blocked || []), uid] : (s.blocked || []).filter(x => x !== uid), follows: on ? s.follows.filter(x => x !== uid) : s.follows, more: null }), () => this.loadFollowFeed());
     this.toast(on ? `Blocked ${name}` : `Unblocked ${name}`);
-    api.setBlocked(a.uid, uid, on).catch(e => { console.error(e); this.toast('Couldn’t update that. Try again.'); });
+    api.setBlocked(a.uid, uid, on, wasFollowing).catch(e => { console.error(e); this.toast('Couldn’t update that. Try again.'); });
   }
   openReport(r: NonNullable<State['reportFor']>) { if (!this.state.acct) return this.openJoin(); this.setState({ reportFor: r, reportReason: '', reportNote: '', reportErr: '', more: null }); }
   /** Decoded images kept alive so turns, zooms and the focus backdrop never wait on a download. */
@@ -198,6 +201,7 @@ export default class App extends Component<object, State> {
   }
   componentDidUpdate(_: object, prev: State) {
     const s = this.state;
+    this.syncWatches();
     // The first route is applied once we know who's signed in; after that the URL follows the screen.
     if (s.authReady && !this.routed) { this.routed = true; this.applyRoute(); }
     else if (this.routed) {
@@ -217,7 +221,34 @@ export default class App extends Component<object, State> {
     if (s.books !== prev.books) this.preload(s.books.map(b => b.coverImg));
     if (s.community !== prev.community) this.preload((s.community || []).flatMap(b => [b.coverImg && this.thumbOf(b, b.coverImg), b.images[0]]));
   }
+  // ---------- live counts and notifications ----------
+  watches = new Map<string, () => void>(); goalTried = new Set<string>();
+  /** Keeps exactly the listeners the current screen needs: the open book's likes, the profile's counts, your notifications. */
+  syncWatches() {
+    const s = this.state, me = s.acct?.uid, o = s.other as OtherBook | null, mb = s.books[s.active];
+    const want = new Map<string, () => () => void>();
+    const bookId = s.mode === 'other' ? o?.id : s.mode === 'mine' && mb && !mb.id.startsWith('local') ? mb.id : undefined;
+    if (bookId) want.set('bc:' + bookId, () => api.watch(['bookCounts', bookId], d => this.setState(st => ({ counts: { ...st.counts, ['b:' + bookId]: Math.max(0, d?.likes || 0) } }))));
+    if (bookId && me && s.mode === 'other') want.set(`lk:${bookId}:${me}`, () => api.watch(['books', bookId, 'likes', me], d => this.setState(st => ({ liked: { ...st.liked, [bookId]: !!d } }))));
+    const pu = s.mode === 'profile' ? s.profileOf?.uid || me : undefined;
+    for (const u of new Set([pu, me])) if (u) want.set('uc:' + u, () => api.watch(['userCounts', u], d => this.setState(st => ({ counts: { ...st.counts, ['f:' + u]: Math.max(0, d?.followers || 0), ['l:' + u]: Math.max(0, d?.likes || 0) } }))));
+    if (me) want.set('nt:' + me, () => api.watchNotifications(me, notifs => this.setState({ notifs })));
+    for (const [k, stop] of this.watches) if (!want.has(k)) { stop(); this.watches.delete(k); }
+    for (const [k, start] of want) if (!this.watches.has(k)) this.watches.set(k, start());
+    // Goals: a one-off notification the first time a count reaches 100.
+    if (s.acct) for (const [k, goal] of [['l:', 'likes100'], ['f:', 'followers100']] as const) {
+      if ((s.counts?.[k + me] || 0) >= GOAL && !this.goalTried.has(goal) && !(s.notifs || []).some(n => n.id === 'goal_' + goal)) { this.goalTried.add(goal); api.addGoal(s.acct, goal); }
+    }
+  }
+  toggleLike(o: OtherBook) {
+    const a = this.state.acct; if (!a) return this.openJoin();
+    if (!o.ownerId) return;
+    const on = !this.state.liked?.[o.id], key = 'b:' + o.id;
+    this.setState(st => ({ liked: { ...st.liked, [o.id]: on }, counts: { ...st.counts, [key]: Math.max(0, (st.counts?.[key] || 0) + (on ? 1 : -1)) } }));
+    api.setLike(a, { id: o.id, ownerId: o.ownerId, name: o.name }, on).catch(e => { console.error(e); this.toast('Couldn’t save that. Try again.'); this.setState(st => ({ liked: { ...st.liked, [o.id]: !on } })); });
+  }
   componentWillUnmount() {
+    this.watches.forEach(stop => stop());
     removeEventListener('resize', this.onResize); removeEventListener('keydown', this.onKey); removeEventListener('popstate', this.onPop);
     this.unAuth?.(); this.ro?.disconnect(); cancelAnimationFrame(this.raf); cancelAnimationFrame(this.exRaf);
   }
@@ -652,7 +683,15 @@ export default class App extends Component<object, State> {
       pfName: p.name, pfHandle: '@' + (p.handle || ''), pfHasBio: !!p.bio || (mine && !pv), pfBio: p.bio || 'Add a short bio so people know what you draw.', pfBioOp: p.bio ? 1 : 0.55,
       pfHasLoc: !!(p.loc || '').trim(), pfLoc: p.loc, pfHasWeb: !!web, pfWeb: web.replace(/^https?:\/\//, ''), pfWebHref: /^https?:\/\//.test(web) ? web : 'https://' + web, pfJoined: p.joined,
       pfAvBg: avatarBg(p.av), pfInit: p.av ? '' : ini(p.name),
-      pfStats: p.stats.map(([n, l]) => ({ n: fmtK(n), l })), pfBooks: list, pfCount: String(list.length), pfBooksLbl: mine && !pv ? 'Your sketchbooks' : 'Sketchbooks',
+      ...(() => {
+        // Followers and likes update live from the counters (see syncWatches).
+        const pu = mine ? s.acct?.uid : s.profileOf?.uid, fol = s.counts?.['f:' + pu] || 0, lk = s.counts?.['l:' + pu] || 0;
+        const stats = [...p.stats, [fol, fol === 1 ? 'follower' : 'followers'], [lk, lk === 1 ? 'like' : 'likes']] as [number, string][];
+        return {
+          pfStats: stats.map(([n, l]) => ({ n: fmtK(n), l })),
+          pfGoals: mine && !pv ? [['Likes', lk], ['Followers', fol]].map(([l, n]) => ({ key: l as string, label: l as string, n: n as number, goal: GOAL, pct: Math.min(100, Math.round((n as number) / GOAL * 100)), done: (n as number) >= GOAL })) : null,
+        };
+      })(), pfBooks: list, pfCount: String(list.length), pfBooksLbl: mine && !pv ? 'Your sketchbooks' : 'Sketchbooks',
       pfMine: mine && !pv, pfPreviewing: pv, pfOther: !mine, pfShowNew: mine && !pv && (s.pfTab || 'books') === 'books',
       ...(() => {
         const tab = mine && !pv ? s.pfTab || 'books' : 'books', setTab = (t: 'books' | 'saved' | 'following') => {
@@ -684,7 +723,7 @@ export default class App extends Component<object, State> {
         const key = s.profileOf?.uid; if (!key) return;
         const on = !follows.includes(key);
         this.setState({ follows: on ? [...follows, key] : follows.filter(x => x !== key) });
-        api.setFollow(s.acct.uid, key, on).then(() => this.loadFollowFeed()).catch(e => { console.error(e); this.setState(st => ({ follows: on ? st.follows.filter(x => x !== key) : [...st.follows, key] })); });
+        api.setFollow(s.acct, key, on).then(() => this.loadFollowFeed()).catch(e => { console.error(e); this.setState(st => ({ follows: on ? st.follows.filter(x => x !== key) : [...st.follows, key] })); });
       },
     };
   }
@@ -778,6 +817,30 @@ export default class App extends Component<object, State> {
       },
       pfCancel: () => this.setState({ draft: null, dErr: '' }), pfClose: (e: MouseEvent) => { if (e.target === e.currentTarget) this.setState({ draft: null }); },
       signOut: async () => { if (!window.confirm('Sign out of your account?')) return; await api.signOut(); this.setState({ draft: null }); this.goMode('home'); },
+    };
+  }
+
+  notifVals(): V {
+    const s = this.state, list = s.notifs || [], unread = list.filter(n => !n.read);
+    const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd'; };
+    return {
+      ntShow: !!s.acct, ntUnread: unread.length, ntOpen: !!s.notifOpen,
+      ntToggle: () => {
+        const open = !s.notifOpen; this.setState({ notifOpen: open, more: null });
+        if (open && s.acct && unread.length) api.markRead(s.acct.uid, unread.map(n => n.id)).catch(() => {});
+      },
+      ntClose: () => this.setState({ notifOpen: false }),
+      ntItems: list.map(n => ({
+        key: n.id, unread: !n.read, when: ago(n.at), goal: n.type === 'goal',
+        who: n.type === 'goal' ? '' : n.fromName || '@' + n.fromHandle,
+        text: n.type === 'like' ? <>liked <i>{n.bookName}</i></> : n.type === 'follow' ? 'started following you' : n.goal === 'likes100' ? `You reached ${GOAL} likes. Thank you for sharing your pages.` : `You reached ${GOAL} followers. People are following along.`,
+        open: () => {
+          this.setState({ notifOpen: false });
+          if (n.type === 'like' && n.bookId) { const j = s.books.findIndex(b => b.id === n.bookId); if (j >= 0) { this.goMode('mine'); this.setState({ active: j, images: s.books[j].images }); } }
+          else if (n.type === 'follow') this.openProfile({ uid: n.from, name: n.fromName, handle: n.fromHandle });
+          else this.openProfile(null);
+        },
+      })),
     };
   }
 
@@ -1030,13 +1093,16 @@ export default class App extends Component<object, State> {
         const o = other as OtherBook | null, mineB = books[active];
         return {
           bkSaved: this.isSaved(o?.id), bkSave: () => o && this.toggleSave(o),
+          bkLiked: !!(o && s.liked?.[o.id]), bkLike: () => o && this.toggleLike(o),
+          bkLikes: (() => { const id = o?.id || (mineB && !mineB.id.startsWith('local') ? mineB.id : ''); return id ? s.counts?.['b:' + id] || 0 : 0; })(),
           bkShare: () => o ? this.share(`/@${o.handle}/${o.id}`, `${o.name} by ${o.artist}`) : s.acct && mineB && this.share(`/@${s.acct.handle}/${mineB.id}`, `${mineB.name} by ${s.acct.name}`),
           bkCanShare: !!o || (!!s.acct && mineB?.isPublic !== false && !mineB?.id.startsWith('local')),
           bkMoreOpen: s.more === 'book', bkMore: () => this.setState(st => ({ more: st.more === 'book' ? null : 'book' })),
           bkReport: () => o && this.openReport({ kind: 'book', targetId: o.id, ownerId: o.ownerId || '', label: `“${o.name}”` }),
           bkBlock: () => o?.ownerId && this.toggleBlock(o.ownerId, o.artist), bkBlockLbl: `Block ${o?.artist || ''}`,
-          closeMore: () => s.more && this.setState({ more: null }),
+          closeMore: () => (s.more || s.notifOpen) && this.setState({ more: null, notifOpen: false }),
           toastMsg: s.toast || '',
+          ...this.notifVals(),
           reportOpen: !!s.reportFor, reportLabel: s.reportFor?.label || '', reportKind: s.reportFor?.kind, reportReasons: api.REPORT_REASONS.map(r => ({ key: r, label: r, on: s.reportReason === r, pick: () => this.setState({ reportReason: r, reportErr: '' }) })),
           reportNote: s.reportNote || '', onReportNote: (e: ChangeEvent<HTMLTextAreaElement>) => this.setState({ reportNote: e.target.value }), reportBusy: !!s.reportBusy, reportErr: s.reportErr || '',
           closeReport: () => this.setState({ reportFor: null }),

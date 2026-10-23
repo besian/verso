@@ -27,6 +27,7 @@ function TopBar({ v }: { v: V }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         {v.isOther && <button onClick={v.goExplore} className={hover(`color:${MARK}`)} style={textBtn}>← Explore</button>}
         {v.isMine && <button onClick={v.newBook} className={hover(`color:${MARK}`)} style={textBtn}>{v.newLbl}</button>}
+        {v.ntShow && <Bell v={v} />}
         {v.hasAcct && <button onClick={v.openMe} title="Your profile" className={hover('transform:scale(1.06)')} style={{ width: 34, height: 34, flexShrink: 0, borderRadius: '50%', border: 'none', padding: 0, background: v.meAvBg, color: PAPER, font: `500 11px ${SANS}`, cursor: 'pointer', boxShadow: v.meRing }}>{v.meInit}</button>}
         {v.noAcct && (
           <>
@@ -36,6 +37,31 @@ function TopBar({ v }: { v: V }) {
         )}
       </div>
     </div>
+  );
+}
+
+/** Notification bell with unread count and a dropdown of recent likes, follows and goals. */
+function Bell({ v }: { v: V }) {
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex' }} onClick={e => e.stopPropagation()}>
+      <button onClick={v.ntToggle} title="Notifications" aria-label={`Notifications${v.ntUnread ? `, ${v.ntUnread} new` : ''}`} aria-expanded={v.ntOpen} className={hover(`color:${MARK}`)} style={{ position: 'relative', width: 34, height: 34, padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2.2 2.2 0 0 0 4 0" /></svg>
+        {v.ntUnread > 0 && <span style={{ position: 'absolute', top: 3, right: 2, minWidth: 16, height: 16, padding: '0 4px', boxSizing: 'border-box', borderRadius: 8, background: MARK, color: PAPER, font: `600 10px/16px ${SANS}`, textAlign: 'center' }}>{v.ntUnread > 9 ? '9+' : v.ntUnread}</span>}
+      </button>
+      {v.ntOpen && (
+        <div role="dialog" aria-label="Notifications" style={{ position: 'absolute', top: 'calc(100% + 8px)', right: v.notMob ? 0 : -60, width: 'min(340px, calc(100vw - 24px))', maxHeight: '60vh', overflowY: 'auto', zIndex: 30, background: PAPER, border: `1px solid ${INK}`, boxShadow: '0 16px 40px rgba(34,35,32,.16)' }}>
+          <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(34,35,32,.15)', ...label(INK) }}>Notifications</div>
+          {!v.ntItems.length && <div style={{ padding: '18px 14px', fontSize: 14, color: 'rgba(34,35,32,.65)' }}>Nothing yet. Likes and new followers show up here.</div>}
+          {v.ntItems.map((n: V) => (
+            <button key={n.key} onClick={n.open} className={hover('background:rgba(34,35,32,.06)')} style={{ display: 'flex', gap: 10, width: '100%', textAlign: 'left', padding: '12px 14px', border: 'none', borderBottom: '1px solid rgba(34,35,32,.08)', background: n.unread ? 'rgba(173,73,58,.06)' : 'none', color: INK, font: `400 14px/1.4 ${SANS}`, cursor: 'pointer' }}>
+              <span style={{ flexShrink: 0, width: 8, height: 8, marginTop: 6, borderRadius: '50%', background: n.unread ? MARK : 'transparent' }} />
+              <span style={{ flex: 1, minWidth: 0 }}>{n.goal ? <b style={{ fontWeight: 600 }}>🎉 {n.text}</b> : <><b style={{ fontWeight: 600 }}>{n.who}</b> {n.text}</>}</span>
+              <span style={{ flexShrink: 0, fontSize: 12, color: 'rgba(34,35,32,.55)' }}>{n.when}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
   );
 }
 
@@ -52,7 +78,9 @@ function Title({ v }: { v: V }) {
         </div>
         {(v.isOther || (v.isMine && v.bkCanShare)) && (
           <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginTop: 2, ...label(INK, 10) }}>
-            {v.isOther && <button onClick={v.bkSave} aria-pressed={v.bkSaved} className={hover(`color:${MARK}`)} style={{ ...actLink, color: v.bkSaved ? MARK : INK }}>{v.bkSaved ? '♥ Saved' : '♡ Save'}</button>}
+            {v.isOther && <button onClick={v.bkLike} aria-pressed={v.bkLiked} title={v.bkLiked ? 'Unlike' : 'Like'} className={hover(`color:${MARK}`)} style={{ ...actLink, color: v.bkLiked ? MARK : INK }}>{v.bkLiked ? '♥' : '♡'} {v.bkLikes}</button>}
+            {v.isMine && <span title="Likes">♥ {v.bkLikes}</span>}
+            {v.isOther && <button onClick={v.bkSave} aria-pressed={v.bkSaved} className={hover(`color:${MARK}`)} style={{ ...actLink, color: v.bkSaved ? MARK : INK }}>{v.bkSaved ? 'Saved' : 'Save'}</button>}
             <button onClick={v.bkShare} className={hover(`color:${MARK}`)} style={actLink}>Share</button>
             {v.isOther && <MoreMenu open={v.bkMoreOpen} onToggle={v.bkMore} items={[{ label: 'Report sketchbook', onClick: v.bkReport }, { label: v.bkBlockLbl, onClick: v.bkBlock, danger: true }]} />}
           </div>
