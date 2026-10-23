@@ -521,6 +521,16 @@ export async function bannedUsers(): Promise<string[]> {
   if (!db) return [];
   try { return (await getDocs(collection(db, 'banned'))).docs.map(d => d.id); } catch { return []; }
 }
+/** Staff pick: one sketchbook moderators feature on the home page (picks/current). */
+export async function getPick(): Promise<{ bookId: string; at: number } | null> {
+  if (!db) return null;
+  try { const s = await getDoc(doc(db, 'picks', 'current')); return s.exists() && s.data().bookId ? { bookId: s.data().bookId, at: s.data().at || 0 } : null; } catch { return null; }
+}
+export async function setPick(by: string, bookId: string | null) {
+  const r = doc(need().db, 'picks', 'current');
+  if (bookId) await setDoc(r, { bookId, by, at: Date.now() }); else await deleteDoc(r);
+}
+
 /** Hides a sketchbook from everyone but its owner, or restores it. */
 export async function setHidden(bookId: string, on: boolean) { await updateDoc(doc(need().db, 'books', bookId), { hidden: on, isPublic: !on }); }
 /** Suspends an artist (their public sketchbooks are hidden) or lifts it (books hidden by moderators come back). */

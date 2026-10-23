@@ -131,7 +131,7 @@ function Title({ v }: { v: V }) {
             {v.isOther && <button onClick={v.bkSave} aria-pressed={v.bkSaved} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, color: v.bkSaved ? MARK : INK }}>{v.bkSaved ? 'Saved' : 'Save'}</button>}
             <button onClick={v.bkShare} className={'tap ' + hover(`color:${MARK}`)} style={actLink}>Share</button>
             <button onClick={v.bkEmbed} className={'tap ' + hover(`color:${MARK}`)} style={actLink}>Embed</button>
-            {v.isOther && <MoreMenu open={v.bkMoreOpen} onToggle={v.bkMore} items={[{ label: 'Report sketchbook', onClick: v.bkReport }, { label: v.bkBlockLbl, onClick: v.bkBlock, danger: true }]} />}
+            {v.isOther && <MoreMenu open={v.bkMoreOpen} onToggle={v.bkMore} items={[...(v.bkIsAdmin ? [{ label: v.bkPickLbl, onClick: v.bkPick }] : []), { label: 'Report sketchbook', onClick: v.bkReport }, { label: v.bkBlockLbl, onClick: v.bkBlock, danger: true }]} />}
           </div>
         )}
       </div>

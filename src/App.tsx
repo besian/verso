@@ -76,6 +76,8 @@ interface State {
   colNew?: { name: string; forId?: string } | null; colMenu?: string | null;
   /** Shown inside an iframe on someone's site (/embed/<id>): just the book. And the embed-code dialog. */
   embed?: boolean; embedFor?: { id: string; title: string } | null;
+  /** The sketchbook moderators feature on the home page. */
+  pick?: OtherBook | null;
   /** /auth/action: a link from one of our emails (confirm email, reset password, email change). */
   act?: { mode: string; code: string; next: string; step: 'checking' | 'form' | 'working' | 'done' | 'error'; email: string; pw: string; err: string };
   tagDraft?: string; soundOn?: boolean; dark?: boolean; welcome?: boolean;
@@ -142,7 +144,7 @@ export default class App extends Component<object, State> {
   exView0 = store.loadExView();
   blobs = new Map<string, string>();
   ro?: ResizeObserver; stageEl?: HTMLElement;
-  fileRef = createRef<HTMLInputElement>(); coverRef = createRef<HTMLInputElement>(); avRef = createRef<HTMLInputElement>();
+  fileRef = createRef<HTMLInputElement>(); camRef = createRef<HTMLInputElement>(); coverRef = createRef<HTMLInputElement>(); avRef = createRef<HTMLInputElement>();
   unAuth?: () => void; signingUp = false;
   // Book sync: books with unsaved changes, one promise chain per book, and the file URLs last written for each.
   dirty = new Set<string>(); syncT?: ReturnType<typeof setTimeout>; syncQ = new Map<string, Promise<void>>(); synced = new Map<string, string[]>();
@@ -178,6 +180,7 @@ export default class App extends Component<object, State> {
     this.unAuth = api.watchAuth(u => { if (!this.signingUp) this.loadUser(u); });
     this.loadCommunity();
     api.bannedUsers().then(banned => this.setState({ banned }));
+    this.loadPick();
   }
   /** Loads (or clears) everything that belongs to the signed-in user. */
   async loadUser(u: AuthUser | null, acct?: Account) {
@@ -227,6 +230,16 @@ export default class App extends Component<object, State> {
         return { community: [...prev, ...books.filter(b => !seen.has(b.id)).map((b, i) => toOther(b, prev.length + i))], exMore: !!next, exBusy: false };
       });
     }).catch(e => { console.error(e); this.setState({ exBusy: false, community: this.state.community || [] }); });
+  }
+  /** The staff pick, shown first on the home shelf. */
+  loadPick() {
+    api.getPick().then(p => p ? api.getBook(p.bookId) : null).then(d => this.setState({ pick: d && d.pageCount > 0 ? toOther(d, 0) : null })).catch(() => this.setState({ pick: null }));
+  }
+  togglePick(b: OtherBook) {
+    const a = this.state.acct; if (!a || !this.state.admin) return;
+    const on = this.state.pick?.id !== b.id;
+    this.setState({ pick: on ? b : null, more: null });
+    api.setPick(a.uid, on ? b.id : null).then(() => this.toast(on ? `“${b.name}” is the staff pick` : 'Staff pick removed'), e => { console.error(e); this.toast('Couldn’t change the staff pick'); this.loadPick(); });
   }
   /** Filters Explore to one medium or tag ('' clears it). */
   setLabel(lbl: string) {
@@ -894,7 +907,8 @@ export default class App extends Component<object, State> {
     const feed = this.state.acct ? (this.state.followFeed || []).filter(b => !(this.state.blocked || []).includes(b.ownerId || '')) : [];
     // Books from people you follow come first, then the community; your own public books only fill spots left over.
     const seen = new Set(feed.map(b => b.id)), me = this.state.acct?.uid, rest = [...this.community()].filter(b => !seen.has(b.id)).sort((a, b) => b.likes - a.likes);
-    const list = [...feed, ...rest.filter(b => b.ownerId !== me), ...rest.filter(b => !!me && b.ownerId === me)];
+    const pick = this.state.pick && !(this.state.blocked || []).includes(this.state.pick.ownerId || '') ? this.state.pick : null;
+    const list = [...(pick ? [pick] : []), ...[...feed, ...rest.filter(b => b.ownerId !== me), ...rest.filter(b => !!me && b.ownerId === me)].filter(b => b.id !== pick?.id)];
     // One screen: the shelf takes what height is left after the headline block, and its books
     // shrink further if they'd be wider than the page.
     const sel = list.slice(0, mob ? 5 : 10), gap = mob ? 10 : 16, shapes = sel.map(b => this.shapeOf(b)), sumW = shapes.reduce((t, sh) => t + sh.s * sh.a, 0);
@@ -905,8 +919,9 @@ export default class App extends Component<object, State> {
       hmFollowing: feed.length > 0, hmMixed: feed.length > 0 && feed.length < sel.length, hmMob: mob, hmPadX: mob ? 16 : 40, hmPadT: mob ? 70 : 84, hmEmpty: !!this.state.community && !list.length, hmShelfGap: gap, hmShelfH: Math.round(base),
       hmShelf: sel.map((b, i) => {
         const hh = Math.round(base * shapes[i].s);
-        return { key: b.id, name: b.name, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, title: b.name + ' — ' + b.artist, h: hh, w: Math.round(hh * shapes[i].a), fs: Math.max(11, Math.round(hh / 17)), rot: [0, -2, 0, 1.5, 0, -1, 1, 0, -1.5, 1][i] || 0, open: () => this.openOtherBook(b) };
+        return { key: b.id, isPick: b.id === pick?.id, name: b.name, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, title: b.name + ' — ' + b.artist, h: hh, w: Math.round(hh * shapes[i].a), fs: Math.max(11, Math.round(hh / 17)), rot: [0, -2, 0, 1.5, 0, -1, 1, 0, -1.5, 1][i] || 0, open: () => this.openOtherBook(b) };
       }),
+      hmPick: pick ? { name: pick.name, artist: pick.artist, open: () => this.openOtherBook(pick) } : null,
       hmPrompt: currentPrompt().word, hmPromptOpen: () => this.openLabel('t:' + currentPrompt().tag),
       startOwn: () => { if (!this.state.acct) return this.openProfile(null); this.goMode('mine'); this.openNewPick(); },
     };
@@ -1276,6 +1291,7 @@ export default class App extends Component<object, State> {
     };
     const ago = (t: number) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ', ' + new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     return {
+      adPick: s.pick ? { name: s.pick.name, artist: s.pick.artist, open: () => this.openOtherBook(s.pick!), remove: () => this.togglePick(s.pick!) } : null,
       isAdminPage: s.mode === 'admin', adAllowed: !!s.admin, adLoading: !list, adErr: s.adErr || '', adReload: () => this.loadReports(),
       adCount: list ? `${list.length} open ${list.length === 1 ? 'report' : 'reports'}` : '',
       adItems: (list || []).map(r => ({
@@ -1496,6 +1512,7 @@ export default class App extends Component<object, State> {
           bkShare: () => o ? this.share(`/@${o.handle}/${o.id}`, `${o.name} by ${o.artist}`) : s.acct && mineB && this.share(`/@${mineB.owner?.handle || s.acct.handle}/${mineB.id}`, `${mineB.name} by ${mineB.owner?.name || s.acct.name}`),
           bkCanShare: !!o || (!!s.acct && mineB?.isPublic !== false && !mineB?.id.startsWith('local')),
           bkMoreOpen: s.more === 'book', bkMore: () => this.setState(st => ({ more: st.more === 'book' ? null : 'book' })),
+          bkIsAdmin: !!s.admin, bkPickLbl: o && s.pick?.id === o.id ? 'Remove staff pick' : 'Make staff pick', bkPick: () => o && this.togglePick(o),
           bkReport: () => o && this.openReport({ kind: 'book', targetId: o.id, ownerId: o.ownerId || '', label: `“${o.name}”` }),
           bkBlock: () => o?.ownerId && this.toggleBlock(o.ownerId, o.artist), bkBlockLbl: `Block ${o?.artist || ''}`,
           closeMore: () => (s.more || s.notifOpen || s.colMenu) && this.setState({ more: null, notifOpen: false, colMenu: null }),
@@ -1622,7 +1639,7 @@ export default class App extends Component<object, State> {
         if (!foc || focusMode !== 'auto-hide') return; if (this.state.ctrlShow === false) this.setState({ ctrlShow: true });
         clearTimeout(this.wakeT); this.wakeT = setTimeout(() => this.state.focus && this.setState({ ctrlShow: false }), 1800);
       },
-      pick: () => this.fileRef.current?.click(),
+      pick: () => this.fileRef.current?.click(), pickCamera: () => this.camRef.current?.click(),
       onFiles: (e: ChangeEvent<HTMLInputElement>) => { if (e.target.files) this.addFiles(e.target.files); e.target.value = ''; },
       onDragOver: (e: DragEvent) => e.preventDefault(),
       onDrop: (e: DragEvent) => { e.preventDefault(); this.addFiles(e.dataTransfer.files); },
@@ -1664,6 +1681,8 @@ export default class App extends Component<object, State> {
         {v.managing && <Manager v={v} />}
         {v.editing && <Editor v={v} />}
         <input ref={this.fileRef} type="file" accept="image/*" multiple onChange={v.onFiles} style={{ display: 'none' }} />
+        {/* Phones: opens the camera straight away. */}
+        <input ref={this.camRef} type="file" accept="image/*" capture="environment" onChange={v.onFiles} style={{ display: 'none' }} />
       </Stage>
     );
   }

@@ -41,6 +41,13 @@ export function HomeScreen({ v }: { v: V }) {
             : <button onClick={v.startOwn} className={hoverLine} style={underlineBtn(15)}>Start your own →</button>}
         </div>
         {signedOut && <div style={{ fontSize: 13, color: STONE }}>Already a member? <button onClick={v.openSignin} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${STONE}`, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Sign in</button></div>}
+        {v.hmPick && (
+          <button onClick={v.hmPick.open} className={hover(`border-color:${MARK}`)} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, maxWidth: '100%', padding: '7px 14px', border: '1px solid rgba(var(--ink-rgb),.2)', borderRadius: 20, background: 'none', color: INK, cursor: 'pointer', font: `500 13px ${SANS}` }}>
+            <span style={label(MARK, 10)}>Staff pick</span>
+            <span style={{ font: `italic 400 17px/1 ${SERIF}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{v.hmPick.name}</span>
+            <span style={{ color: MUTED, whiteSpace: 'nowrap' }}>by {v.hmPick.artist} →</span>
+          </button>
+        )}
         {signedOut && <LegalLinks v={v} />}
       </section>
       <section style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10, paddingTop: mob ? 0 : 28 }}>
@@ -52,6 +59,7 @@ export function HomeScreen({ v }: { v: V }) {
             {v.hmShelf.map((sh: V) => (
               <div key={sh.key} onClick={sh.open} title={sh.title} className={hover('transform:translateY(-12px)')} style={{ position: 'relative', flexShrink: 0, width: sh.w, height: sh.h, transform: `rotate(${sh.rot}deg)`, transformOrigin: '50% 100%', cursor: 'pointer', transition: 'transform .5s cubic-bezier(.2,.8,.2,1)' }}>
                 <ClosedBook size="sm" bg={sh.bg} board={sh.color} label={sh.showLabel ? sh.name : null} labelStyle={{ padding: '6px 8px', font: `400 ${sh.fs}px/1.1 ${SERIF}` }} />
+                {sh.isPick && <span style={{ position: 'absolute', left: '50%', top: -11, transform: 'translateX(-50%)', padding: '3px 8px', borderRadius: 10, background: MARK, color: '#F6F2E8', font: `600 9px/1.2 ${SANS}`, letterSpacing: '.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,.2)' }}>Staff pick</span>}
               </div>
             ))}
           </div>

@@ -174,10 +174,16 @@ export function Manager({ v }: { v: V }) {
                     <span style={{ fontSize: 13, color: p.caption ? INK : 'rgba(var(--ink-rgb),.45)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontStyle: p.caption ? 'italic' : 'normal' }}>{p.caption || 'Add a caption'}</span>
                   </div>
                 ))}
-                <button onClick={v.pick} className={hover(`border-color:${INK};color:${INK}`)} style={{ aspectRatio: v.pgAspect, borderRadius: '2px 8px 8px 2px', border: '2px dashed rgba(var(--ink-rgb),.3)', background: 'none', display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', justifyContent: 'center', color: 'rgba(var(--ink-rgb),.7)', font: `500 14px ${SANS}`, cursor: 'pointer', padding: 12 }}>
+                {v.isTouch ? (
+                  // Touch screens: photograph a page straight from the camera, or pick from the library.
+                  <div style={{ aspectRatio: v.pgAspect, borderRadius: '2px 8px 8px 2px', border: '2px dashed rgba(var(--ink-rgb),.3)', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'stretch', justifyContent: 'center', padding: 10, boxSizing: 'border-box' }}>
+                    <button onClick={v.pickCamera} style={{ height: 40, border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Take photo</button>
+                    <button onClick={v.pick} style={{ ...ghostBtn, height: 40, fontSize: 13 }}>Choose photos</button>
+                  </div>
+                ) : <button onClick={v.pick} className={hover(`border-color:${INK};color:${INK}`)} style={{ aspectRatio: v.pgAspect, borderRadius: '2px 8px 8px 2px', border: '2px dashed rgba(var(--ink-rgb),.3)', background: 'none', display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', justifyContent: 'center', color: 'rgba(var(--ink-rgb),.7)', font: `500 14px ${SANS}`, cursor: 'pointer', padding: 12 }}>
                   <span style={{ fontSize: 28, fontWeight: 300, lineHeight: 1 }}>+</span>Add pages
-                  {!v.isTouch && <span style={{ fontSize: 12, fontWeight: 400, color: 'rgba(var(--ink-rgb),.55)' }}>or drop images</span>}
-                </button>
+                  <span style={{ fontSize: 12, fontWeight: 400, color: 'rgba(var(--ink-rgb),.55)' }}>or drop images</span>
+                </button>}
               </div>
             </>
           )}

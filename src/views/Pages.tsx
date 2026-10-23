@@ -151,6 +151,12 @@ export function Admin({ v }: { v: V }) {
   }
   return (
     <Page v={v} kicker="Moderation" title={<>Open <em>reports</em></>}>
+      <section style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 20px', flexWrap: 'wrap', padding: '14px 16px', background: 'rgba(173,73,58,.06)', borderLeft: `2px solid ${MARK}` }}>
+        {v.adPick
+          ? <span style={{ fontSize: 14 }}><span style={label(MARK, 10)}>Staff pick</span> <button onClick={v.adPick.open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', ...serif(20, 1.1), fontStyle: 'italic' }}>{v.adPick.name}</button> <span style={{ color: MUTED }}>by {v.adPick.artist}</span></span>
+          : <span style={{ fontSize: 14, color: MUTED }}><span style={label(MARK, 10)}>Staff pick</span> · none. Open any public sketchbook and choose <b style={{ color: INK, fontWeight: 600 }}>Make staff pick</b> from its ⋯ menu.</span>}
+        {v.adPick && <button onClick={v.adPick.remove} style={smallBtn(true)}>Remove</button>}
+      </section>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, ...label() }}>
         <span>{v.adCount}</span>
         <button onClick={v.adReload} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(INK) }}>Refresh</button>

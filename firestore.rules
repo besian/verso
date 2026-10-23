@@ -115,6 +115,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Staff pick: the sketchbook moderators feature on the home page.
+    match /picks/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // One document per handle so handles stay unique.
     match /handles/{handle} {
       allow read: if true;
