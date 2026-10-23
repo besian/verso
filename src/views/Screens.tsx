@@ -223,21 +223,22 @@ export function Profile({ v }: { v: V }) {
             <div style={{ display: 'flex', gap: '6px 20px', flexWrap: 'wrap', justifyContent: v.pfJust, marginTop: 4 }}>
               {v.pfStats.map((st: V) => <span key={st.l} style={{ fontSize: 14, color: 'rgba(var(--ink-rgb),.7)' }}><b style={{ color: INK, fontWeight: 600 }}>{st.n}</b> {st.l}</span>)}
             </div>
-          </div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: v.pfJust, flexShrink: 0, paddingTop: v.pfInfoTop }}>
+          {/* Actions sit under the details (not in a third column), so they wrap instead of squeezing the name and stats. */}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: v.pfJust, marginTop: 12 }}>
             {v.pfMine && (
               <>
                 <button onClick={v.editProfile} className={hoverMark} style={actionBtn(true)}>Edit profile</button>
                 <button onClick={v.togglePreview} className={hover('background:rgba(var(--ink-rgb),.1)')} style={actionBtn(false)}>View as public</button>
                 <button onClick={v.openSettings} className={hover('background:rgba(var(--ink-rgb),.1)')} style={actionBtn(false)}>Settings</button>
                 {v.pfAdmin && <button onClick={v.openAdmin} className={hover('background:rgba(var(--ink-rgb),.1)')} style={actionBtn(false)}>Moderation</button>}
-                <button onClick={v.signOut} className={hover(`color:${MARK}`)} style={{ ...actionBtn(false), border: 'none', padding: '0 6px' }}>Sign out</button>
+                <button onClick={v.signOut} className={'tap ' + hover(`color:${MARK}`)} style={{ padding: '0 4px', border: 'none', background: 'none', color: 'rgba(var(--ink-rgb),.7)', font: `500 14px ${SANS}`, cursor: 'pointer' }}>Sign out</button>
               </>
             )}
             {v.pfPreviewing && <button onClick={v.togglePreview} className={hoverMark} style={actionBtn(true)}>Exit preview</button>}
             {v.pfOther && <button onClick={v.toggleFollow} style={{ height: 44, minWidth: 120, padding: '0 20px', borderRadius: 2, border: `1.5px solid ${v.folBd}`, background: v.folBg, color: v.folFg, font: `500 14px ${SANS}`, cursor: 'pointer' }}>{v.folLbl}</button>}
             {v.pfOther && <button onClick={v.pfShare} className={hover('background:rgba(var(--ink-rgb),.1)')} style={actionBtn(false)}>Share</button>}
-            {v.pfOther && <span style={{ alignSelf: 'center' }}><MoreMenu open={v.pfMoreOpen} onToggle={v.pfMore} align="right" items={[{ label: 'Report artist', onClick: v.pfReport }, { label: v.pfBlockLbl, onClick: v.pfBlock, danger: true }]} /></span>}
+            {v.pfOther && <span style={{ alignSelf: 'center' }}><MoreMenu open={v.pfMoreOpen} onToggle={v.pfMore} align={v.notMob ? 'center' : 'right'} items={[{ label: 'Report artist', onClick: v.pfReport }, { label: v.pfBlockLbl, onClick: v.pfBlock, danger: true }]} /></span>}
+          </div>
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
