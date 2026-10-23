@@ -3,7 +3,7 @@ import type { V } from '../App';
 import ClosedBook from '../ClosedBook';
 import { hover } from '../pseudo';
 import { CANVAS, INK, MARK, MUTED, PAGE_EDGES, PAPER, SANS, SERIF, STONE, label, serif } from '../theme';
-import { HandleField, Notice, TextField } from './Overlays';
+import { HandleField, MoreMenu, Notice, TextField } from './Overlays';
 
 const screen = (overflowY: CSSProperties['overflowY'] = 'auto'): CSSProperties => ({ position: 'absolute', inset: 0, zIndex: 4, background: PAPER, overflowX: 'hidden', overflowY });
 const primaryBtn = (h: number, fs: number, px: number): CSSProperties => ({ height: h, padding: `0 ${px}px`, border: 'none', background: INK, color: PAPER, font: `500 ${fs}px ${SANS}`, cursor: 'pointer', transition: 'background .25s' });
@@ -56,7 +56,7 @@ export function HomeScreen({ v }: { v: V }) {
           </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, ...label() }}>
-          <span>{v.hmShelf.length ? (mob ? 'From the community' : 'From the community — open any book to leaf through it') : 'The shelf is empty — yours could be first'}</span>
+          <span>{v.hmFollowing ? (mob ? 'From artists you follow' : 'New from artists you follow') : v.hmShelf.length ? (mob ? 'From the community' : 'From the community — open any book to leaf through it') : 'The shelf is empty — yours could be first'}</span>
           {v.hmShelf.length > 0 && <button onClick={v.goExplore} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap', ...label(INK) }}>View all →</button>}
         </div>
       </section>
@@ -217,13 +217,43 @@ export function Profile({ v }: { v: V }) {
             )}
             {v.pfPreviewing && <button onClick={v.togglePreview} className={hoverMark} style={actionBtn(true)}>Exit preview</button>}
             {v.pfOther && <button onClick={v.toggleFollow} style={{ height: 44, minWidth: 120, padding: '0 20px', borderRadius: 2, border: `1.5px solid ${v.folBd}`, background: v.folBg, color: v.folFg, font: `500 14px ${SANS}`, cursor: 'pointer' }}>{v.folLbl}</button>}
+            {v.pfOther && <button onClick={v.pfShare} className={hover('background:rgba(34,35,32,.1)')} style={actionBtn(false)}>Share</button>}
+            {v.pfOther && <span style={{ alignSelf: 'center' }}><MoreMenu open={v.pfMoreOpen} onToggle={v.pfMore} align="right" items={[{ label: 'Report artist', onClick: v.pfReport }, { label: v.pfBlockLbl, onClick: v.pfBlock, danger: true }]} /></span>}
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, paddingBottom: 12, borderBottom: `1px solid ${INK}` }}>
-            <span style={serif(32, 1)}>{v.pfBooksLbl}</span>
-            <span style={{ fontSize: 14, color: 'rgba(34,35,32,.6)' }}>{v.pfCount}</span>
-          </div>
+          {v.pfTabs ? (
+            <div role="tablist" style={{ display: 'flex', alignItems: 'baseline', gap: v.notMob ? 28 : 18, flexWrap: 'wrap', paddingBottom: 12, borderBottom: `1px solid ${INK}` }}>
+              {v.pfTabs.map((t: V) => (
+                <button key={t.key} role="tab" aria-selected={t.on} onClick={t.pick} className={hover(`color:${INK}`)} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: 0, border: 'none', background: 'none', cursor: 'pointer', color: t.on ? INK : 'rgba(34,35,32,.45)' }}>
+                  <span style={{ ...serif(v.notMob ? 32 : 26, 1), color: 'inherit' }}>{t.label}</span>
+                  <span style={{ fontSize: 13 }}>{t.n}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, paddingBottom: 12, borderBottom: `1px solid ${INK}` }}>
+              <span style={serif(32, 1)}>{v.pfBooksLbl}</span>
+              <span style={{ fontSize: 14, color: 'rgba(34,35,32,.6)' }}>{v.pfCount}</span>
+            </div>
+          )}
+          {v.pfBlocked && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontSize: 14, color: MUTED }}>
+              You’ve blocked this artist, so their sketchbooks are hidden.
+              <button onClick={v.pfUnblock} className={hoverLine} style={underlineBtn(14)}>Unblock</button>
+            </div>
+          )}
+          {v.pfEmptyNote && !v.pfBooks.length && <div style={{ fontSize: 14, color: MUTED }}>{v.pfEmptyNote}</div>}
+          {v.pfPeople && (v.pfPeople.length ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 32px' }}>
+              {v.pfPeople.map((p: V) => (
+                <button key={p.key} onClick={p.open} className={hover(`color:${MARK}`)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', textAlign: 'left' }}>
+                  <span style={{ width: 44, height: 44, flexShrink: 0, borderRadius: '50%', background: p.avBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 18px ${SERIF}` }}>{p.init}</span>
+                  <span style={{ display: 'flex', flexDirection: 'column' }}><span style={{ ...serif(22, 1.1, 'normal'), color: 'inherit' }}>{p.name}</span><span style={{ fontSize: 13, color: MUTED }}>{p.handle}</span></span>
+                </button>
+              ))}
+            </div>
+          ) : <div style={{ fontSize: 14, color: MUTED }}>You’re not following anyone yet. Follow artists from their profile to see their new pages on your home shelf.</div>)}
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${v.pfCols},minmax(0,1fr))`, gap: '28px 18px', alignItems: 'end' }}>
             {v.pfBooks.map((pb: V) => (
               <div key={pb.key} onClick={pb.open} style={{ display: 'flex', flexDirection: 'column', gap: 20, cursor: 'pointer', minWidth: 0 }}>

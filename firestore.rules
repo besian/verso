@@ -25,6 +25,24 @@ service cloud.firestore {
         allow read: if true;
         allow write: if isUser(uid) && target != uid;
       }
+      // Saved sketchbooks and blocked artists are private to their owner.
+      match /saved/{bookId} {
+        allow read, write: if isUser(uid);
+      }
+      match /blocked/{target} {
+        allow read: if isUser(uid);
+        allow write: if isUser(uid) && target != uid;
+      }
+    }
+
+    // Reports can be filed by anyone signed in, and read only in the Firebase console.
+    match /reports/{id} {
+      allow create: if signedIn()
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.keys().hasOnly(['by', 'kind', 'targetId', 'ownerId', 'reason', 'note', 'at'])
+        && request.resource.data.kind in ['book', 'user']
+        && str(request.resource.data.reason, 60) && str(request.resource.data.note, 500);
+      allow read, update, delete: if false;
     }
 
     // One document per handle so handles stay unique.

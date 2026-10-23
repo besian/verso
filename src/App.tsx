@@ -3,14 +3,14 @@ import type { ChangeEvent, DragEvent, MouseEvent, PointerEvent, WheelEvent } fro
 import { CONFIG, GRID_WIDTH, PALETTE, SHAPES } from './data';
 import type { Account, Book, OtherBook, Shape, ShapeKey } from './data';
 import * as api from './backend';
-import type { AuthUser, BookDoc, Person } from './backend';
+import type { AuthUser, BookDoc, Person, Saved } from './backend';
 import * as store from './storage';
 import { COVER_INSIDE, pageWear } from './wear';
 import type { Wear } from './wear';
 import { INK, MARK, PAPER } from './theme';
 import Stage from './views/Stage';
 import { AuthPage, Explore, HomeScreen, Profile, Settings } from './views/Screens';
-import { Editor, EditProfile, Manager, NewBookPicker } from './views/Overlays';
+import { Editor, EditProfile, Manager, NewBookPicker, ReportModal, Toast } from './views/Overlays';
 
 export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings';
 type AnyBook = Book | OtherBook;
@@ -36,6 +36,9 @@ interface State {
   acErr?: string; acInfo?: string; acBusy?: string; verified?: boolean;
   ac?: { email?: string; pwEmail?: string; pwOld?: string; pwNew?: string; delHandle?: string; pwDel?: string };
   community?: OtherBook[]; people?: Person[];
+  saved?: Saved[]; blocked?: string[]; followFeed?: OtherBook[]; followPeople?: Person[]; pfTab?: 'books' | 'saved' | 'following';
+  toast?: string; more?: 'book' | 'profile' | null;
+  reportFor?: { kind: 'book' | 'user'; targetId: string; ownerId: string; label: string } | null; reportReason?: string; reportNote?: string; reportBusy?: boolean; reportErr?: string;
   p: number; zoom: number; managing: boolean;
   vw: number; vh: number; sw?: number; sh?: number;
   switching?: boolean; car?: number; swT?: number;
@@ -125,11 +128,11 @@ export default class App extends Component<object, State> {
   async loadUser(u: AuthUser | null, acct?: Account) {
     if (!u) {
       this.synced.clear(); this.dirty.clear();
-      return this.setState({ acct: null, follows: [], books: [localBook()], active: 0, images: [], p: 0, authReady: true });
+      return this.setState({ acct: null, follows: [], saved: [], blocked: [], followFeed: [], followPeople: [], books: [localBook()], active: 0, images: [], p: 0, authReady: true });
     }
     try {
       const a = acct || await api.ensureProfile(u);
-      const [docs, follows] = await Promise.all([api.userBooks(u.uid), api.following(u.uid)]);
+      const [docs, follows, saved, blocked] = await Promise.all([api.userBooks(u.uid), api.following(u.uid), api.savedBooks(u.uid).catch(() => []), api.blockedUsers(u.uid).catch(() => [])]);
       let books = docs.map(api.toBook);
       // Books saved before visibility existed are re-saved once so they get the field (and stay in Explore).
       const legacy = docs.some(d => d.legacy);
@@ -138,8 +141,8 @@ export default class App extends Component<object, State> {
       if (fresh) books = [{ id: api.newBookId(), name: 'sketchbook', color: '#b8243a', images: [], createdAt: Date.now() }];
       this.target = 0;
       // Signed-in visitors start on their own sketchbooks rather than the home page.
-      this.setState(s => ({ acct: a, verified: acct ? false : !!u.verified, follows, books, active: 0, images: books[0].images, p: 0, authReady: true, mode: this.routed && (s.mode === 'home' || s.mode === 'auth') ? 'mine' : s.mode }),
-        () => { if (fresh || legacy) this.persist(books); this.backfillThumbs(); });
+      this.setState(s => ({ acct: a, verified: acct ? false : !!u.verified, follows, saved, blocked, books, active: 0, images: books[0].images, p: 0, authReady: true, mode: this.routed && (s.mode === 'home' || s.mode === 'auth') ? 'mine' : s.mode }),
+        () => { if (fresh || legacy) this.persist(books); this.backfillThumbs(); this.loadFollowFeed(); });
     } catch (e) {
       console.error(e);
       this.setState({ authReady: true });
@@ -151,7 +154,37 @@ export default class App extends Component<object, State> {
       this.setState({ community });
     }).catch(e => console.error(e));
   }
-  community(): OtherBook[] { return this.state.community || []; }
+  /** Community books, minus anyone you've blocked. */
+  community(): OtherBook[] { const bl = this.state.blocked || []; return (this.state.community || []).filter(b => !b.ownerId || !bl.includes(b.ownerId)); }
+  loadFollowFeed() {
+    const s = this.state, ids = (s.follows || []).filter(id => !(s.blocked || []).includes(id));
+    if (!s.acct || !ids.length) return this.setState({ followFeed: [] });
+    api.booksBy(ids).then(d => this.setState({ followFeed: d.map(toOther) })).catch(e => console.error(e));
+  }
+  toastT?: ReturnType<typeof setTimeout>;
+  toast(msg: string) { clearTimeout(this.toastT); this.setState({ toast: msg }); this.toastT = setTimeout(() => this.setState({ toast: '' }), 2600); }
+  share(path: string, title: string) {
+    api.shareLink(location.origin + path, title).then(r => { if (r === 'copied') this.toast('Link copied'); }).catch(() => this.toast('Couldn’t copy the link'));
+  }
+  openBookById(id: string) { api.getBook(id).then(d => d ? this.openOtherBook(toOther(d, 0)) : this.toast('That sketchbook is no longer available')); }
+  isSaved(id?: string) { return !!id && (this.state.saved || []).some(x => x.id === id); }
+  toggleSave(b: OtherBook) {
+    const a = this.state.acct; if (!a) return this.openJoin();
+    const on = !this.isSaved(b.id), cover = b.coverImg ? this.thumbOf(b, b.coverImg) : null;
+    const item: Saved = { id: b.id, name: b.name, color: b.color, shape: b.shape, cover, ownerId: b.ownerId || '', ownerName: b.artist, ownerHandle: b.handle || '', at: Date.now() };
+    this.setState(s => ({ saved: on ? [item, ...(s.saved || [])] : (s.saved || []).filter(x => x.id !== b.id) }));
+    this.toast(on ? 'Saved to your profile' : 'Removed from Saved');
+    api.setSaved(a.uid, item, on).catch(e => { console.error(e); this.toast('Couldn’t save that. Try again.'); });
+  }
+  toggleBlock(uid: string, name: string) {
+    const a = this.state.acct; if (!a) return this.openJoin();
+    const on = !(this.state.blocked || []).includes(uid);
+    if (on && !window.confirm(`Block ${name}? Their sketchbooks will be hidden from you, and you’ll stop following them.`)) return;
+    this.setState(s => ({ blocked: on ? [...(s.blocked || []), uid] : (s.blocked || []).filter(x => x !== uid), follows: on ? s.follows.filter(x => x !== uid) : s.follows, more: null }), () => this.loadFollowFeed());
+    this.toast(on ? `Blocked ${name}` : `Unblocked ${name}`);
+    api.setBlocked(a.uid, uid, on).catch(e => { console.error(e); this.toast('Couldn’t update that. Try again.'); });
+  }
+  openReport(r: NonNullable<State['reportFor']>) { if (!this.state.acct) return this.openJoin(); this.setState({ reportFor: r, reportReason: '', reportNote: '', reportErr: '', more: null }); }
   /** Decoded images kept alive so turns, zooms and the focus backdrop never wait on a download. */
   preloaded = new Map<string, HTMLImageElement>();
   preload(urls: (string | null | undefined)[]) {
@@ -200,6 +233,7 @@ export default class App extends Component<object, State> {
   goMode(mode: Mode) {
     cancelAnimationFrame(this.raf); this.target = 0;
     if (mode === 'explore' || mode === 'home') this.loadCommunity();
+    if (mode === 'home') this.loadFollowFeed();
     if (mode === 'explore') api.people().then(people => this.setState({ people })).catch(e => console.error(e));
     this.setState(s => ({ mode, other: null, images: s.books[s.active].images, p: 0, focus: false, fz: 0, managing: false }));
   }
@@ -567,7 +601,9 @@ export default class App extends Component<object, State> {
   // ---------- computed values per screen ----------
   homeVals(): V {
     const { vw, vh } = this.state, mob = vw < 640;
-    const list = [...this.community()].sort((a, b) => b.likes - a.likes);
+    // Signed in and following someone: the shelf shows their latest books first.
+    const feed = this.state.acct ? (this.state.followFeed || []).filter(b => !(this.state.blocked || []).includes(b.ownerId || '')) : [];
+    const list = feed.length ? feed : [...this.community()].sort((a, b) => b.likes - a.likes);
     // One screen: the shelf takes what height is left after the headline block, and its books
     // shrink further if they'd be wider than the page.
     const sel = list.slice(0, mob ? 3 : 7), gap = mob ? 14 : 26, shapes = sel.map(b => this.shapeOf(b)), sumW = shapes.reduce((t, sh) => t + sh.s * sh.a, 0);
@@ -575,7 +611,7 @@ export default class App extends Component<object, State> {
     const maxH = mob ? Math.max(90, Math.min(170, vh * 0.21)) : Math.max(110, Math.min(290, vh * 0.29));
     const base = sumW ? Math.min(maxH, avail / sumW) : maxH;
     return {
-      hmMob: mob, hmPadX: mob ? 16 : 40, hmPadT: mob ? 70 : 84, hmEmpty: !!this.state.community && !list.length, hmShelfGap: gap, hmShelfH: Math.round(base),
+      hmFollowing: feed.length > 0, hmMob: mob, hmPadX: mob ? 16 : 40, hmPadT: mob ? 70 : 84, hmEmpty: !!this.state.community && !list.length, hmShelfGap: gap, hmShelfH: Math.round(base),
       hmShelf: sel.map((b, i) => {
         const hh = Math.round(base * shapes[i].s);
         return { key: b.id, name: b.name, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, title: b.name + ' — ' + b.artist, h: hh, w: Math.round(hh * shapes[i].a), fs: Math.max(11, Math.round(hh / 17)), rot: [0, -2, 0, 1.5, 0, -1, 1][i], open: () => this.openOtherBook(b) };
@@ -593,14 +629,18 @@ export default class App extends Component<object, State> {
     let p: { name?: string; handle?: string; bio?: string; loc?: string; web?: string; accent?: string; av?: string | null; joined: string; stats: [number, string][] };
     let list: ReturnType<typeof card>[], folOn = false;
     if (mine) {
-      list = s.books.map((b, j) => card(b, this.coverBg(b), !b.coverImg, b.images.length, () => { cancelAnimationFrame(this.raf); this.target = 0; this.setState({ mode: 'mine', profileOf: null, active: j, images: b.images, p: 0, other: null }); }));
+      const tab = pv ? 'books' : s.pfTab || 'books';
+      list = tab === 'saved'
+        ? (s.saved || []).filter(x => !(s.blocked || []).includes(x.ownerId)).map(x => ({ ...card({ id: x.id, name: x.name, color: x.color, shape: x.shape, coverImg: x.cover, images: [] } as Book, x.cover ? `url("${x.cover}") center/cover no-repeat ${x.color}` : x.color, !x.cover, 0, () => this.openBookById(x.id)), count: `by ${x.ownerName}` }))
+        : tab === 'following' ? []
+        : s.books.map((b, j) => card(b, this.coverBg(b), !b.coverImg, b.images.length, () => { cancelAnimationFrame(this.raf); this.target = 0; this.setState({ mode: 'mine', profileOf: null, active: j, images: b.images, p: 0, other: null }); }));
       p = {
         name: a.name, handle: a.handle, bio: a.bio, loc: a.loc, web: a.web, accent: a.accent, av: a.av,
         joined: 'Joined ' + new Date(a.joined || Date.now()).toLocaleDateString('en', { month: 'short', year: 'numeric' }),
         stats: [[s.books.length, s.books.length === 1 ? 'sketchbook' : 'sketchbooks'], [s.books.reduce((t, b) => t + b.images.length, 0), 'pages']],
       };
     } else {
-      const who = s.profileOf!, pf = s.pf?.uid === who.uid ? s.pf : null, pr = pf?.profile, bks = pf?.books || [];
+      const who = s.profileOf!, pf = s.pf?.uid === who.uid ? s.pf : null, pr = pf?.profile, bks = (s.blocked || []).includes(who.uid || '') ? [] : pf?.books || [];
       folOn = !!who.uid && follows.includes(who.uid);
       list = bks.map(b => card(b, this.coverBg(b), !b.coverImg, b.likes, () => this.openOtherBook(b)));
       p = { name: pr?.name || who.name, handle: pr?.handle, bio: pr?.bio, loc: pr?.loc, web: pr?.web, accent: pr?.accent, av: pr?.av,
@@ -613,7 +653,25 @@ export default class App extends Component<object, State> {
       pfHasLoc: !!(p.loc || '').trim(), pfLoc: p.loc, pfHasWeb: !!web, pfWeb: web.replace(/^https?:\/\//, ''), pfWebHref: /^https?:\/\//.test(web) ? web : 'https://' + web, pfJoined: p.joined,
       pfAvBg: avatarBg(p.av), pfInit: p.av ? '' : ini(p.name),
       pfStats: p.stats.map(([n, l]) => ({ n: fmtK(n), l })), pfBooks: list, pfCount: String(list.length), pfBooksLbl: mine && !pv ? 'Your sketchbooks' : 'Sketchbooks',
-      pfMine: mine && !pv, pfPreviewing: pv, pfOther: !mine, pfShowNew: mine && !pv,
+      pfMine: mine && !pv, pfPreviewing: pv, pfOther: !mine, pfShowNew: mine && !pv && (s.pfTab || 'books') === 'books',
+      ...(() => {
+        const tab = mine && !pv ? s.pfTab || 'books' : 'books', setTab = (t: 'books' | 'saved' | 'following') => {
+          this.setState({ pfTab: t });
+          if (t === 'following') Promise.all((s.follows || []).filter(id => !(s.blocked || []).includes(id)).map(id => api.getProfile(id).then(pr => pr && { uid: id, name: pr.name, handle: pr.handle, av: pr.av }).catch(() => null)))
+            .then(ps => this.setState({ followPeople: ps.filter((x): x is Person => !!x) }));
+        };
+        const uid = s.profileOf?.uid || '', blockedOn = !!uid && (s.blocked || []).includes(uid), name = p.name || 'this artist', handle = p.handle || s.profileOf?.handle;
+        return {
+          pfTabs: mine && !pv ? ([['books', 'Sketchbooks', s.books.length], ['saved', 'Saved', (s.saved || []).length], ['following', 'Following', (s.follows || []).length]] as const).map(([k, l, n]) => ({ key: k, label: l, n, on: tab === k, pick: () => setTab(k) })) : null,
+          pfTab: tab, pfEmptyNote: tab === 'saved' ? 'Save sketchbooks you love with ♡ Save. Only you can see this list.' : '',
+          pfPeople: tab === 'following' ? (s.followPeople || []).map(x => ({ key: x.uid, name: x.name, handle: '@' + x.handle, avBg: avatarBg(x.av), init: x.av ? '' : ini(x.name), open: () => this.openProfile({ uid: x.uid, name: x.name, handle: x.handle }) })) : null,
+          pfBlocked: blockedOn, pfUnblock: () => this.toggleBlock(uid, name),
+          pfShare: () => handle && this.share('/@' + handle, `${name} on verso.`),
+          pfMoreOpen: s.more === 'profile', pfMore: () => this.setState(st => ({ more: st.more === 'profile' ? null : 'profile' })),
+          pfReport: () => this.openReport({ kind: 'user', targetId: uid, ownerId: uid, label: name }),
+          pfBlock: () => this.toggleBlock(uid, name), pfBlockLbl: blockedOn ? `Unblock ${name}` : `Block ${name}`,
+        };
+      })(),
       pfDir: mob ? 'column' : 'row', pfAlign: mob ? 'center' : 'flex-start', pfTA: mob ? 'center' : 'left', pfJust: mob ? 'center' : 'flex-start', pfHeadGap: mob ? 16 : 28,
       pfBanH: mob ? 96 : 128, pfInfoTop: mob ? 0 : 2, pfPadX: pad, pfNameSize: mob ? 48 : 72,
       pfCols: Math.max(2, Math.min(5, Math.floor((Math.min(vw, 1080) - pad * 2 + 18) / (mob ? 150 : 200)))),
@@ -626,7 +684,7 @@ export default class App extends Component<object, State> {
         const key = s.profileOf?.uid; if (!key) return;
         const on = !follows.includes(key);
         this.setState({ follows: on ? [...follows, key] : follows.filter(x => x !== key) });
-        api.setFollow(s.acct.uid, key, on).catch(e => { console.error(e); this.setState(st => ({ follows: on ? st.follows.filter(x => x !== key) : [...st.follows, key] })); });
+        api.setFollow(s.acct.uid, key, on).then(() => this.loadFollowFeed()).catch(e => { console.error(e); this.setState(st => ({ follows: on ? st.follows.filter(x => x !== key) : [...st.follows, key] })); });
       },
     };
   }
@@ -782,7 +840,7 @@ export default class App extends Component<object, State> {
       exPeople: (() => {
         const q = (s.exQ || '').trim().toLowerCase().replace(/^@/, '');
         if (!q) return [];
-        return (s.people || []).filter(p => p.name && `${p.name} ${p.handle}`.toLowerCase().includes(q)).slice(0, 12).map(p => ({
+        return (s.people || []).filter(p => p.name && !(s.blocked || []).includes(p.uid) && `${p.name} ${p.handle}`.toLowerCase().includes(q)).slice(0, 12).map(p => ({
           key: p.uid, name: p.name, handle: '@' + p.handle, avBg: avatarBg(p.av), init: p.av ? '' : ini(p.name), open: () => this.openProfile({ uid: p.uid, name: p.name }),
         }));
       })(),
@@ -968,6 +1026,30 @@ export default class App extends Component<object, State> {
           ring: on ? `0 0 0 2px ${MARK}` : '0 0 0 1px rgba(34,35,32,.18)', bg: on ? 'rgba(34,35,32,.08)' : 'transparent', pick: () => this.setState({ pickShape: k }) };
       }),
       managing: s.managing, openManager: () => this.setState({ managing: true }), closeManager: () => this.setState({ managing: false }),
+      ...(() => {
+        const o = other as OtherBook | null, mineB = books[active];
+        return {
+          bkSaved: this.isSaved(o?.id), bkSave: () => o && this.toggleSave(o),
+          bkShare: () => o ? this.share(`/@${o.handle}/${o.id}`, `${o.name} by ${o.artist}`) : s.acct && mineB && this.share(`/@${s.acct.handle}/${mineB.id}`, `${mineB.name} by ${s.acct.name}`),
+          bkCanShare: !!o || (!!s.acct && mineB?.isPublic !== false && !mineB?.id.startsWith('local')),
+          bkMoreOpen: s.more === 'book', bkMore: () => this.setState(st => ({ more: st.more === 'book' ? null : 'book' })),
+          bkReport: () => o && this.openReport({ kind: 'book', targetId: o.id, ownerId: o.ownerId || '', label: `“${o.name}”` }),
+          bkBlock: () => o?.ownerId && this.toggleBlock(o.ownerId, o.artist), bkBlockLbl: `Block ${o?.artist || ''}`,
+          closeMore: () => s.more && this.setState({ more: null }),
+          toastMsg: s.toast || '',
+          reportOpen: !!s.reportFor, reportLabel: s.reportFor?.label || '', reportKind: s.reportFor?.kind, reportReasons: api.REPORT_REASONS.map(r => ({ key: r, label: r, on: s.reportReason === r, pick: () => this.setState({ reportReason: r, reportErr: '' }) })),
+          reportNote: s.reportNote || '', onReportNote: (e: ChangeEvent<HTMLTextAreaElement>) => this.setState({ reportNote: e.target.value }), reportBusy: !!s.reportBusy, reportErr: s.reportErr || '',
+          closeReport: () => this.setState({ reportFor: null }),
+          submitReport: async () => {
+            const r = s.reportFor, a = s.acct; if (!r || !a) return;
+            if (!s.reportReason) return this.setState({ reportErr: 'Choose a reason.' });
+            this.setState({ reportBusy: true });
+            try { await api.report(a.uid, { kind: r.kind, targetId: r.targetId, ownerId: r.ownerId, reason: s.reportReason, note: s.reportNote || '' }); this.setState({ reportFor: null }); this.toast('Thanks. We’ll take a look.'); }
+            catch (e) { this.setState({ reportErr: api.errMsg(e) }); }
+            finally { this.setState({ reportBusy: false }); }
+          },
+        };
+      })(),
       bookPublic: (book as Book).isPublic !== false, setPublic: (on: boolean) => this.updateBook({ isPublic: on }),
       pagesList, blankNote: blanks > 0 ? `${blanks} blank pages follow your drawings` : 'Book grows as you add pages',
       onName: (e: ChangeEvent<HTMLInputElement>) => this.updateBook({ name: e.target.value }),
@@ -1034,6 +1116,8 @@ export default class App extends Component<object, State> {
         {v.isExplore && <Explore v={v} />}
         {v.isProfile && <Profile v={v} />}
         {v.isSettings && <Settings v={v} />}
+        {v.reportOpen && <ReportModal v={v} />}
+        {v.toastMsg && <Toast msg={v.toastMsg} />}
         {v.isAuth && <AuthPage v={v} />}
         {v.pfEditing && <EditProfile v={v} />}
         <input ref={this.avRef} type="file" accept="image/*" onChange={v.onAvFile} style={{ display: 'none' }} />

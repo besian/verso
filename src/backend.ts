@@ -303,6 +303,55 @@ export async function setFollow(uid: string, target: string, on: boolean) {
   if (on) await setDoc(r, { at: Date.now() }); else await deleteDoc(r);
 }
 
+// ---------- saved, blocked, reports, following shelf ----------
+
+/** What a saved sketchbook shows in your Saved list (copied so the list renders without extra reads). */
+export interface Saved { id: string; name: string; color: string; shape: ShapeKey; cover: string | null; ownerId: string; ownerName: string; ownerHandle: string; at: number }
+
+export async function savedBooks(uid: string): Promise<Saved[]> {
+  const s = await getDocs(collection(need().db, 'users', uid, 'saved'));
+  return s.docs.map(d => ({ ...(d.data() as Omit<Saved, 'id'>), id: d.id })).sort((a, b) => b.at - a.at);
+}
+export async function setSaved(uid: string, b: Saved, on: boolean) {
+  const r = doc(need().db, 'users', uid, 'saved', b.id);
+  if (on) { const { id: _id, ...rest } = b; await setDoc(r, rest); } else await deleteDoc(r);
+}
+
+export async function blockedUsers(uid: string): Promise<string[]> {
+  return (await getDocs(collection(need().db, 'users', uid, 'blocked'))).docs.map(d => d.id);
+}
+export async function setBlocked(uid: string, target: string, on: boolean) {
+  const { db: d } = need(), r = doc(d, 'users', uid, 'blocked', target);
+  if (!on) return deleteDoc(r);
+  const batch = writeBatch(d);
+  batch.set(r, { at: Date.now() }); batch.delete(doc(d, 'users', uid, 'following', target));
+  await batch.commit();
+}
+
+export const REPORT_REASONS = ['Spam or scam', 'Not their own work', 'Harassment or hate', 'Sexual content', 'Something else'] as const;
+/** Files a report for the site owner to review in the Firebase console (`reports` collection). */
+export async function report(by: string, r: { kind: 'book' | 'user'; targetId: string; ownerId: string; reason: string; note: string }) {
+  await setDoc(doc(collection(need().db, 'reports')), { by, ...r, note: r.note.slice(0, 500), at: Date.now() });
+}
+
+/** Recent public books from the given artists (Firestore allows 30 ids per `in` query). */
+export async function booksBy(uids: string[]): Promise<BookDoc[]> {
+  if (!db || !uids.length) return [];
+  const chunks: string[][] = []; for (let i = 0; i < uids.length; i += 30) chunks.push(uids.slice(i, i + 30));
+  const all = await Promise.all(chunks.map(c => getDocs(query(collection(db!, 'books'), where('ownerId', 'in', c), where('isPublic', '==', true)))));
+  return all.flatMap(s => s.docs.map(x => bookDoc(x.id, x.data()))).filter(b => b.pageCount > 0).sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/** Opens the share sheet where there is one, otherwise copies the link. Returns what happened. */
+export async function shareLink(url: string, title: string): Promise<'shared' | 'copied' | 'cancelled'> {
+  const nav = navigator as Navigator & { share?: (d: ShareData) => Promise<void> };
+  if (nav.share && matchMedia('(pointer: coarse)').matches) {
+    try { await nav.share({ title, url }); return 'shared'; } catch { return 'cancelled'; }
+  }
+  await navigator.clipboard.writeText(url);
+  return 'copied';
+}
+
 // ---------- links ----------
 
 export async function uidForHandle(handle: string): Promise<string | null> {
@@ -342,9 +391,9 @@ async function removeFolder(path: string) {
 export async function deleteAccount(pw: string, acct: Account) {
   const u = await reauth(pw), { db: d } = need();
   const books = await getDocs(query(collection(d, 'books'), where('ownerId', '==', acct.uid)));
-  const follows = await getDocs(collection(d, 'users', acct.uid, 'following'));
+  const [follows, saved, blocked] = await Promise.all(['following', 'saved', 'blocked'].map(c => getDocs(collection(d, 'users', acct.uid, c))));
   const batch = writeBatch(d);
-  books.forEach(b => batch.delete(b.ref)); follows.forEach(f => batch.delete(f.ref));
+  books.forEach(b => batch.delete(b.ref)); [follows, saved, blocked].forEach(c => c.forEach(f => batch.delete(f.ref)));
   batch.delete(doc(d, 'handles', acct.handle)); batch.delete(doc(d, 'users', acct.uid));
   await batch.commit();
   await removeFolder(`users/${acct.uid}`).catch(() => {});

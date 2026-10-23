@@ -257,3 +257,51 @@ export function Editor({ v }: { v: V }) {
     </div>
   );
 }
+
+/** Small dropdown under a ⋯ button: report, block and the like. */
+export function MoreMenu({ open, onToggle, items, align = 'center' }: { open: boolean; onToggle: () => void; items: { label: string; onClick: () => void; danger?: boolean }[]; align?: 'center' | 'right' }) {
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex' }}>
+      <button onClick={e => { e.stopPropagation(); onToggle(); }} aria-haspopup="menu" aria-expanded={open} title="More" className={hover(`color:${MARK}`)} style={{ height: 28, minWidth: 28, padding: '0 6px', border: 'none', background: 'none', color: INK, font: `600 16px/1 ${SANS}`, letterSpacing: 1, cursor: 'pointer' }}>⋯</button>
+      {open && (
+        <span role="menu" style={{ position: 'absolute', top: '100%', [align === 'right' ? 'right' : 'left']: align === 'right' ? 0 : '50%', transform: align === 'right' ? undefined : 'translateX(-50%)', marginTop: 6, zIndex: 30, display: 'flex', flexDirection: 'column', minWidth: 190, padding: 6, background: PAPER, border: `1px solid ${INK}`, boxShadow: '0 12px 30px rgba(34,35,32,.14)' }}>
+          {items.map(it => (
+            <button key={it.label} role="menuitem" onClick={it.onClick} className={hover('background:rgba(34,35,32,.07)')} style={{ textAlign: 'left', padding: '9px 10px', border: 'none', background: 'none', color: it.danger ? MARK : INK, font: `500 13px ${SANS}`, letterSpacing: 0, textTransform: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>{it.label}</button>
+          ))}
+        </span>
+      )}
+    </span>
+  );
+}
+
+export function ReportModal({ v }: { v: V }) {
+  return (
+    <Modal onClose={e => { if (e.target === e.currentTarget) v.closeReport(); }} pad={v.mModalPad} maxWidth={460}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={heading}>Report {v.reportKind === 'user' ? 'artist' : 'sketchbook'}</div>
+        <div style={{ fontSize: 14, lineHeight: 1.45, color: 'rgba(34,35,32,.7)' }}>What’s wrong with {v.reportLabel}? Reports are private; the artist isn’t told who sent one.</div>
+      </div>
+      <div role="radiogroup" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {v.reportReasons.map((r: V) => (
+          <button key={r.key} role="radio" aria-checked={r.on} onClick={r.pick} style={{ display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', padding: '10px 12px', border: `1.5px solid ${r.on ? INK : 'rgba(34,35,32,.14)'}`, borderRadius: 2, background: r.on ? 'rgba(34,35,32,.06)' : 'none', color: INK, font: `500 14px ${SANS}`, cursor: 'pointer' }}>
+            <span style={{ width: 14, height: 14, borderRadius: '50%', border: `1.5px solid ${INK}`, boxSizing: 'border-box', background: r.on ? `radial-gradient(${INK} 0 3px, transparent 3.5px)` : 'none', flexShrink: 0 }} />
+            {r.label}
+          </button>
+        ))}
+      </div>
+      <label style={fieldLabel}>Anything else? (optional)
+        <textarea value={v.reportNote} onChange={v.onReportNote} maxLength={500} rows={3} className={focusMark} style={{ ...field, height: undefined, padding: '12px 14px', font: `500 14px/1.45 ${SANS}`, resize: 'none' }} />
+      </label>
+      <Notice err={v.reportErr} />
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+        <button onClick={v.closeReport} className={hoverTint} style={{ ...ghostBtn, height: 44, padding: '0 18px', fontSize: 14 }}>Cancel</button>
+        <button onClick={v.submitReport} disabled={v.reportBusy} style={{ height: 44, padding: '0 22px', borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer', opacity: v.reportBusy ? 0.6 : 1 }}>{v.reportBusy ? 'Sending…' : 'Send report'}</button>
+      </div>
+    </Modal>
+  );
+}
+
+/** Brief confirmation at the bottom of the screen. */
+export function Toast({ msg }: { msg: string }) {
+  return <div role="status" style={{ position: 'absolute', left: '50%', bottom: 'calc(110px + env(safe-area-inset-bottom))', transform: 'translateX(-50%)', zIndex: 40, padding: '10px 16px', background: INK, color: PAPER, font: `500 13px ${SANS}`, borderRadius: 2, boxShadow: '0 10px 24px rgba(34,35,32,.2)', whiteSpace: 'nowrap', pointerEvents: 'none' }}>{msg}</div>;
+}

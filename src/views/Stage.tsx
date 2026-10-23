@@ -4,12 +4,14 @@ import type { V } from '../App';
 import ClosedBook from '../ClosedBook';
 import { hover } from '../pseudo';
 import { earClip } from '../wear';
+import { MoreMenu } from './Overlays';
 import type { Wear } from '../wear';
 import { INK, MARK, PAGE_EDGES, PAPER, SANS, SERIF, STONE, label } from '../theme';
 
 const navLink: CSSProperties = { border: 'none', background: 'none', padding: '4px 0', cursor: 'pointer', ...label() };
 const textBtn: CSSProperties = { height: 34, padding: 0, border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap', ...label(INK) };
 const roundDark = (size: number, fs: number): CSSProperties => ({ width: size, height: size, borderRadius: '50%', border: 'none', background: INK, color: PAPER, font: `500 ${fs}px ${SANS}`, cursor: 'pointer' });
+const actLink: CSSProperties = { padding: 0, border: 'none', background: 'none', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: INK, cursor: 'pointer' };
 const arrowBtn: CSSProperties = { width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'rgba(34,35,32,.12)', color: INK, font: `500 16px ${SANS}`, cursor: 'pointer' };
 
 function TopBar({ v }: { v: V }) {
@@ -48,6 +50,13 @@ function Title({ v }: { v: V }) {
             ? <>by <button onClick={v.openArtist} title="View profile" className={hover(`color:${MARK};border-color:${MARK}`)} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: INK, cursor: 'pointer' }}>{v.artist}</button> · {v.otherPages} pages</>
             : v.bookMeta}
         </div>
+        {(v.isOther || (v.isMine && v.bkCanShare)) && (
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginTop: 2, ...label(INK, 10) }}>
+            {v.isOther && <button onClick={v.bkSave} aria-pressed={v.bkSaved} className={hover(`color:${MARK}`)} style={{ ...actLink, color: v.bkSaved ? MARK : INK }}>{v.bkSaved ? '♥ Saved' : '♡ Save'}</button>}
+            <button onClick={v.bkShare} className={hover(`color:${MARK}`)} style={actLink}>Share</button>
+            {v.isOther && <MoreMenu open={v.bkMoreOpen} onToggle={v.bkMore} items={[{ label: 'Report sketchbook', onClick: v.bkReport }, { label: v.bkBlockLbl, onClick: v.bkBlock, danger: true }]} />}
+          </div>
+        )}
       </div>
       {v.multi && <button onClick={v.nextBook} title="Next sketchbook" style={{ ...arrowBtn, opacity: v.nextOp }}>›</button>}
     </div>
@@ -195,7 +204,7 @@ function KeyGuide({ v }: { v: V }) {
 /** App shell: focus backdrop, top bar, book title, the 3D stage and its controls. Screens and overlays render as children above it. */
 export default function Stage({ v, children }: { v: V; children: ReactNode }) {
   return (
-    <div onDragOver={v.onDragOver} onDrop={v.onDrop} onMouseMove={v.wake} onPointerDown={v.wake} style={{ position: 'fixed', inset: 0, background: PAPER, color: INK, fontFamily: SANS, display: 'flex', flexDirection: 'column', alignItems: 'center', userSelect: 'none' }}>
+    <div onDragOver={v.onDragOver} onDrop={v.onDrop} onMouseMove={v.wake} onPointerDown={v.wake} onClick={v.closeMore} style={{ position: 'fixed', inset: 0, background: PAPER, color: INK, fontFamily: SANS, display: 'flex', flexDirection: 'column', alignItems: 'center', userSelect: 'none' }}>
       <div style={{ ...fill, overflow: 'hidden', pointerEvents: 'none', opacity: v.fz }}>
         <div ref={v.bgRefA} style={{ position: 'absolute', inset: '-25%', background: v.focusBg, filter: 'blur(80px) saturate(1.5)', transition: 'background .9s' }} />
         <div ref={v.bgRefB} style={{ position: 'absolute', inset: '-25%', background: v.focusBg, filter: 'blur(110px) saturate(1.3)', opacity: .55, mixBlendMode: 'screen', transition: 'background .9s' }} />
