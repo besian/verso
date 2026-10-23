@@ -5,7 +5,7 @@ import { hover, wheelSideways } from '../pseudo';
 import { CANVAS, INK, MARK, MUTED, PAGE_EDGES, PAPER, SANS, SERIF, STONE, label, serif } from '../theme';
 import { HandleField, MoreMenu, Notice, TextField } from './Overlays';
 
-const screen = (overflowY: CSSProperties['overflowY'] = 'auto'): CSSProperties => ({ position: 'absolute', inset: 0, zIndex: 4, background: PAPER, overflowX: 'hidden', overflowY });
+const screen = (overflowY: CSSProperties['overflowY'] = 'auto'): CSSProperties => ({ position: 'absolute', inset: '0 0 var(--tabbar, 0px) 0', zIndex: 4, background: PAPER, overflowX: 'hidden', overflowY });
 const primaryBtn = (h: number, fs: number, px: number): CSSProperties => ({ height: h, padding: `0 ${px}px`, border: 'none', background: INK, color: PAPER, font: `500 ${fs}px ${SANS}`, cursor: 'pointer', transition: 'background .25s' });
 const underlineBtn = (fs: number, color = INK): CSSProperties => ({ padding: '4px 0', border: 'none', borderBottom: `1px solid ${color}`, background: 'none', color: INK, font: `500 ${fs}px ${SANS}`, cursor: 'pointer', transition: 'color .25s,border-color .25s' });
 const hoverMark = hover(`background:${MARK}`);
@@ -40,7 +40,7 @@ export function HomeScreen({ v }: { v: V }) {
             ? <button onClick={v.goExplore} className={hoverLine} style={underlineBtn(15)}>Explore sketchbooks ↗</button>
             : <button onClick={v.startOwn} className={hoverLine} style={underlineBtn(15)}>Start your own →</button>}
         </div>
-        {signedOut && <div style={{ fontSize: 13, color: STONE }}>Already a member? <button onClick={v.openSignin} className={hoverText} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${STONE}`, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Sign in</button></div>}
+        {signedOut && <div style={{ fontSize: 13, color: STONE }}>Already a member? <button onClick={v.openSignin} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${STONE}`, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Sign in</button></div>}
         {signedOut && <LegalLinks v={v} />}
       </section>
       <section style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10, paddingTop: mob ? 0 : 28 }}>
@@ -58,14 +58,14 @@ export function HomeScreen({ v }: { v: V }) {
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, ...label() }}>
           <span>{v.hmFollowing ? (mob ? 'From artists you follow' : 'New from artists you follow') : v.hmShelf.length ? (mob ? 'From the community' : 'From the community — open any book to leaf through it') : 'The shelf is empty — yours could be first'}</span>
-          {v.hmShelf.length > 0 && <button onClick={v.goExplore} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap', ...label(INK) }}>View all →</button>}
+          {v.hmShelf.length > 0 && <button onClick={v.goExplore} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap', ...label(INK) }}>View all →</button>}
         </div>
       </section>
     </div>
   );
 }
 
-const chipStyle = (on: boolean): CSSProperties => ({ flexShrink: 0, height: 30, padding: '0 12px', borderRadius: 15, border: `1px solid ${on ? INK : 'rgba(var(--ink-rgb),.25)'}`, background: on ? INK : 'transparent', color: on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' });
+const chipStyle = (on: boolean): CSSProperties => ({ flexShrink: 0, height: 34, padding: '0 12px', borderRadius: 15, border: `1px solid ${on ? INK : 'rgba(var(--ink-rgb),.25)'}`, background: on ? INK : 'transparent', color: on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' });
 const segBtn = (bg: string, fg: string): CSSProperties => ({ height: 32, borderRadius: 2, border: 'none', background: bg, color: fg, font: `500 13px ${SANS}`, cursor: 'pointer' });
 const iconSeg = (bg: string, fg: string): CSSProperties => ({ ...segBtn(bg, fg), width: 32, fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' });
 const segGroup: CSSProperties = { display: 'flex', gap: 2, padding: 3, border: '1px solid rgba(var(--ink-rgb),.2)' };
@@ -86,22 +86,28 @@ export function Explore({ v }: { v: V }) {
             <span style={label()}>{v.exCountLbl}</span>
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ flex: `1 1 ${v.exSearchBasis}`, minWidth: 200, maxWidth: v.exSearchMax, height: 40, display: 'flex', alignItems: 'center', gap: 10, padding: 0, borderBottom: '1px solid rgba(var(--ink-rgb),.35)', boxSizing: 'border-box' }}>
+        {/* Phones: search and view on one line; Featured / Recent join the filter row below. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: v.notMob ? 'wrap' : 'nowrap' }}>
+          <div style={{ flex: v.notMob ? `1 1 ${v.exSearchBasis}` : '1 1 0', minWidth: v.notMob ? 200 : 0, maxWidth: v.exSearchMax, height: 40, display: 'flex', alignItems: 'center', gap: 10, padding: 0, borderBottom: '1px solid rgba(var(--ink-rgb),.35)', boxSizing: 'border-box' }}>
             <span style={{ fontSize: 15, color: 'rgba(var(--ink-rgb),.6)' }}>⌕</span>
             <input value={v.exQ} onChange={v.onExQ} placeholder="Search sketchbooks or artists" style={{ flex: 1, minWidth: 0, height: '100%', border: 'none', outline: 'none', background: 'none', color: INK, font: `500 14px ${SANS}` }} />
           </div>
-          <div style={{ flex: 1, minWidth: 0 }} />
-          <div style={segGroup}>
+          {v.notMob && <div style={{ flex: 1, minWidth: 0 }} />}
+          {v.notMob && <div style={segGroup}>
             <button onClick={v.sortTrend} style={{ ...segBtn(v.sTrBg, v.sTrFg), padding: '0 14px' }}>Featured</button>
             <button onClick={v.sortNew} style={{ ...segBtn(v.sNewBg, v.sNewFg), padding: '0 14px' }}>Recent</button>
-          </div>
-          <div style={segGroup}>
+          </div>}
+          <div style={{ ...segGroup, flexShrink: 0 }}>
             <button onClick={v.viewGrid} title="Grid" style={iconSeg(v.vGridBg, v.vGridFg)}>▦</button>
             <button onClick={v.viewStack} title="Stack" style={iconSeg(v.vStackBg, v.vStackFg)}>≡</button>
           </div>
         </div>
         <div role="group" aria-label="Filter by medium" onWheel={wheelSideways} style={{ display: 'flex', gap: 6, overflowX: 'auto', margin: `0 -${v.exPadX}px`, padding: `2px ${v.exPadX}px 4px`, scrollbarWidth: 'none', maskImage: `linear-gradient(90deg,#000 calc(100% - ${v.exPadX + 24}px),transparent)` } as CSSProperties}>
+          {!v.notMob && <>
+            <button onClick={v.sortTrend} aria-pressed={v.sTrBg !== 'transparent'} style={chipStyle(v.sTrBg !== 'transparent')}>Featured</button>
+            <button onClick={v.sortNew} aria-pressed={v.sNewBg !== 'transparent'} style={chipStyle(v.sNewBg !== 'transparent')}>Recent</button>
+            <span aria-hidden="true" style={{ flexShrink: 0, width: 1, margin: '4px 4px', background: 'rgba(var(--ink-rgb),.2)' }} />
+          </>}
           {v.exTag && <button onClick={v.clearLabel} title="Clear tag" style={{ ...chipStyle(true), background: MARK, borderColor: MARK }}>{v.exTag} ×</button>}
           {v.exMediums.map((m: V) => <button key={m.key} onClick={m.pick} aria-pressed={m.on} className={m.on ? undefined : hover('border-color:rgba(var(--ink-rgb),.6)')} style={chipStyle(m.on && !v.exTag)}>{m.label}</button>)}
         </div>
@@ -137,7 +143,7 @@ export function Explore({ v }: { v: V }) {
                     <ClosedBook bg={xb.bg} board={xb.color} label={xb.showLabel ? xb.name : null} />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-                    <span style={label(STONE, 10)}>{xb.no}</span>
+                    {v.notMob && <span style={label(STONE, 10)}>{xb.no}</span>}
                     <span style={{ ...serif(22, 1.1, 'normal'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{xb.name}</span>
                     <span style={{ fontSize: 13, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>by <span onClick={xb.openArtist} className={hoverText} style={{ color: INK, cursor: 'pointer', borderBottom: '1px solid rgba(var(--ink-rgb),.3)' }}>{xb.artist}</span> · {xb.count}</span>
                   </div>
@@ -322,7 +328,7 @@ export function AuthPage({ v }: { v: V }) {
           {!v.suReset && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <TextField label="Password" value={v.suPw} onChange={v.onSuPw} type="password" placeholder="At least 6 characters" autoComplete={v.suJoin ? 'new-password' : 'current-password'} />
-              {!v.suJoin && <button type="button" onClick={v.suToReset} className={hover(`color:${MARK}`)} style={{ alignSelf: 'flex-end', padding: 0, border: 'none', background: 'none', color: 'rgba(var(--ink-rgb),.75)', font: `500 13px ${SANS}`, cursor: 'pointer' }}>Forgot password?</button>}
+              {!v.suJoin && <button type="button" onClick={v.suToReset} className={'tap ' + hover(`color:${MARK}`)} style={{ alignSelf: 'flex-end', padding: 0, border: 'none', background: 'none', color: 'rgba(var(--ink-rgb),.75)', font: `500 13px ${SANS}`, cursor: 'pointer' }}>Forgot password?</button>}
             </div>
           )}
           <Notice err={v.suErr} info={v.suInfo} />
@@ -330,9 +336,9 @@ export function AuthPage({ v }: { v: V }) {
           <button type="submit" disabled={v.suBusy} className={v.suBusy ? undefined : hover(`background:${MARK}`)} style={{ height: 50, marginTop: 4, border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 15px ${SANS}`, cursor: v.suBusy ? 'progress' : 'pointer', opacity: v.suBusy ? 0.6 : v.suOk ? 1 : 0.55, transition: 'background .25s' }}>{v.suBusy ? 'One moment…' : v.suBtn}</button>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontSize: 13, color: MUTED }}>
             {v.suReset
-              ? <button type="button" onClick={v.suToSignin} className={hoverLine} style={quietLink()}>← Back to sign in</button>
-              : <span>{v.suSwitchQ} <button type="button" onClick={v.suSwitch} className={hoverLine} style={quietLink()}>{v.suSwitchLbl}</button></span>}
-            <button type="button" onClick={v.closeAuth} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'rgba(var(--ink-rgb),.75)', font: `500 13px ${SANS}`, cursor: 'pointer' }}>Not now</button>
+              ? <button type="button" onClick={v.suToSignin} className={'tap ' + hoverLine} style={quietLink()}>← Back to sign in</button>
+              : <span>{v.suSwitchQ} <button type="button" onClick={v.suSwitch} className={'tap ' + hoverLine} style={quietLink()}>{v.suSwitchLbl}</button></span>}
+            <button type="button" onClick={v.closeAuth} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'rgba(var(--ink-rgb),.75)', font: `500 13px ${SANS}`, cursor: 'pointer' }}>Not now</button>
           </div>
         </form>
       </div>
@@ -373,7 +379,7 @@ export function Settings({ v }: { v: V }) {
     <div style={screen()}>
       <div style={{ maxWidth: 1080, margin: '0 auto', boxSizing: 'border-box', padding: `${mob ? 84 : 108}px ${mob ? 16 : 40}px 48px`, display: 'flex', flexDirection: 'column', gap: 32 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <button onClick={v.closeSettings} className={hoverText} style={{ alignSelf: 'flex-start', padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(INK) }}>← Your profile</button>
+          <button onClick={v.closeSettings} className={'tap ' + hoverText} style={{ alignSelf: 'flex-start', padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(INK) }}>← Your profile</button>
           <h1 style={{ margin: 0, ...serif(mob ? 44 : 64, 1, '-.02em') }}>Account <em>settings</em></h1>
           <span style={{ display: 'flex', gap: 14, alignItems: 'baseline', flexWrap: 'wrap', fontSize: 14, color: MUTED }}>
             Signed in as {v.acEmail}
@@ -433,8 +439,8 @@ export function Settings({ v }: { v: V }) {
 function LegalLinks({ v, align = 'center' }: { v: V; align?: CSSProperties['justifyContent'] }) {
   return (
     <div style={{ display: 'flex', gap: 16, justifyContent: align, fontSize: 12, color: STONE }}>
-      <button onClick={v.openPrivacy} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>Privacy</button>
-      <button onClick={v.openTerms} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>Terms</button>
+      <button onClick={v.openPrivacy} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>Privacy</button>
+      <button onClick={v.openTerms} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>Terms</button>
     </div>
   );
 }

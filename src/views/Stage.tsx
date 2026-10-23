@@ -19,13 +19,14 @@ function TopBar({ v }: { v: V }) {
     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: `${v.mTop}px ${v.mPad}px 12px`, background: PAPER, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, zIndex: 5, opacity: v.uiOp, pointerEvents: v.uiPE }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: v.mNavGap }}>
         <button onClick={v.goHome} title="Home" style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', font: `400 30px/1 ${SERIF}`, letterSpacing: '-.01em', color: INK }}>verso<span style={{ color: MARK }}>.</span></button>
-        <div style={{ display: 'flex', gap: v.mGap }}>
+        {/* Phones, signed in: navigation lives in the tab bar at the bottom. */}
+        {!v.tabBar && <div style={{ display: 'flex', gap: v.mGap }}>
           <button onClick={v.goExplore} className={hover(`color:${MARK}`)} style={{ ...navLink, borderBottom: `1px solid ${v.navExLine}`, color: v.navExFg }}>Explore</button>
           {v.hasAcct && <button onClick={v.goMine} className={hover(`color:${MARK}`)} style={{ ...navLink, borderBottom: `1px solid ${v.navMineLine}`, color: v.navMineFg, whiteSpace: 'nowrap' }}>{v.navMineLbl}</button>}
-        </div>
+        </div>}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {v.isOther && <button onClick={v.goExplore} className={hover(`color:${MARK}`)} style={textBtn}>← Explore</button>}
+      {!v.tabBar && <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {v.isOther && v.notMob && <button onClick={v.goExplore} className={hover(`color:${MARK}`)} style={textBtn}>← Explore</button>}
         {v.isMine && <button onClick={v.newBook} className={hover(`color:${MARK}`)} style={textBtn}>{v.newLbl}</button>}
         {v.ntShow && <Bell v={v} />}
         {v.hasAcct && <button onClick={v.openMe} title="Your profile" className={hover('transform:scale(1.06)')} style={{ width: 34, height: 34, flexShrink: 0, borderRadius: '50%', border: 'none', padding: 0, background: v.meAvBg, color: PAPER, font: `500 11px ${SANS}`, cursor: 'pointer', boxShadow: v.meRing }}>{v.meInit}</button>}
@@ -35,21 +36,53 @@ function TopBar({ v }: { v: V }) {
             <button onClick={v.openMe} className={hover(`background:${MARK}`)} style={{ ...textBtn, padding: '0 14px', borderRadius: 2, background: INK, color: PAPER }}>Join</button>
           </>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
 
-/** Notification bell with unread count and a dropdown of recent likes, follows and goals. */
-function Bell({ v }: { v: V }) {
+const TB_ICONS: Record<string, ReactNode> = {
+  explore: <><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4.5 4.5" /></>,
+  mine: <><path d="M6 3.5h11a1.5 1.5 0 0 1 1.5 1.5v14a1.5 1.5 0 0 1-1.5 1.5H6z" /><path d="M6 3.5v17M14.5 3.5v17" /></>,
+};
+/** Phones, signed in: Explore, your sketchbooks, a new one, notifications and your profile, within thumb reach. */
+function TabBar({ v }: { v: V }) {
+  const item = (k: string, label: string, on: boolean, onClick: () => void, icon: ReactNode) => (
+    <button key={k} onClick={onClick} aria-current={on ? 'page' : undefined} style={{ flex: 1, minWidth: 0, height: 56, padding: 0, border: 'none', background: 'none', color: on ? INK : STONE, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, cursor: 'pointer', font: `500 10px ${SANS}`, letterSpacing: '.06em', textTransform: 'uppercase' }}>
+      {icon}<span>{label}</span>
+    </button>
+  );
+  const svg = (k: string) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{TB_ICONS[k]}</svg>;
   return (
-    <span style={{ position: 'relative', display: 'inline-flex' }} onClick={e => e.stopPropagation()}>
-      <button onClick={v.ntToggle} title="Notifications" aria-label={`Notifications${v.ntUnread ? `, ${v.ntUnread} new` : ''}`} aria-expanded={v.ntOpen} className={hover(`color:${MARK}`)} style={{ position: 'relative', width: 34, height: 34, padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2.2 2.2 0 0 0 4 0" /></svg>
+    <nav aria-label="Main" onClick={e => e.stopPropagation()} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 12, display: 'flex', alignItems: 'stretch', padding: '0 6px env(safe-area-inset-bottom)', background: PAPER, borderTop: '1px solid rgba(var(--ink-rgb),.14)', opacity: v.uiOp, pointerEvents: v.uiPE }}>
+      {item('explore', 'Explore', v.tbOn === 'explore', v.goExplore, svg('explore'))}
+      {item('mine', 'Yours', v.tbOn === 'mine', v.goMine, svg('mine'))}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <button onClick={v.tbNew} aria-label="New sketchbook" className={hover('transform:scale(1.06)')} style={{ width: 46, height: 46, borderRadius: '50%', border: 'none', background: MARK, color: '#F6F2E8', font: `300 28px/1 ${SANS}`, cursor: 'pointer', boxShadow: '0 6px 16px rgba(173,73,58,.35)' }}>+</button>
+      </div>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Bell v={v} sheet /></div>
+      {item('me', 'You', v.tbOn === 'me', v.openMe, <span style={{ width: 24, height: 24, borderRadius: '50%', background: v.meAvBg, color: PAPER, font: `600 9px/24px ${SANS}`, textAlign: 'center', letterSpacing: 0, boxShadow: v.tbOn === 'me' ? `0 0 0 1.5px ${PAPER}, 0 0 0 3px ${INK}` : 'none' }}>{v.meInit}</span>)}
+    </nav>
+  );
+}
+
+/** First few times on a touch screen: how to turn pages and zoom. */
+function SwipeHint({ v }: { v: V }) {
+  return <div role="status" style={{ position: 'relative', zIndex: 2, marginBottom: 10, padding: '7px 14px', borderRadius: 16, background: 'rgba(var(--ink-rgb),.08)', fontSize: 13, color: INK, opacity: v.uiOp, pointerEvents: 'none' }}>Swipe to turn pages · pinch to zoom in</div>;
+}
+
+/** Notification bell with unread count and a dropdown of recent likes, follows and goals. */
+function Bell({ v, sheet }: { v: V; sheet?: boolean }) {
+  return (
+    <span style={{ position: sheet ? 'static' : 'relative', display: 'inline-flex' }} onClick={e => e.stopPropagation()}>
+      <button onClick={v.ntToggle} title="Notifications" aria-label={`Notifications${v.ntUnread ? `, ${v.ntUnread} new` : ''}`} aria-expanded={v.ntOpen} className={hover(`color:${MARK}`)} style={{ position: 'relative', width: sheet ? 48 : 34, height: sheet ? 48 : 34, padding: 0, border: 'none', background: 'none', color: sheet && !v.ntOpen ? STONE : INK, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <svg width={sheet ? 22 : 19} height={sheet ? 22 : 19} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2.2 2.2 0 0 0 4 0" /></svg>
         {v.ntUnread > 0 && <span style={{ position: 'absolute', top: 3, right: 2, minWidth: 16, height: 16, padding: '0 4px', boxSizing: 'border-box', borderRadius: 8, background: MARK, color: PAPER, font: `600 10px/16px ${SANS}`, textAlign: 'center' }}>{v.ntUnread > 9 ? '9+' : v.ntUnread}</span>}
       </button>
       {v.ntOpen && (
-        <div role="dialog" aria-label="Notifications" style={{ position: 'absolute', top: 'calc(100% + 8px)', right: v.notMob ? 0 : -60, width: 'min(340px, calc(100vw - 24px))', maxHeight: '60vh', overflowY: 'auto', zIndex: 30, background: PAPER, border: `1px solid ${INK}`, boxShadow: '0 16px 40px rgba(34,35,32,.16)' }}>
+        <div role="dialog" aria-label="Notifications" style={{ ...(sheet
+          ? { position: 'absolute', left: 8, right: 8, bottom: 'calc(100% + 8px)', maxHeight: '65vh' } as CSSProperties
+          : { position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 'min(340px, calc(100vw - 24px))', maxHeight: '60vh' } as CSSProperties), overflowY: 'auto', zIndex: 30, background: PAPER, border: `1px solid ${INK}`, boxShadow: '0 16px 40px rgba(34,35,32,.16)' }}>
           <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(var(--ink-rgb),.15)', ...label(INK) }}>Notifications</div>
           {v.ntInvites.map((iv: V) => (
             <div key={iv.key} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '12px 14px', borderBottom: '1px solid rgba(var(--ink-rgb),.08)', background: 'rgba(173,73,58,.06)', font: `400 14px/1.4 ${SANS}` }}>
@@ -82,21 +115,21 @@ function Title({ v }: { v: V }) {
         <div style={{ fontSize: v.mTitleSize, fontFamily: SERIF, fontWeight: 400, letterSpacing: '-.01em', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.titleName}</div>
         <div style={label()}>
           {v.isOther
-            ? <>by <button onClick={v.openArtist} title="View profile" className={hover(`color:${MARK};border-color:${MARK}`)} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: INK, cursor: 'pointer' }}>{v.artist}</button> · {v.otherPages} pages</>
+            ? <>by <button onClick={v.openArtist} title="View profile" className={'tap ' + hover(`color:${MARK};border-color:${MARK}`)} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: INK, cursor: 'pointer' }}>{v.artist}</button> · {v.otherPages} pages</>
             : v.bookMeta}
         </div>
         {(v.bkMediums || v.bkTags.length > 0) && (
           <div style={{ display: 'flex', gap: '2px 12px', flexWrap: 'wrap', justifyContent: 'center', fontSize: 13, color: 'rgba(var(--ink-rgb),.7)' }}>
             {v.bkMediums && <span>{v.bkMediums}</span>}
-            {v.bkTags.map((t: V) => <button key={t.key} onClick={t.open} className={hover(`color:${MARK}`)} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>{t.label}</button>)}
+            {v.bkTags.map((t: V) => <button key={t.key} onClick={t.open} className={'tap ' + hover(`color:${MARK}`)} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>{t.label}</button>)}
           </div>
         )}
         {(v.isOther || (v.isMine && v.bkCanShare)) && (
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginTop: 2, ...label(INK, 10) }}>
-            {v.isOther && <button onClick={v.bkLike} aria-pressed={v.bkLiked} title={v.bkLiked ? 'Unlike' : 'Like'} className={hover(`color:${MARK}`)} style={{ ...actLink, color: v.bkLiked ? MARK : INK }}>{v.bkLiked ? '♥' : '♡'} {v.bkLikes}</button>}
+          <div style={{ display: 'flex', gap: v.notMob ? 16 : 22, alignItems: 'center', marginTop: v.notMob ? 2 : 6, ...label(INK, v.notMob ? 10 : 11) }}>
+            {v.isOther && <button onClick={v.bkLike} aria-pressed={v.bkLiked} title={v.bkLiked ? 'Unlike' : 'Like'} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, color: v.bkLiked ? MARK : INK }}>{v.bkLiked ? '♥' : '♡'} {v.bkLikes}</button>}
             {v.isMine && <span title="Likes">♥ {v.bkLikes}</span>}
-            {v.isOther && <button onClick={v.bkSave} aria-pressed={v.bkSaved} className={hover(`color:${MARK}`)} style={{ ...actLink, color: v.bkSaved ? MARK : INK }}>{v.bkSaved ? 'Saved' : 'Save'}</button>}
-            <button onClick={v.bkShare} className={hover(`color:${MARK}`)} style={actLink}>Share</button>
+            {v.isOther && <button onClick={v.bkSave} aria-pressed={v.bkSaved} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, color: v.bkSaved ? MARK : INK }}>{v.bkSaved ? 'Saved' : 'Save'}</button>}
+            <button onClick={v.bkShare} className={'tap ' + hover(`color:${MARK}`)} style={actLink}>Share</button>
             {v.isOther && <MoreMenu open={v.bkMoreOpen} onToggle={v.bkMore} items={[{ label: 'Report sketchbook', onClick: v.bkReport }, { label: v.bkBlockLbl, onClick: v.bkBlock, danger: true }]} />}
           </div>
         )}
@@ -263,7 +296,7 @@ function KeyGuide({ v }: { v: V }) {
 /** App shell: focus backdrop, top bar, book title, the 3D stage and its controls. Screens and overlays render as children above it. */
 export default function Stage({ v, children }: { v: V; children: ReactNode }) {
   return (
-    <div onDragOver={v.onDragOver} onDrop={v.onDrop} onMouseMove={v.wake} onPointerDown={v.wake} onClick={v.closeMore} style={{ position: 'fixed', inset: 0, background: PAPER, color: INK, fontFamily: SANS, display: 'flex', flexDirection: 'column', alignItems: 'center', userSelect: 'none' }}>
+    <div onDragOver={v.onDragOver} onDrop={v.onDrop} onMouseMove={v.wake} onPointerDown={v.wake} onClick={v.closeMore} style={{ ['--tabbar' as string]: v.tabBar ? 'calc(57px + env(safe-area-inset-bottom))' : '0px', position: 'fixed', inset: 0, background: PAPER, color: INK, fontFamily: SANS, display: 'flex', flexDirection: 'column', alignItems: 'center', userSelect: 'none' }}>
       <div style={{ ...fill, overflow: 'hidden', pointerEvents: 'none', opacity: v.fz }}>
         <div ref={v.bgRefA} style={{ position: 'absolute', inset: '-25%', background: v.focusBg, filter: 'blur(80px) saturate(1.5)', transition: 'background .9s' }} />
         <div ref={v.bgRefB} style={{ position: 'absolute', inset: '-25%', background: v.focusBg, filter: 'blur(110px) saturate(1.3)', opacity: .55, mixBlendMode: 'screen', transition: 'background .9s' }} />
@@ -275,8 +308,10 @@ export default function Stage({ v, children }: { v: V; children: ReactNode }) {
         <Carousel v={v} />
         <Book3D v={v} />
       </div>
-      <div style={{ marginBottom: 14, fontSize: 13, color: 'rgba(var(--ink-rgb),.75)', opacity: v.emptyOp, transition: 'opacity .3s', pointerEvents: 'none' }}>Open pages to add your drawings, or drop images here</div>
+      <div style={{ marginBottom: 14, fontSize: 13, color: 'rgba(var(--ink-rgb),.75)', opacity: v.emptyOp, transition: 'opacity .3s', pointerEvents: 'none' }}>{v.isTouch ? 'Tap ✎ to add your drawings' : 'Open pages to add your drawings, or drop images here'}</div>
+      {v.swipeHint && <SwipeHint v={v} />}
       <Controls v={v} />
+      <div style={{ height: 'var(--tabbar)', flexShrink: 0 }} />
       {v.notMob && (v.isMine || v.isOther) && <KeyGuide v={v} />}
       {v.showHandle && <button onClick={v.toggleMenu} className={hover('background:rgba(var(--paper-rgb),.95)')} style={{ position: 'absolute', right: 24, bottom: 24, zIndex: 3, height: 34, padding: '0 14px', borderRadius: 2, border: 'none', background: 'rgba(var(--paper-rgb),.75)', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>{v.handleLbl}</button>}
       {v.showRail && (
@@ -286,6 +321,7 @@ export default function Stage({ v, children }: { v: V; children: ReactNode }) {
         </div>
       )}
       {children}
+      {v.tabBar && <TabBar v={v} />}
     </div>
   );
 }

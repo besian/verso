@@ -18,5 +18,11 @@ a { color: var(--ink); }
 a:hover { color: var(--mark); }
 input[type="date"] { color-scheme: inherit; }
 
+/* Touch screens: small text buttons get a larger invisible hit area (at least ~44px tall). */
+@media (pointer: coarse) {
+  .tap { position: relative; }
+  .tap::after { content: ''; position: absolute; inset: -12px -6px; }
+}
+
 /* Book-cover name labels don't fit small covers on phones. */
 @media (max-width: 639px) { .cover-label { display: none !important; } }

@@ -42,14 +42,14 @@ export function Notice({ err, info }: { err?: string; info?: string }) {
 
 export function EditProfile({ v }: { v: V }) {
   const grid: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 14 };
-  return (
-    <Modal onClose={v.pfClose} pad={v.mModalPad} maxWidth={520}>
-      <div style={heading}>Edit profile</div>
+  const save = <button onClick={v.pfSave} disabled={v.dBusy} style={{ height: v.notMob ? 44 : 40, padding: '0 22px', borderRadius: 2, border: 'none', background: MARK, color: PAPER, font: `500 ${v.notMob ? 14 : 15}px ${SANS}`, cursor: v.dBusy ? 'progress' : 'pointer', opacity: v.dBusy ? 0.6 : 1 }}>{v.dBusy ? 'Saving…' : 'Save'}</button>;
+  const fields = (
+    <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         <div style={{ width: 80, height: 80, flexShrink: 0, borderRadius: '50%', background: v.dAvBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 600 }}>{v.dInit}</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button onClick={v.pickAv} className={hoverTint} style={{ ...ghostBtn, height: 36, padding: '0 14px' }}>Upload photo</button>
-          {v.dHasAv && <button onClick={v.removeAv} style={{ ...linkBtn(MARK), height: 36, padding: '0 8px' }}>Remove</button>}
+          <button onClick={v.pickAv} className={hoverTint} style={{ ...ghostBtn, height: 40, padding: '0 14px' }}>Upload photo</button>
+          {v.dHasAv && <button onClick={v.removeAv} style={{ ...linkBtn(MARK), height: 40, padding: '0 8px' }}>Remove</button>}
         </div>
       </div>
       <div style={grid}>
@@ -65,16 +65,39 @@ export function EditProfile({ v }: { v: V }) {
         <TextField label="Website" value={v.dWeb} onChange={v.onDWeb} placeholder="yoursite.com" />
       </div>
       <Notice err={v.dErr} />
+    </>
+  );
+  const account = (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 160, gap: v.notMob ? 0 : 6 }}>
+      <span style={{ fontSize: 12, color: 'rgba(var(--ink-rgb),.6)' }}>Signed in as {v.dEmail}</span>
+      <span style={{ display: 'flex', gap: v.notMob ? 14 : 24 }}>
+        <button onClick={v.signOut} className="tap" style={{ ...linkBtn(MARK), padding: '2px 0' }}>Sign out</button>
+        <button onClick={v.openSettings} className="tap" style={{ ...linkBtn('rgba(var(--ink-rgb),.75)'), padding: '2px 0' }}>Account settings</button>
+      </span>
+    </div>
+  );
+  // Phones: a full screen with Cancel and Save at the top, like the sketchbook editor.
+  if (!v.notMob) return (
+    <div role="dialog" aria-label="Edit profile" style={{ position: 'absolute', inset: 0, zIndex: 20, background: PAPER, display: 'flex', flexDirection: 'column' }}>
+      <header style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid rgba(var(--ink-rgb),.12)' }}>
+        <button onClick={v.pfCancel} style={{ justifySelf: 'start', height: 40, padding: '0 4px', border: 'none', background: 'none', color: INK, font: `500 15px ${SANS}`, cursor: 'pointer' }}>Cancel</button>
+        <span style={{ font: `400 20px/1 ${SERIF}` }}>Edit profile</span>
+        <span style={{ justifySelf: 'end' }}>{save}</span>
+      </header>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 16px calc(32px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {fields}
+        <div style={{ paddingTop: 16, borderTop: '1px solid rgba(var(--ink-rgb),.12)' }}>{account}</div>
+      </div>
+    </div>
+  );
+  return (
+    <Modal onClose={v.pfClose} pad={v.mModalPad} maxWidth={520}>
+      <div style={heading}>Edit profile</div>
+      {fields}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', paddingTop: 14, borderTop: '1px solid rgba(var(--ink-rgb),.12)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 160 }}>
-          <span style={{ fontSize: 12, color: 'rgba(var(--ink-rgb),.6)' }}>Signed in as {v.dEmail}</span>
-          <span style={{ display: 'flex', gap: 14 }}>
-            <button onClick={v.signOut} style={{ ...linkBtn(MARK), padding: '2px 0' }}>Sign out</button>
-            <button onClick={v.openSettings} style={{ ...linkBtn('rgba(var(--ink-rgb),.75)'), padding: '2px 0' }}>Account settings</button>
-          </span>
-        </div>
+        {account}
         <button onClick={v.pfCancel} className={hoverTint} style={{ ...ghostBtn, height: 44, padding: '0 18px', fontSize: 14 }}>Cancel</button>
-        <button onClick={v.pfSave} disabled={v.dBusy} style={{ height: 44, padding: '0 22px', borderRadius: 2, border: 'none', background: MARK, color: PAPER, font: `500 14px ${SANS}`, cursor: v.dBusy ? 'progress' : 'pointer', opacity: v.dBusy ? 0.6 : 1 }}>{v.dBusy ? 'Saving…' : 'Save'}</button>
+        {save}
       </div>
     </Modal>
   );
@@ -103,7 +126,7 @@ export function NewBookPicker({ v }: { v: V }) {
   );
 }
 
-const chip = (on: boolean): CSSProperties => ({ height: 32, padding: '0 13px', borderRadius: 16, border: `1px solid ${on ? INK : 'rgba(var(--ink-rgb),.25)'}`, background: on ? INK : 'transparent', color: on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 });
+const chip = (on: boolean): CSSProperties => ({ height: 36, padding: '0 13px', borderRadius: 16, border: `1px solid ${on ? INK : 'rgba(var(--ink-rgb),.25)'}`, background: on ? INK : 'transparent', color: on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 });
 const sectionLbl: CSSProperties = { fontSize: 13, fontWeight: 500, color: INK };
 const hint: CSSProperties = { fontSize: 13, lineHeight: 1.45, color: 'rgba(var(--ink-rgb),.6)' };
 const Row = ({ label, note, children }: { label: string; note?: ReactNode; children: ReactNode }) => (
@@ -135,13 +158,13 @@ export function Manager({ v }: { v: V }) {
           </div>
           <div role="tablist" style={{ display: 'flex', gap: 24, borderBottom: '1px solid rgba(var(--ink-rgb),.15)' }}>
             {tabs.map(([k, l]) => (
-              <button key={k} role="tab" aria-selected={v.mgTab === k} onClick={() => v.setMgTab(k)} style={{ padding: '0 0 10px', marginBottom: -1, border: 'none', borderBottom: `2px solid ${v.mgTab === k ? INK : 'transparent'}`, background: 'none', color: v.mgTab === k ? INK : 'rgba(var(--ink-rgb),.5)', font: `500 15px ${SANS}`, cursor: 'pointer' }}>{l}</button>
+              <button key={k} role="tab" aria-selected={v.mgTab === k} onClick={() => v.setMgTab(k)} style={{ padding: '8px 0 12px', marginBottom: -1, border: 'none', borderBottom: `2px solid ${v.mgTab === k ? INK : 'transparent'}`, background: 'none', color: v.mgTab === k ? INK : 'rgba(var(--ink-rgb),.5)', font: `500 15px ${SANS}`, cursor: 'pointer' }}>{l}</button>
             ))}
           </div>
 
           {v.mgTab === 'pages' && (
             <>
-              <span style={hint}>Tap a page to caption or change it. Drag to reorder.</span>
+              <span style={hint}>{v.isTouch ? 'Tap a page to caption, move or change it.' : 'Click a page to caption or change it. Drag to reorder.'}</span>
               <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill,minmax(${v.notMob ? 160 : 120}px,1fr))`, gap: v.notMob ? 22 : 14 }}>
                 {v.pagesList.map((p: V, i: number) => (
                   <div key={i} draggable onDragStart={p.dragStart} onDragOver={p.dragOver} onDrop={p.drop} onClick={() => v.openPage(i)} style={{ display: 'flex', flexDirection: 'column', gap: 8, cursor: 'pointer', minWidth: 0 }}>
@@ -153,7 +176,7 @@ export function Manager({ v }: { v: V }) {
                 ))}
                 <button onClick={v.pick} className={hover(`border-color:${INK};color:${INK}`)} style={{ aspectRatio: v.pgAspect, borderRadius: '2px 8px 8px 2px', border: '2px dashed rgba(var(--ink-rgb),.3)', background: 'none', display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', justifyContent: 'center', color: 'rgba(var(--ink-rgb),.7)', font: `500 14px ${SANS}`, cursor: 'pointer', padding: 12 }}>
                   <span style={{ fontSize: 28, fontWeight: 300, lineHeight: 1 }}>+</span>Add pages
-                  <span style={{ fontSize: 12, fontWeight: 400, color: 'rgba(var(--ink-rgb),.55)' }}>or drop images</span>
+                  {!v.isTouch && <span style={{ fontSize: 12, fontWeight: 400, color: 'rgba(var(--ink-rgb),.55)' }}>or drop images</span>}
                 </button>
               </div>
             </>
@@ -170,7 +193,7 @@ export function Manager({ v }: { v: V }) {
                 <>
                   <Row label="Cover">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      {v.swatches.map((c: V) => <button key={c.key} onClick={c.pick} aria-label={`Cover colour ${c.c}`} style={{ width: 28, height: 28, borderRadius: '50%', border: 'none', background: c.c, boxShadow: c.ring, cursor: 'pointer', padding: 0 }} />)}
+                      {v.swatches.map((c: V) => <button key={c.key} onClick={c.pick} aria-label={`Cover colour ${c.c}`} style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', background: c.c, boxShadow: c.ring, cursor: 'pointer', padding: 0 }} />)}
                       <button onClick={v.pickCover} className={hoverTint} style={{ ...ghostBtn, height: 32, padding: '0 12px', marginLeft: 4 }}>{v.hasCoverImg ? 'Change image' : 'Use an image'}</button>
                       {v.hasCoverImg && <button onClick={v.removeCover} style={linkBtn(MARK)}>Remove image</button>}
                       <input ref={v.coverRef} type="file" accept="image/*" onChange={v.onCoverFile} style={{ display: 'none' }} />
@@ -237,7 +260,7 @@ function PageSheet({ v, pg }: { v: V; pg: V }) {
             <button onClick={pg.right} disabled={v.mgPage === v.pagesList.length - 1} className={hoverTint} style={{ ...act, opacity: v.mgPage === v.pagesList.length - 1 ? 0.4 : 1 }}>Later →</button>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: 8 }}>
-            <button onClick={() => { v.closePage(); pg.remove(); }} style={linkBtn(MARK)}>Remove page</button>
+            <button onClick={() => { v.closePage(); pg.remove(); }} className="tap" style={linkBtn(MARK)}>Remove page</button>
             <button onClick={v.closePage} style={{ height: 44, padding: '0 24px', borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer' }}>Done</button>
           </div>
         </div>
@@ -368,11 +391,11 @@ export function Editor({ v }: { v: V }) {
 export function MoreMenu({ open, onToggle, items, align = 'center' }: { open: boolean; onToggle: () => void; items: { label: string; onClick: () => void; danger?: boolean }[]; align?: 'center' | 'right' }) {
   return (
     <span style={{ position: 'relative', display: 'inline-flex' }}>
-      <button onClick={e => { e.stopPropagation(); onToggle(); }} aria-haspopup="menu" aria-expanded={open} title="More" className={hover(`color:${MARK}`)} style={{ height: 28, minWidth: 28, padding: '0 6px', border: 'none', background: 'none', color: INK, font: `600 16px/1 ${SANS}`, letterSpacing: 1, cursor: 'pointer' }}>⋯</button>
+      <button onClick={e => { e.stopPropagation(); onToggle(); }} aria-haspopup="menu" aria-expanded={open} title="More" className={'tap ' + hover(`color:${MARK}`)} style={{ height: 28, minWidth: 28, padding: '0 6px', border: 'none', background: 'none', color: INK, font: `600 16px/1 ${SANS}`, letterSpacing: 1, cursor: 'pointer' }}>⋯</button>
       {open && (
         <span role="menu" style={{ position: 'absolute', top: '100%', [align === 'right' ? 'right' : 'left']: align === 'right' ? 0 : '50%', transform: align === 'right' ? undefined : 'translateX(-50%)', marginTop: 6, zIndex: 30, display: 'flex', flexDirection: 'column', minWidth: 190, padding: 6, background: PAPER, border: `1px solid ${INK}`, boxShadow: '0 12px 30px rgba(34,35,32,.14)' }}>
           {items.map(it => (
-            <button key={it.label} role="menuitem" onClick={it.onClick} className={hover('background:rgba(var(--ink-rgb),.07)')} style={{ textAlign: 'left', padding: '9px 10px', border: 'none', background: 'none', color: it.danger ? MARK : INK, font: `500 13px ${SANS}`, letterSpacing: 0, textTransform: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>{it.label}</button>
+            <button key={it.label} role="menuitem" onClick={it.onClick} className={hover('background:rgba(var(--ink-rgb),.07)')} style={{ textAlign: 'left', padding: '12px 10px', border: 'none', background: 'none', color: it.danger ? MARK : INK, font: `500 13px ${SANS}`, letterSpacing: 0, textTransform: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>{it.label}</button>
           ))}
         </span>
       )}
@@ -434,7 +457,7 @@ export function Welcome({ v }: { v: V }) {
           ))}
         </ol>
         <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap', flexDirection: v.notMob ? 'row' : 'column' }}>
-          <button onClick={v.welcomeStart} autoFocus className={hover(`background:${MARK}`)} style={{ height: 50, padding: '0 28px', border: 'none', background: INK, color: PAPER, font: `500 15px ${SANS}`, cursor: 'pointer', width: v.notMob ? undefined : '100%' }}>Add my first pages</button>
+          <button onClick={v.welcomeStart} autoFocus={v.notMob} className={hover(`background:${MARK}`)} style={{ height: 50, padding: '0 28px', border: 'none', background: INK, color: PAPER, font: `500 15px ${SANS}`, cursor: 'pointer', width: v.notMob ? undefined : '100%' }}>Add my first pages</button>
           <button onClick={v.welcomeLater} className={hover(`color:${MARK};border-color:${MARK}`)} style={{ padding: '4px 0', border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', color: INK, font: `500 15px ${SANS}`, cursor: 'pointer' }}>Look around first ↗</button>
         </div>
       </div>
@@ -444,5 +467,5 @@ export function Welcome({ v }: { v: V }) {
 
 /** Brief confirmation at the bottom of the screen. */
 export function Toast({ msg }: { msg: string }) {
-  return <div role="status" style={{ position: 'absolute', left: '50%', bottom: 'calc(110px + env(safe-area-inset-bottom))', transform: 'translateX(-50%)', zIndex: 40, padding: '10px 16px', background: INK, color: PAPER, font: `500 13px ${SANS}`, borderRadius: 2, boxShadow: '0 10px 24px rgba(34,35,32,.2)', whiteSpace: 'nowrap', pointerEvents: 'none' }}>{msg}</div>;
+  return <div role="status" style={{ position: 'absolute', left: '50%', bottom: 'calc(110px + var(--tabbar, 0px))', transform: 'translateX(-50%)', zIndex: 40, padding: '10px 16px', background: INK, color: PAPER, font: `500 13px ${SANS}`, borderRadius: 2, boxShadow: '0 10px 24px rgba(34,35,32,.2)', whiteSpace: 'nowrap', pointerEvents: 'none' }}>{msg}</div>;
 }

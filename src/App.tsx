@@ -66,6 +66,8 @@ interface State {
   invites?: BookDoc[]; shDraft?: string; shBusy?: boolean; shErr?: string;
   /** Edit screen: which tab, and the page whose details sheet is open. */
   mgTab?: 'pages' | 'details' | 'share'; mgPage?: number | null;
+  /** Touch screens: the swipe hint shows the first few times until a page is turned. */
+  hintDone?: boolean;
 }
 
 const ini = (n?: string) => (n || '').trim().split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
@@ -74,6 +76,9 @@ const fmtK = (v: number) => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v);
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 /** Peak total bend from spine to outer edge of a turning page (degrees). */
 const CURL_DEG = 110;
+/** Page width as a share of a phone's screen: closed, and open (two pages side by side, plus the fan of turning pages). */
+const PHONE_CLOSED = 0.6, PHONE_OPEN = 0.44;
+const IS_TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 /** Likes and followers each artist is working toward. */
 const GOAL = 100;
 const avatarBg = (av?: string | null) => av ? `url("${av}") center/cover no-repeat ${INK}` : INK;
@@ -110,6 +115,8 @@ export default class App extends Component<object, State> {
   edPts = new Map<number, { x: number; y: number }>();
   edPinch: { dist: number; ang: number; mx: number; my: number; scale: number; rot: number; tx: number; ty: number } | null = null;
   dragIdx: number | null = null;
+  /** Fingers on the book, for pinch to zoom. */
+  stPts = new Map<number, { x: number; y: number }>(); pinch0 = 0;
   wheelLock = false; stLock = false; stT = 0; stY: number | null = null;
   wakeT?: ReturnType<typeof setTimeout>;
   editImg?: HTMLImageElement;
@@ -654,6 +661,7 @@ export default class App extends Component<object, State> {
   /** Sets where the book is turning to, with a page sound for each turn made by the reader. */
   turnTo(t: number, from = Math.round(this.target)) {
     const n = Math.abs(Math.round(t) - from); if (n) sound.pageTurn(n);
+    if (n && IS_TOUCH && !this.state.hintDone) { store.saveHints(store.loadHints() + 1); this.setState({ hintDone: true }); }
     this.target = t;
   }
   animate(onDone?: () => void) {
@@ -700,7 +708,10 @@ export default class App extends Component<object, State> {
   /** Book size: normal view (Hn) blended toward the focus view (Hf) by fz. */
   dims(b?: AnyBook, flat?: boolean) {
     const s = this.state, shp = this.shapeOf(b === undefined ? this.curBook() : b), sh = s.sh || s.vh * 0.5, sw = s.sw || s.vw, aspect = shp.a, fz = flat ? 0 : s.fz || 0;
-    const Hn = Math.max(120, Math.min(sh * 0.7 * shp.s, sw * (sw < 640 ? 0.45 : 0.29) / aspect, 560 * shp.s) || 360) * s.zoom;
+    // Phones: a closed book is shown large, and shrinks as it opens so the whole spread fits the screen width.
+    const phone = sw < 640, open = phone && !flat && (b === undefined || b === this.curBook()) ? clamp01(Math.min(s.p, this.nLeaves() - s.p)) : 0;
+    const across = phone ? PHONE_CLOSED + (PHONE_OPEN - PHONE_CLOSED) * open : 0.29;
+    const Hn = Math.max(phone ? 60 : 120, Math.min(sh * (phone ? 0.78 : 0.7) * shp.s, sw * across / aspect, 560 * shp.s) || 360) * s.zoom;
     const Hf = Math.max(200, Math.min(s.vh * 0.84, s.vw * 0.86 / aspect));
     const H = Hn + (Hf - Hn) * fz; return { H: Math.round(H), W: Math.round(H * aspect) };
   }
@@ -1082,7 +1093,7 @@ export default class App extends Component<object, State> {
     const setSort = (v: 'trending' | 'new') => { cancelAnimationFrame(this.exRaf); this.stT = 0; if (v !== sort) this.setState({ exSort: v, stS: 0 }, () => this.loadCommunity()); };
     const [vGridBg, vGridFg] = on(view === 'grid'), [vStackBg, vStackFg] = on(view === 'stack'), [sTrBg, sTrFg] = on(sort === 'trending'), [sNewBg, sNewFg] = on(sort === 'new');
     return {
-      exH1: mob ? 44 : 72, exCountLbl: n + (s.exMore && !s.exLabel ? '+' : '') + (n === 1 ? ' sketchbook' : ' sketchbooks') + ' · ' + new Date().toLocaleDateString('en', { month: 'short', year: 'numeric' }),
+      exH1: mob ? 36 : 72, exCountLbl: n + (s.exMore && !s.exLabel ? '+' : '') + (n === 1 ? ' sketchbook' : ' sketchbooks') + ' · ' + new Date().toLocaleDateString('en', { month: 'short', year: 'numeric' }),
       exMediums: [{ key: '', label: 'All mediums', on: !s.exLabel?.startsWith('m:'), pick: () => this.setLabel('') },
         ...MEDIUMS.map(m => ({ key: m, label: m, on: s.exLabel === 'm:' + mediumKey(m), pick: () => this.setLabel(s.exLabel === 'm:' + mediumKey(m) ? '' : 'm:' + mediumKey(m)) }))],
       exTag: s.exLabel?.startsWith('t:') ? '#' + s.exLabel.slice(2) : '', clearLabel: () => this.setLabel(''),
@@ -1104,7 +1115,7 @@ export default class App extends Component<object, State> {
       })(),
       exQ: s.exQ || '', onExQ: (e: ChangeEvent<HTMLInputElement>) => { cancelAnimationFrame(this.exRaf); this.stT = 0; this.setState({ exQ: e.target.value, stS: 0 }); }, exNone: n === 0,
       exCols: Math.max(2, Math.min(6, Math.floor((s.vw - (mob ? 32 : 80) + 18) / (mob ? 150 : 200)))),
-      exPadT: mob ? 84 : 108, exPadX: mob ? 16 : 40, exGap: mob ? 14 : 24, exSearchBasis: mob ? '100%' : 'auto', exSearchMax: mob ? 'none' : '380px',
+      exPadT: mob ? 74 : 108, exPadX: mob ? 16 : 40, exGap: mob ? 14 : 24, exSearchBasis: mob ? '100%' : 'auto', exSearchMax: mob ? 'none' : '380px',
       exOvY: view === 'grid' ? 'auto' : 'hidden', exInnerH: view === 'grid' ? 'auto' : '100%',
       stackT: `scale3d(${sk.toFixed(3)},${sk.toFixed(3)},${sk.toFixed(3)}) rotateX(56deg) rotateZ(-12deg)`,
       exGrid: view === 'grid' && n > 0, exStack: view === 'stack' && n > 0, vGridBg, vGridFg, vStackBg, vStackFg, sTrBg, sTrFg, sNewBg, sNewFg,
@@ -1241,8 +1252,9 @@ export default class App extends Component<object, State> {
         transform: `rotateY(${a}deg) translateZ(${((N - i) * 0.5).toFixed(2)}px)`, frontBg: F.bg, backBg: B.bg,
         shadeF: (0.35 * Math.sin(rad) * (rad < Math.PI / 2 ? 1 : 0)).toFixed(3), shadeB: (0.3 * Math.max(0, Math.sin(rad)) * (rad > Math.PI / 2 ? 1 : 0)).toFixed(3),
         numF: F.num, numB: B.num, noteF: F.note || '', noteB: B.note || '', noteFs: Math.max(9, Math.min(15, Math.round(H * 0.026))),
-        openFront: () => { if (!this.moved) this.focusOn(i, 'R'); },
-        openBack: () => { if (!this.moved) this.focusOn(i + 1, 'L'); },
+        // On touch screens, tapping a zoomed page only brings the controls back (swipe to move between pages).
+        openFront: () => { if (!this.moved && !(IS_TOUCH && s.focus)) this.focusOn(i, 'R'); },
+        openBack: () => { if (!this.moved && !(IS_TOUCH && s.focus)) this.focusOn(i + 1, 'L'); },
       };
     });
 
@@ -1329,7 +1341,11 @@ export default class App extends Component<object, State> {
       prevOp: active > 0 ? 1 : 0.3, nextOp: active < books.length - 1 ? 1 : 0.3,
       sideBooks, sbBase: `rotateX(${tilt}deg)`, ghostT: sideT(books.length), ghostW: ghostD.W, ghostH: ghostD.H, ghostTop: -ghostD.H / 2,
       newBook: this.openNewPick, stopPD: (e: PointerEvent) => e.stopPropagation(),
-      vw: s.vw,
+      vw: s.vw, isTouch: IS_TOUCH,
+      tabBar: m && !!s.acct && mode !== 'auth',
+      tbOn: mode === 'explore' || mode === 'other' ? 'explore' : mode === 'mine' ? 'mine' : mode === 'profile' && !s.profileOf ? 'me' : '',
+      tbNew: () => { if (mode !== 'mine') this.goMode('mine'); this.openNewPick(); },
+      swipeHint: IS_TOUCH && !s.hintDone && store.loadHints() < 3 && (mode === 'mine' || mode === 'other') && !s.focus && (images.length > 0 || !!other) && !s.switching,
       navMineLbl: m ? 'Yours' : 'Your sketchbooks', mNavGap: m ? 14 : 40, notMob: !m, mPad: m ? 14 : 24, mTop: m ? 14 : 20, mGap: m ? 14 : 24,
       newLbl: m ? '+ New' : '+ New sketchbook', mTitleTop: m ? 72 : 76, mTitleSize: m ? 32 : 46, mBottom: m ? 16 : 36, mModalPad: m ? 18 : 28, mOptMin: m ? 92 : 120, mOptH: m ? 130 : 170,
       newPick: !!s.newPick, closePick: (e: MouseEvent) => { if (e.target === e.currentTarget) this.setState({ newPick: false }); }, cancelPick: () => this.setState({ newPick: false }),
@@ -1427,13 +1443,30 @@ export default class App extends Component<object, State> {
       bookTransform: `rotateX(${(tilt * (1 - fz) + 3 * fz).toFixed(2)}deg) translateX(${shift}px)`,
       shadowLeft: -W * clamp01(p), shadowW: W * (clamp01(p) + clamp01(N - p)),
       emptyOp: !images.length && !other && !sw ? 1 : 0,
-      onDown: (e: PointerEvent) => { this.drag = { x: e.clientX, p0: s.p, id: e.pointerId }; this.moved = false; cancelAnimationFrame(this.raf); },
+      onDown: (e: PointerEvent) => {
+        this.stPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (this.stPts.size === 2) {
+          // Two fingers: a pinch, not a page turn. Put any half-turned page back.
+          const [a, b] = [...this.stPts.values()]; this.pinch0 = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+          if (this.drag) { this.drag = null; this.animate(); }
+          return;
+        }
+        this.drag = { x: e.clientX, p0: s.p, id: e.pointerId }; this.moved = false; cancelAnimationFrame(this.raf);
+      },
       onMove: (e: PointerEvent<HTMLDivElement>) => {
+        if (this.stPts.has(e.pointerId)) this.stPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (this.pinch0 && this.stPts.size >= 2) {
+          const [a, b] = [...this.stPts.values()], k = Math.hypot(b.x - a.x, b.y - a.y) / this.pinch0;
+          if (k > 1.25 && !this.state.focus) { this.pinch0 = 0; const fp = Math.max(1, Math.min(N - 1, Math.round(this.target))); this.focusOn(fp, this.autoSide(fp)); }
+          else if (k < 0.8 && this.state.focus) { this.pinch0 = 0; this.setFocus(false); }
+          return;
+        }
         if (!this.drag) return; const dx = e.clientX - this.drag.x;
         if (Math.abs(dx) > 4 && !this.moved) { this.moved = true; e.currentTarget.setPointerCapture?.(this.drag.id); }
         this.setState({ p: Math.max(-0.15, Math.min(N + 0.15, this.drag.p0 - dx / (W * 1.1))) });
       },
       onUp: (e: PointerEvent) => {
+        this.stPts.delete(e.pointerId); if (this.stPts.size < 2) this.pinch0 = 0;
         if (!this.drag) return; const dx = e.clientX - this.drag.x, pp = this.state.p;
         // Swiping past the front or back cover moves to the neighbouring sketchbook.
         if (this.drag.p0 === 0 && dx > 90 && active > 0) { this.drag = null; return this.switchBook(active - 1); }

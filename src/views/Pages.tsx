@@ -4,7 +4,7 @@ import { hover } from '../pseudo';
 import { INK, MARK, MUTED, PAPER, SANS, label, serif } from '../theme';
 import { Notice } from './Overlays';
 
-const screen: CSSProperties = { position: 'absolute', inset: 0, zIndex: 4, background: PAPER, overflowX: 'hidden', overflowY: 'auto' };
+const screen: CSSProperties = { position: 'absolute', inset: '0 0 var(--tabbar, 0px) 0', zIndex: 4, background: PAPER, overflowX: 'hidden', overflowY: 'auto' };
 const hoverText = hover(`color:${MARK}`);
 const hoverLine = hover(`color:${MARK};border-color:${MARK}`);
 const underline = (fs = 14): CSSProperties => ({ padding: '4px 0', border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', color: INK, font: `500 ${fs}px ${SANS}`, cursor: 'pointer' });
