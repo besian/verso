@@ -5,6 +5,8 @@ import type { Account, Book, OtherBook, Shape, ShapeKey } from './data';
 import * as api from './backend';
 import type { AuthUser, BookDoc } from './backend';
 import * as store from './storage';
+import { COVER_INSIDE, pageWear } from './wear';
+import type { Wear } from './wear';
 import { INK, MARK, PAPER } from './theme';
 import Stage from './views/Stage';
 import { AuthPage, Explore, Home, Landing, Profile } from './views/Screens';
@@ -279,12 +281,19 @@ export default class App extends Component<object, State> {
   nLeaves() { return this.nPages() / 2 + 2; }
   maxP() { return this.nLeaves(); }
   /** Background + page number for one side of a leaf. Leaf 0 is the front cover, the last leaf the back cover. */
-  face(leaf: number, side: 0 | 1) {
-    const N = this.nLeaves(), book = this.curBook(), cover = book?.color ?? '#b8243a', inner = '#e9e2d3', paper = '#f3efe6';
-    if (leaf === 0) return side ? { bg: inner, num: '', idx: -1 } : { bg: this.coverBg(book), num: '', idx: -1 };
-    if (leaf === N - 1) return side ? { bg: cover, num: '', idx: -1 } : { bg: inner, num: '', idx: -1 };
-    const pi = 2 * (leaf - 1) + side, img = this.state.images[pi];
-    return { bg: img ? `url("${this.blobUrl(img)}") center/cover no-repeat ${paper}` : paper, num: String(pi + 1), idx: img ? pi : -1 };
+  face(leaf: number, side: 0 | 1, w = 0): { bg: string; num: string; idx: number; wear: Wear | null; inside?: boolean } {
+    const N = this.nLeaves(), book = this.curBook(), cover = book?.color ?? '#b8243a', inner = '#e9e2d3';
+    if (leaf === 0) return side ? { bg: inner, num: '', idx: -1, wear: null, inside: true } : { bg: this.coverBg(book), num: '', idx: -1, wear: null };
+    if (leaf === N - 1) return side ? { bg: cover, num: '', idx: -1, wear: null } : { bg: inner, num: '', idx: -1, wear: null, inside: true };
+    const pi = 2 * (leaf - 1) + side, img = this.state.images[pi], wear = this.wear(`${book?.id}:${pi}`, side ? 'l' : 'r', w), paper = wear.paper;
+    return { bg: img ? `url("${this.blobUrl(img)}") center/cover no-repeat ${paper}` : paper, num: String(pi + 1), idx: img ? pi : -1, wear };
+  }
+  wearCache = new Map<string, Wear>();
+  /** Per-page wear, cached because the book re-renders every animation frame. */
+  wear(seed: string, outer: 'l' | 'r', w: number) {
+    const k = seed + '|' + w; let v = this.wearCache.get(k);
+    if (!v) { if (this.wearCache.size > 2000) this.wearCache.clear(); v = pageWear(seed, outer, w); this.wearCache.set(k, v); }
+    return v;
   }
   animate(onDone?: () => void) {
     cancelAnimationFrame(this.raf);
@@ -652,8 +661,9 @@ export default class App extends Component<object, State> {
       // Pages near the one turning fan out, always in order so none passes through another.
       const a = -(A * clamp01((x + 2.5) / 2.5) + (180 - 2 * A) * ease + A * clamp01((x - 1) / 2.5));
       const rad = -a * Math.PI / 180;
-      const F = this.face(i, 0), B = this.face(i, 1);
+      const F = this.face(i, 0, W), B = this.face(i, 1, W);
       return {
+        wearF: F.wear, wearB: B.wear, overlayF: F.wear?.overlay || (F.inside ? COVER_INSIDE : ''), overlayB: B.wear?.overlay || (B.inside ? COVER_INSIDE : ''),
         key: i, label: book.name, isCover: i === 0 && !book.coverImg, isCoverAny: i === 0,
         transform: `rotateY(${a}deg) translateZ(${((N - i) * 0.5).toFixed(2)}px)`, frontBg: F.bg, backBg: B.bg,
         shadeF: (0.35 * Math.sin(rad) * (rad < Math.PI / 2 ? 1 : 0)).toFixed(3), shadeB: (0.3 * Math.max(0, Math.sin(rad)) * (rad > Math.PI / 2 ? 1 : 0)).toFixed(3),
