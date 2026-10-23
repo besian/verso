@@ -4,7 +4,7 @@ import ClosedBook from '../ClosedBook';
 import { hover } from '../pseudo';
 import { earClip } from '../wear';
 import type { Wear } from '../wear';
-import { INK, MARK, PAGE_EDGES, PAPER, SANS, SERIF, SPINE, label } from '../theme';
+import { INK, MARK, PAGE_EDGES, PAPER, SANS, SERIF, SPINE, label, spineStyle } from '../theme';
 
 const navLink: CSSProperties = { border: 'none', background: 'none', padding: '4px 0', cursor: 'pointer', ...label() };
 const textBtn: CSSProperties = { height: 34, padding: 0, border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap', ...label(INK) };
@@ -98,6 +98,7 @@ function Book3D({ v }: { v: V }) {
     <div style={{ position: 'relative', width: 0, height: v.H, transformStyle: 'preserve-3d', transform: v.bookTransform, opacity: v.bookOp }}>
       <div style={{ position: 'absolute', left: v.shadowLeft, top: 0, width: v.shadowW, height: v.H, transform: 'translateZ(-2px) translateY(26px)', background: 'rgba(34,35,32,.16)', filter: 'blur(22px)', borderRadius: 2, opacity: v.openShadowOp }} />
       <div style={{ position: 'absolute', left: v.bodyLeft, top: 0, width: v.W, height: v.H, transform: 'translateZ(-1px)', opacity: v.bodyOp, pointerEvents: 'none' }}>
+        <div style={spineStyle(v.boardColor, v.bodyBack ? 'r' : 'l', 9, 6)} />
         <div style={{ ...fill, transform: v.bodyBack ? 'translate(-7px,6px)' : 'translate(7px,6px)', borderRadius: v.bodyBack ? '11px 3px 3px 11px' : '3px 11px 11px 3px', background: v.boardColor, filter: 'brightness(.6)', boxShadow: '0 24px 40px rgba(34,35,32,.16)' }} />
         <div style={{ position: 'absolute', top: 3, bottom: -3, left: v.bodyBack ? -4 : 4, right: v.bodyBack ? 4 : -4, borderRadius: v.bodyBack ? '9px 2px 2px 9px' : '2px 9px 9px 2px', background: PAGE_EDGES }} />
       </div>

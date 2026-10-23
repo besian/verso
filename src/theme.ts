@@ -20,4 +20,11 @@ export const serif = (size: number, lh: number | string = 1.05, ls = '-.01em'): 
 });
 
 export const PAGE_EDGES = 'repeating-linear-gradient(180deg,#f3efe6 0 2px,#d8d1c1 2px 3px)';
+/** The rounded binding that sticks out past the cover on the spine side. `side` is where the spine is. */
+export const spineStyle = (color: string, side: 'l' | 'r', w: number, drop: number): CSSProperties => ({
+  position: 'absolute', top: 1, bottom: -drop, width: w + 4, [side === 'l' ? 'left' : 'right']: -w,
+  borderRadius: side === 'l' ? `${w}px 2px 2px ${w}px` : `2px ${w}px ${w}px 2px`,
+  background: `linear-gradient(${side === 'l' ? 90 : 270}deg, rgba(0,0,0,.42) 0%, rgba(255,255,255,.16) 38%, rgba(0,0,0,.08) 70%, rgba(0,0,0,.3) 100%), ${color}`,
+  boxShadow: '0 2px 4px rgba(0,0,0,.18)',
+});
 export const SPINE = 'linear-gradient(90deg,rgba(0,0,0,.28),rgba(0,0,0,.08))';

@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { PAGE_EDGES, SPINE } from './theme';
+import { PAGE_EDGES, SPINE, spineStyle } from './theme';
 
 interface Props {
   /** 'lg' — carousel, Explore grid, profile; 'sm' — home and landing panels. */
@@ -28,6 +28,7 @@ export default function ClosedBook({ size = 'lg', bg, board, boardShadow, band, 
   const r = lg ? '2px 10px 10px 2px' : '2px 8px 8px 2px';
   return (
     <>
+      <div style={spineStyle(board, 'l', lg ? 9 : 7, lg ? 6 : 5)} />
       <div style={{ position: 'absolute', inset: 0, transform: lg ? 'translate(7px,6px)' : 'translate(6px,5px)', borderRadius: lg ? '3px 11px 11px 3px' : '2px 8px 8px 2px', background: board, filter: 'brightness(.6)', boxShadow: boardShadow ?? (lg ? '0 20px 32px rgba(34,35,32,.16)' : '0 18px 30px rgba(34,35,32,.14)') }} />
       <div style={lg
         ? { position: 'absolute', top: 3, bottom: -3, left: 4, right: -4, borderRadius: '2px 9px 9px 2px', background: PAGE_EDGES }
