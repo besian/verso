@@ -65,6 +65,8 @@ interface State {
   exMore?: boolean; exBusy?: boolean; exLabel?: string; exLabelBooks?: OtherBook[] | null;
   legal?: 'privacy' | 'terms'; nf?: string;
   banned?: string[]; admin?: boolean; adReports?: AdminItem[] | null; adBusy?: string; adErr?: string;
+  /** Resend on the confirm-email reminder rests until this time. */
+  vfUntil?: number;
   tagDraft?: string; soundOn?: boolean; dark?: boolean; welcome?: boolean;
   /** Shared sketchbooks: invitations waiting for an answer, and the invite form on the Pages screen. */
   invites?: BookDoc[]; shDraft?: string; shBusy?: boolean; shErr?: string;
@@ -440,7 +442,7 @@ export default class App extends Component<object, State> {
     if (!who && !this.state.acct && !force) return this.openJoin();
     if (who?.uid && who.uid === this.state.acct?.uid) who = null;
     cancelAnimationFrame(this.raf); cancelAnimationFrame(this.exRaf); this.target = 0;
-    this.setState(s => ({ mode: 'profile', profileOf: who, pf: null, pfPreview: false, other: null, images: s.books[s.active].images, p: 0, focus: false, fz: 0, managing: false }));
+    this.setState(s => ({ mode: 'profile', profileOf: who, pf: null, pfPreview: false, other: null, acErr: '', acInfo: '', images: s.books[s.active].images, p: 0, focus: false, fz: 0, managing: false }));
     const uid = who?.uid;
     if (uid) Promise.all([api.getProfile(uid), api.userBooks(uid, true)]).then(([profile, docs]) => {
       if (this.state.profileOf?.uid === uid) this.setState({ pf: { uid, profile, books: docs.filter(b => b.pageCount > 0).map(toOther) } });
@@ -1086,7 +1088,14 @@ export default class App extends Component<object, State> {
       acF: { email: f.email || '', pwEmail: f.pwEmail || '', pwOld: f.pwOld || '', pwNew: f.pwNew || '', delHandle: f.delHandle || '', pwDel: f.pwDel || '' },
       onAc: { email: set('email'), pwEmail: set('pwEmail'), pwOld: set('pwOld'), pwNew: set('pwNew'), delHandle: set('delHandle'), pwDel: set('pwDel') },
       acHandle: a?.handle || '',
-      resendVerify: () => run('verify', async () => { await api.resendVerification(); return `Sent. Check ${a?.email} for the link.`; }),
+      // Firebase sends at most about one confirmation email a minute, so Resend rests for a minute after sending.
+      resendVerify: () => run('verify', async () => {
+        try { await api.resendVerification(); }
+        catch (e) { if ((e as { code?: string }).code === 'auth/too-many-requests') throw Object.assign(new Error('wait'), { code: 'verify-wait' }); throw e; }
+        this.setState({ vfUntil: Date.now() + 60000 }); setTimeout(() => this.setState({ vfUntil: 0 }), 60000);
+        return `Sent to ${a?.email}. It can take a minute or two, and may land in spam.`;
+      }),
+      vfCooldown: (s.vfUntil || 0) > Date.now(), vfMsg: s.acInfo || '', vfErr: s.acErr || '',
       checkVerified: () => run('verify', async () => { const ok = await api.refreshVerified(); this.setState({ verified: ok }); return ok ? 'Thanks, your email is confirmed.' : 'Not confirmed yet. Open the link in the email we sent, then try again.'; }),
       changeEmail: (e?: { preventDefault(): void }) => { e?.preventDefault(); const next = (f.email || '').trim();
         if (!/\S+@\S+\.\S+/.test(next)) return this.setState({ acErr: 'Enter the new email address.' });

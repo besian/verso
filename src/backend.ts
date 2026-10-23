@@ -73,6 +73,7 @@ export function errMsg(e: unknown): string {
     'storage/unauthorized': 'Upload refused. Images must be under 10 MB.',
     'auth/requires-recent-login': 'For your security, sign in again and retry.',
     'auth/missing-password': 'Enter your current password.',
+    'verify-wait': 'We just sent one. Firebase allows one email a minute, so try again shortly.',
   };
   return msgs[code] || 'Something went wrong. Please try again.';
 }
