@@ -2,6 +2,7 @@
 // Storage (page images, covers, avatars). Configured from VITE_FIREBASE_* env vars; when
 // they're missing the app still runs signed-out with the sample sketchbooks.
 import { initializeApp } from 'firebase/app';
+import { getAnalytics, isSupported as analyticsSupported } from 'firebase/analytics';
 import {
   connectAuthEmulator, createUserWithEmailAndPassword, getAuth, onAuthStateChanged,
   sendPasswordResetEmail, signInWithEmailAndPassword, signOut as fbSignOut,
@@ -23,6 +24,7 @@ const config = {
   storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: env.VITE_FIREBASE_APP_ID,
+  measurementId: env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 export const enabled = !!(config.apiKey && config.projectId);
@@ -36,6 +38,8 @@ if (app && env.VITE_FIREBASE_EMULATORS === '1') {
   connectAuthEmulator(auth!, 'http://127.0.0.1:9099', { disableWarnings: true });
   connectFirestoreEmulator(db!, '127.0.0.1', 8080);
   connectStorageEmulator(storage!, '127.0.0.1', 9199);
+} else if (app && config.measurementId) {
+  analyticsSupported().then(ok => { if (ok) getAnalytics(app); }).catch(() => {});
 }
 
 class NotConfigured extends Error { code = 'not-configured'; }
