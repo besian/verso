@@ -53,6 +53,8 @@ interface State {
   reportFor?: { kind: 'book' | 'user'; targetId: string; ownerId: string; label: string } | null; reportReason?: string; reportNote?: string; reportBusy?: boolean; reportErr?: string;
   p: number; zoom: number; managing: boolean;
   vw: number; vh: number; sw?: number; sh?: number;
+  /** Top of the book area on screen (it sits below the title), used to centre a zoomed page on the whole screen. */
+  st?: number;
   switching?: boolean; car?: number; swT?: number;
   focus?: boolean; fz?: number; fside?: 'L' | 'R'; fsx?: number; ctrlShow?: boolean; menuOpen?: boolean;
   edit?: EditState | null; edTool?: string; edAdjTool?: string; edPeek?: boolean;
@@ -372,7 +374,7 @@ export default class App extends Component<object, State> {
   stageRef = (el: HTMLDivElement | null) => {
     if (el && el !== this.stageEl && window.ResizeObserver) {
       this.ro?.disconnect(); this.stageEl = el;
-      this.ro = new ResizeObserver(([e]) => this.setState({ sh: e.contentRect.height, sw: e.contentRect.width })); this.ro.observe(el);
+      this.ro = new ResizeObserver(([e]) => this.setState({ sh: e.contentRect.height, sw: e.contentRect.width, st: (e.target as HTMLElement).getBoundingClientRect().top })); this.ro.observe(el);
     }
   };
 
@@ -762,7 +764,7 @@ export default class App extends Component<object, State> {
     const phone = sw < 640, open = phone && !flat && (b === undefined || b === this.curBook()) ? clamp01(Math.min(s.p, this.nLeaves() - s.p)) : 0;
     const across = phone ? PHONE_CLOSED + (PHONE_OPEN - PHONE_CLOSED) * open : 0.29;
     const Hn = Math.max(phone ? 60 : 120, Math.min(sh * (phone ? 0.78 : 0.7) * shp.s, sw * across / aspect, 560 * shp.s) || 360) * s.zoom;
-    const Hf = Math.max(200, Math.min(s.vh * 0.84, s.vw * 0.86 / aspect));
+    const Hf = Math.max(200, Math.min(s.vh * 0.8, s.vw * 0.86 / aspect));
     const H = Hn + (Hf - Hn) * fz; return { H: Math.round(H), W: Math.round(H * aspect) };
   }
 
@@ -1567,7 +1569,8 @@ export default class App extends Component<object, State> {
         };
       })(),
       W, H, leaves, stageRef: this.stageRef, fileRef: this.fileRef,
-      bookTransform: `rotateX(${(tilt * (1 - fz) + 3 * fz).toFixed(2)}deg) translateX(${shift}px)`,
+      // Zoomed in, the page is centred on the whole screen rather than on the book area below the title.
+      bookTransform: `translateY(${((s.vh / 2 - ((s.st ?? 0) + (s.sh || s.vh) / 2)) * fz).toFixed(1)}px) rotateX(${(tilt * (1 - fz) + 3 * fz).toFixed(2)}deg) translateX(${shift}px)`,
       shadowLeft: -W * clamp01(p), shadowW: W * (clamp01(p) + clamp01(N - p)),
       emptyOp: !images.length && !other && !sw ? 1 : 0,
       onDown: (e: PointerEvent) => {
