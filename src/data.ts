@@ -32,35 +32,12 @@ export interface Book {
   createdAt?: number;
 }
 
-/** Someone else's sketchbook (or a sample one): read-only. `likes` drives the Featured sort. */
+/** Someone else's sketchbook: read-only. `likes` drives the Featured sort. */
 export interface OtherBook {
   id: string; idx: number; shape: ShapeKey; likes: number; artist: string; name: string;
   color: string; images: string[]; pages: number; initials: string; coverImg?: string | null;
   ownerId?: string; updatedAt?: number;
 }
-
-export const EXPLORE: OtherBook[] = ([
-  ['Mira Okafor', 'night market', '#e8542f'], ['Jun Park', 'studies 03', '#2f4a7a'], ['Tomás Reyes', 'birds of lisbon', '#3f7a5a'], ['Elif Kaya', 'figure drawing', '#b8243a'],
-  ['Noor Haddad', 'ink only', '#1f1f24'], ['Sam Lindqvist', 'commute', '#d9a42b'], ['Ana Ruiz', 'plants & pots', '#6b4fa0'], ['Kofi Mensah', 'summer 26', '#c8643c'],
-] as const).map(([artist, name, color], i) => ({
-  id: 'x' + i, idx: i,
-  shape: (['portrait', 'landscape', 'square', 'pocket', 'portrait', 'panorama', 'square', 'landscape'] as ShapeKey[])[i],
-  likes: [2410, 860, 1530, 3120, 640, 1980, 1190, 420][i],
-  artist, name, color, images: [], pages: 12 + (i % 3) * 8,
-  initials: artist.split(' ').map(w => w[0]).join(''),
-}));
-
-/** handle, location, bio, extra sketchbook names */
-export const ARTISTS: Record<string, [string, string, string, string[]]> = {
-  'Mira Okafor': ['miraok', 'Lagos → Berlin', 'Street food, neon and the people who stay up late. Mostly gouache.', ['market mornings', 'lagos 25']],
-  'Jun Park': ['junpark', 'Seoul', 'Daily studies. Hands, folds, light on concrete.', ['studies 02', 'studies 01']],
-  'Tomás Reyes': ['tomasdraws', 'Lisbon', 'Birds, rooftops and tiles from my window.', ['azulejos']],
-  'Elif Kaya': ['elifkaya', 'Istanbul', 'Life drawing every Thursday. Charcoal and red pencil.', ['gesture 60s', 'portraits', 'café regulars']],
-  'Noor Haddad': ['noor.ink', 'Amman', 'One brush pen, no pencils, no undo.', ['ink only ii']],
-  'Sam Lindqvist': ['samlq', 'Stockholm', 'Drawn on the 7:42 every weekday.', ['commute 25', 'platforms']],
-  'Ana Ruiz': ['anaruiz', 'Mexico City', 'Houseplants and the pots they live in. Watercolor.', ['succulents']],
-  'Kofi Mensah': ['kofim', 'Accra', 'Beaches, buses and summer light.', ['harmattan']],
-};
 
 /** Cover width (% of its grid cell) per shape, so books in a row read as a shelf. */
 export const GRID_WIDTH: Record<ShapeKey, number> = { pocket: 64, portrait: 78, square: 88, landscape: 100, panorama: 100 };

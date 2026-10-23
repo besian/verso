@@ -1,6 +1,6 @@
 // Firebase: Auth (email + password), Firestore (profiles, handles, books, follows) and
 // Storage (page images, covers, avatars). Configured from VITE_FIREBASE_* env vars; when
-// they're missing the app still runs signed-out with the sample sketchbooks.
+// they're missing the app still runs, signed out and without community books.
 import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported as analyticsSupported } from 'firebase/analytics';
 import {

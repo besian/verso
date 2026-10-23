@@ -88,6 +88,9 @@ export function Landing({ v }: { v: V }) {
       <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ overflowX: 'auto', overflowY: 'hidden', paddingTop: 48 }}>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: v.ldShelfJust, gap: v.ldShelfGap, width: 'max-content', minWidth: '100%', boxSizing: 'border-box', padding: '0 12px', borderBottom: `1px solid ${INK}` }}>
+            {!v.ldShelf.length && (
+              <div onClick={v.openMe} className={hover(`border-color:${MARK};color:${MARK}`)} style={{ width: 168, height: 232, margin: '0 auto', boxSizing: 'border-box', border: '2px dashed rgba(34,35,32,.35)', borderBottom: 'none', borderRadius: '2px 8px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 16, cursor: 'pointer', color: 'rgba(34,35,32,.7)', font: `400 22px/1.1 ${SERIF}` }}>Your sketchbook<br />goes here</div>
+            )}
             {v.ldShelf.map((sh: V) => (
               <div key={sh.key} onClick={sh.open} title={sh.title} className={hover('transform:translateY(-14px)')} style={{ position: 'relative', flexShrink: 0, width: sh.w, height: sh.h, transform: `rotate(${sh.rot}deg)`, transformOrigin: '50% 100%', cursor: 'pointer', transition: 'transform .5s cubic-bezier(.2,.8,.2,1)' }}>
                 <ClosedBook size="sm" bg={sh.bg} board={sh.color} label={sh.showLabel ? sh.name : null} labelStyle={{ padding: '6px 8px', font: `400 ${sh.fs}px/1.1 ${SERIF}` }} />
@@ -95,7 +98,7 @@ export function Landing({ v }: { v: V }) {
             ))}
           </div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', ...label() }}><span>From the community — open any book to leaf through it</span><span>No account needed to look</span></div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', ...label() }}>{v.ldShelf.length ? <><span>From the community — open any book to leaf through it</span><span>No account needed to look</span></> : <><span>The shelf is empty — be the first to put a sketchbook on it</span><span>Free to join</span></>}</div>
       </section>
       <section style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
         <div style={{ display: 'flex', gap: 16, alignItems: 'baseline' }}><span style={label(MARK)}>How it works</span></div>
@@ -142,20 +145,28 @@ export function Home({ v }: { v: V }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, width: '100%', maxWidth: 520, justifySelf: v.hmHeroJustify }}>
           <div style={label()}>On the desk this week</div>
           {v.hmHero.map((b: V) => <PanelCard key={b.key} b={b} labelFs={18} nameFs={30} />)}
+          {v.hmEmpty && (
+            <div onClick={v.startOwn} style={{ display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer' }}>
+              <div style={{ aspectRatio: '4/5', background: CANVAS, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div className={hover(`border-color:${MARK};color:${MARK}`)} style={{ width: '58%', aspectRatio: '.72', boxSizing: 'border-box', border: '2px dashed rgba(34,35,32,.35)', borderRadius: '2px 8px 8px 2px', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 16, color: 'rgba(34,35,32,.7)', font: `400 22px/1.1 ${SERIF}` }}>Nothing on the desk yet</div>
+              </div>
+              <div style={{ fontSize: 13, color: MUTED }}>No one has shared a sketchbook yet. Start yours and it could be the first one here.</div>
+            </div>
+          )}
         </div>
       </section>
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+      {v.hmFeat.length > 0 && <section style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
         <SectionHead n="01" title="Featured sketchbooks" onAll={v.goExplore} />
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${v.hmFeatCols},minmax(0,1fr))`, gap: '48px 28px' }}>
           {v.hmFeat.map((b: V) => <PanelCard key={b.key} b={b} labelFs={15} nameFs={27} />)}
         </div>
-      </section>
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+      </section>}
+      {v.hmComm.length > 0 && <section style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
         <SectionHead n="02" title="From the community" onAll={v.goExplore} />
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${v.hmCommCols},minmax(0,1fr))`, gap: '48px 24px' }}>
           {v.hmComm.map((b: V) => <PanelCard key={b.key} b={b} labelFs={13} nameFs={25} />)}
         </div>
-      </section>
+      </section>}
       <Footer />
     </Page>
   );

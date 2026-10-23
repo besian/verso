@@ -2,7 +2,7 @@
 
 Vite + React app. Accounts use Firebase Authentication (email + password); profiles, books and
 follows are in Cloud Firestore; page images, covers and avatars are in Cloud Storage. Without
-Firebase config the site still runs signed-out with sample sketchbooks.
+Firebase config the site still runs, signed out and without community books.
 
 ## Run locally
 

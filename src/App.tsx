@@ -1,6 +1,6 @@
 import { Component, createRef } from 'react';
 import type { ChangeEvent, DragEvent, MouseEvent, PointerEvent, WheelEvent } from 'react';
-import { ARTISTS, CONFIG, EXPLORE, GRID_WIDTH, PALETTE, PANEL_WIDTH, SHAPES } from './data';
+import { CONFIG, GRID_WIDTH, PALETTE, PANEL_WIDTH, SHAPES } from './data';
 import type { Account, Book, OtherBook, Shape, ShapeKey } from './data';
 import * as api from './backend';
 import type { AuthUser, BookDoc } from './backend';
@@ -12,7 +12,7 @@ import { Editor, EditProfile, Manager, NewBookPicker } from './views/Overlays';
 
 export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth';
 type AnyBook = Book | OtherBook;
-/** Whose profile is open: a real user (uid) or one of the sample artists (name only). */
+/** Whose profile is open; name shows while the profile loads. */
 type Who = { name: string; uid?: string };
 type PublicProfile = Omit<Account, 'uid' | 'email'>;
 // Everything a view reads: computed styles/labels plus handlers (mirrors the design's template bindings).
@@ -131,8 +131,7 @@ export default class App extends Component<object, State> {
       this.setState({ community });
     }).catch(e => console.error(e));
   }
-  /** Real community books once there are any; until then the sample sketchbooks. */
-  community(): OtherBook[] { const c = this.state.community; return c && c.length ? c : EXPLORE; }
+  community(): OtherBook[] { return this.state.community || []; }
   componentWillUnmount() {
     removeEventListener('resize', this.onResize); removeEventListener('keydown', this.onKey);
     this.unAuth?.(); this.ro?.disconnect(); cancelAnimationFrame(this.raf); cancelAnimationFrame(this.exRaf);
@@ -362,8 +361,7 @@ export default class App extends Component<object, State> {
 
   // ---------- explore ----------
   exSorted() {
-    // Explore lists real sketchbooks only; the samples remain on the home pages until the community grows.
-    const q = (this.state.exQ || '').trim().toLowerCase(), l = (this.state.community || []).filter(b => !q || (b.name + ' ' + b.artist).toLowerCase().includes(q));
+    const q = (this.state.exQ || '').trim().toLowerCase(), l = this.community().filter(b => !q || (b.name + ' ' + b.artist).toLowerCase().includes(q));
     if ((this.state.exSort || 'trending') === 'trending') return l.sort((a, b) => b.likes - a.likes);
     return l[0]?.updatedAt ? l.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)) : l.reverse();
   }
@@ -389,7 +387,7 @@ export default class App extends Component<object, State> {
     const sel = list.slice(0, 6), gap = mob ? 16 : 28, rel = sel.map(b => { const s = this.shapeOf(b); return { s, w: s.s * s.a }; }), sumW = rel.reduce((t, r) => t + r.w, 0);
     const avail = Math.min(vw, 1320) - 2 * (mob ? 16 : 40) - 24 - gap * (sel.length - 1), base = mob ? 170 : Math.max(150, Math.min(300, avail / sumW));
     return {
-      hmHero: [mk(list[0])], hmFeat: list.slice(1, 4).map(mk), hmComm: list.slice(4).map(mk),
+      hmEmpty: !!this.state.community && !list.length, hmHero: list.slice(0, 1).map(mk), hmFeat: list.slice(1, 4).map(mk), hmComm: list.slice(4).map(mk),
       hmPadT: mob ? 96 : 140, hmPadX: mob ? 16 : 40, hmHeroCols: tab ? 'minmax(0,1fr)' : 'minmax(0,7fr) minmax(0,5fr)', hmHeroJustify: tab ? 'start' : 'end', hmH1: mob ? 58 : tab ? 92 : 120,
       hmFeatCols: mob ? 1 : 3, hmCommCols: mob || tab ? 2 : 4, hmGap: mob ? 72 : 120,
       ldShelf: sel.map((b, i) => {
@@ -418,21 +416,13 @@ export default class App extends Component<object, State> {
         joined: 'Joined ' + new Date(a.joined || Date.now()).toLocaleDateString('en', { month: 'short', year: 'numeric' }),
         stats: [[s.books.length, s.books.length === 1 ? 'sketchbook' : 'sketchbooks'], [s.books.reduce((t, b) => t + b.images.length, 0), 'pages']],
       };
-    } else if (s.profileOf!.uid) {
+    } else {
       const who = s.profileOf!, pf = s.pf?.uid === who.uid ? s.pf : null, pr = pf?.profile, bks = pf?.books || [];
-      folOn = follows.includes(who.uid!);
+      folOn = !!who.uid && follows.includes(who.uid);
       list = bks.map(b => card(b, this.coverBg(b), !b.coverImg, b.likes, () => this.openOtherBook(b)));
       p = { name: pr?.name || who.name, handle: pr?.handle, bio: pr?.bio, loc: pr?.loc, web: pr?.web, accent: pr?.accent, av: pr?.av,
         joined: pr ? 'Joined ' + new Date(pr.joined).toLocaleDateString('en', { month: 'short', year: 'numeric' }) : '',
         stats: [[bks.length, bks.length === 1 ? 'sketchbook' : 'sketchbooks'], [bks.reduce((t, b) => t + b.likes, 0), 'pages']] };
-    } else {
-      const nm = s.profileOf!.name, b0 = EXPLORE.find(b => b.artist === nm) || EXPLORE[0], info = ARTISTS[nm] || [slug(nm), '', '', []];
-      folOn = follows.includes(nm);
-      const shapeKeys = Object.keys(SHAPES) as ShapeKey[];
-      const bks: OtherBook[] = [b0, ...info[3].map((n, k) => ({ ...b0, id: b0.id + '-' + k, name: n, color: PALETTE[(b0.idx + k + 2) % PALETTE.length], shape: shapeKeys[(b0.idx + k + 1) % 5], pages: 16 + k * 8 }))];
-      list = bks.map(b => card(b, b.color, true, b.pages, () => this.openOtherBook(b)));
-      p = { name: nm, handle: info[0], bio: info[2], loc: info[1], accent: b0.color, joined: 'Joined ' + (2021 + b0.idx % 4),
-        stats: [[bks.length, bks.length === 1 ? 'sketchbook' : 'sketchbooks'], [bks.reduce((t, b) => t + b.pages, 0), 'pages']] };
     }
     const pad = mob ? 16 : 40, web = (p.web || '').trim();
     return {
@@ -448,12 +438,12 @@ export default class App extends Component<object, State> {
       togglePreview: () => this.setState(st => ({ pfPreview: !st.pfPreview })),
       pfNew: this.openNewPick,
       folLbl: folOn ? 'Following' : 'Follow', folBg: folOn ? 'transparent' : MARK, folFg: folOn ? INK : PAPER, folBd: folOn ? 'rgba(34,35,32,.5)' : MARK,
-      // Follows of real artists are saved; the sample artists have no account, so following them only lasts this visit.
       toggleFollow: () => {
         if (!s.acct) return this.openJoin();
-        const who = s.profileOf!, key = who.uid || who.name, on = !follows.includes(key);
+        const key = s.profileOf?.uid; if (!key) return;
+        const on = !follows.includes(key);
         this.setState({ follows: on ? [...follows, key] : follows.filter(x => x !== key) });
-        if (who.uid) api.setFollow(s.acct.uid, who.uid, on).catch(e => { console.error(e); this.setState(st => ({ follows: on ? st.follows.filter(x => x !== key) : [...st.follows, key] })); });
+        api.setFollow(s.acct.uid, key, on).catch(e => { console.error(e); this.setState(st => ({ follows: on ? st.follows.filter(x => x !== key) : [...st.follows, key] })); });
       },
     };
   }
