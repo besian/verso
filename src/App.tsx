@@ -25,6 +25,8 @@ interface EditState {
 
 interface State {
   mode?: Mode;
+  /** False until the first auth check (and, when signed in, the user's books) has finished. */
+  authReady?: boolean;
   acct: Account | null; follows: string[];
   books: Book[]; active: number; images: string[];
   other?: AnyBook | null; profileOf?: Who | null; pfPreview?: boolean;
@@ -110,7 +112,7 @@ export default class App extends Component<object, State> {
   async loadUser(u: AuthUser | null, acct?: Account) {
     if (!u) {
       this.synced.clear(); this.dirty.clear();
-      return this.setState({ acct: null, follows: [], books: [localBook()], active: 0, images: [], p: 0 });
+      return this.setState({ acct: null, follows: [], books: [localBook()], active: 0, images: [], p: 0, authReady: true });
     }
     try {
       const a = acct || await api.ensureProfile(u);
@@ -120,9 +122,12 @@ export default class App extends Component<object, State> {
       const fresh = !books.length;
       if (fresh) books = [{ id: api.newBookId(), name: 'sketchbook', color: '#b8243a', images: [], createdAt: Date.now() }];
       this.target = 0;
-      this.setState({ acct: a, follows, books, active: 0, images: books[0].images, p: 0 }, () => { if (fresh) this.persist(books); });
+      // Signed-in visitors start on their own sketchbooks rather than the home page.
+      this.setState(s => ({ acct: a, follows, books, active: 0, images: books[0].images, p: 0, authReady: true, mode: !s.mode || s.mode === 'home' || s.mode === 'auth' ? 'mine' : s.mode }),
+        () => { if (fresh) this.persist(books); });
     } catch (e) {
       console.error(e);
+      this.setState({ authReady: true });
     }
   }
   loadCommunity() {
@@ -773,6 +778,8 @@ export default class App extends Component<object, State> {
   }
 
   render() {
+    // Blank paper until we know whether someone is signed in, so the landing page doesn't flash first.
+    if (!this.state.authReady) return <div style={{ position: 'fixed', inset: 0, background: PAPER }} />;
     const mode = this.state.mode || 'home';
     const v: V = {
       ...this.editorVals(),
