@@ -850,7 +850,9 @@ export default class App extends Component<object, State> {
     const { vw, vh } = this.state, mob = vw < 640;
     // Signed in and following someone: the shelf shows their latest books first.
     const feed = this.state.acct ? (this.state.followFeed || []).filter(b => !(this.state.blocked || []).includes(b.ownerId || '')) : [];
-    const list = feed.length ? feed : [...this.community()].sort((a, b) => b.likes - a.likes);
+    // Books from people you follow come first; the rest of the shelf is filled from the community.
+    const seen = new Set(feed.map(b => b.id));
+    const list = [...feed, ...[...this.community()].filter(b => !seen.has(b.id) && b.ownerId !== this.state.acct?.uid).sort((a, b) => b.likes - a.likes)];
     // One screen: the shelf takes what height is left after the headline block, and its books
     // shrink further if they'd be wider than the page.
     const sel = list.slice(0, mob ? 5 : 10), gap = mob ? 10 : 16, shapes = sel.map(b => this.shapeOf(b)), sumW = shapes.reduce((t, sh) => t + sh.s * sh.a, 0);
@@ -858,7 +860,7 @@ export default class App extends Component<object, State> {
     const maxH = mob ? Math.max(90, Math.min(170, vh * 0.21)) : Math.max(110, Math.min(290, vh * 0.29));
     const base = sumW ? Math.min(maxH, avail / sumW) : maxH;
     return {
-      hmFollowing: feed.length > 0, hmMob: mob, hmPadX: mob ? 16 : 40, hmPadT: mob ? 70 : 84, hmEmpty: !!this.state.community && !list.length, hmShelfGap: gap, hmShelfH: Math.round(base),
+      hmFollowing: feed.length > 0, hmMixed: feed.length > 0 && feed.length < sel.length, hmMob: mob, hmPadX: mob ? 16 : 40, hmPadT: mob ? 70 : 84, hmEmpty: !!this.state.community && !list.length, hmShelfGap: gap, hmShelfH: Math.round(base),
       hmShelf: sel.map((b, i) => {
         const hh = Math.round(base * shapes[i].s);
         return { key: b.id, name: b.name, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, title: b.name + ' — ' + b.artist, h: hh, w: Math.round(hh * shapes[i].a), fs: Math.max(11, Math.round(hh / 17)), rot: [0, -2, 0, 1.5, 0, -1, 1, 0, -1.5, 1][i] || 0, open: () => this.openOtherBook(b) };

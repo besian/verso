@@ -57,7 +57,7 @@ export function HomeScreen({ v }: { v: V }) {
           </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, ...label() }}>
-          <span>{v.hmFollowing ? (mob ? 'From artists you follow' : 'New from artists you follow') : v.hmShelf.length ? (mob ? 'From the community' : 'From the community — open any book to leaf through it') : 'The shelf is empty — yours could be first'}</span>
+          <span>{v.hmMixed ? (mob ? 'Artists you follow & more' : 'New from artists you follow and the community') : v.hmFollowing ? (mob ? 'From artists you follow' : 'New from artists you follow') : v.hmShelf.length ? (mob ? 'From the community' : 'From the community — open any book to leaf through it') : 'The shelf is empty — yours could be first'}</span>
           {v.hmShelf.length > 0 && <button onClick={v.goExplore} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap', ...label(INK) }}>View all →</button>}
         </div>
       </section>
