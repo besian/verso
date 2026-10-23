@@ -221,6 +221,11 @@ export function Manager({ v }: { v: V }) {
                       {!v.mgTagFull && <input value={v.tagDraft} onChange={v.onTagDraft} onKeyDown={v.onTagKey} onBlur={v.commitTag} placeholder={v.mgTags.length ? 'Add a tag' : 'Add tags'} aria-label="Add a tag" style={{ flex: 1, minWidth: 120, height: 30, border: 'none', outline: 'none', background: 'none', color: INK, font: `500 14px ${SANS}` }} />}
                     </div>
                   </Row>
+                  <Row label="This week’s prompt" note="A new theme every Monday. Joining adds its tag, so your sketchbook shows up with everyone else’s in Explore.">
+                    {v.mgPromptIn
+                      ? <span style={{ fontSize: 14 }}>You’re in: <b style={{ fontWeight: 600 }}>#{v.mgPromptTag}</b></span>
+                      : <button onClick={v.mgJoinPrompt} className={hoverTint} style={{ ...ghostBtn, alignSelf: 'flex-start', height: 38, padding: '0 14px' }}>Join “{v.mgPrompt}”</button>}
+                  </Row>
                   <button onClick={v.deleteBook} className={hover('text-decoration:underline')} style={{ ...linkBtn(MARK), alignSelf: 'flex-start', padding: '4px 0' }}>Delete this sketchbook</button>
                 </>
               )}
@@ -511,6 +516,23 @@ export function Welcome({ v }: { v: V }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Embed code for putting a sketchbook on another website. */
+export function EmbedModal({ v }: { v: V }) {
+  return (
+    <Modal onClose={e => { if (e.target === e.currentTarget) v.emClose(); }} pad={v.mModalPad} maxWidth={560}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={heading}>Embed “{v.emTitle}”</div>
+        <div style={{ fontSize: 14, lineHeight: 1.5, color: 'rgba(var(--ink-rgb),.7)' }}>Paste this into your website or portfolio (an HTML or embed block). Visitors can turn the pages right there. Only public sketchbooks can be embedded.</div>
+      </div>
+      <textarea readOnly value={v.emCode} onFocus={e => e.currentTarget.select()} rows={4} style={{ ...field, height: undefined, padding: '12px 14px', font: `500 12px/1.5 ui-monospace, Menlo, monospace`, resize: 'none' }} />
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+        <button onClick={v.emClose} className={hoverTint} style={{ ...ghostBtn, height: 44, padding: '0 18px', fontSize: 14 }}>Close</button>
+        <button onClick={v.emCopy} style={{ height: 44, padding: '0 22px', borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer' }}>Copy code</button>
+      </div>
+    </Modal>
   );
 }
 

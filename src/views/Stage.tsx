@@ -130,11 +130,22 @@ function Title({ v }: { v: V }) {
             {v.isMine && <span title="Likes">♥ {v.bkLikes}</span>}
             {v.isOther && <button onClick={v.bkSave} aria-pressed={v.bkSaved} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, color: v.bkSaved ? MARK : INK }}>{v.bkSaved ? 'Saved' : 'Save'}</button>}
             <button onClick={v.bkShare} className={'tap ' + hover(`color:${MARK}`)} style={actLink}>Share</button>
+            <button onClick={v.bkEmbed} className={'tap ' + hover(`color:${MARK}`)} style={actLink}>Embed</button>
             {v.isOther && <MoreMenu open={v.bkMoreOpen} onToggle={v.bkMore} items={[{ label: 'Report sketchbook', onClick: v.bkReport }, { label: v.bkBlockLbl, onClick: v.bkBlock, danger: true }]} />}
           </div>
         )}
       </div>
       {v.multi && <button onClick={v.nextBook} title="Next sketchbook" style={{ ...arrowBtn, opacity: v.nextOp }}>›</button>}
+    </div>
+  );
+}
+
+/** Inside an embed: the sketchbook's name and artist, linking back to verso. */
+function EmbedTitle({ v }: { v: V }) {
+  return (
+    <div style={{ marginTop: 14, padding: '0 14px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, textAlign: 'center', opacity: v.uiOp, pointerEvents: v.uiPE, maxWidth: '100%', boxSizing: 'border-box' }}>
+      <div style={{ ...{ font: `400 ${v.notMob ? 30 : 24}px/1.1 ${SERIF}` }, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.titleName}</div>
+      <a href={v.embedHref} target="_blank" rel="noopener" style={{ ...label(INK, 10), textDecoration: 'none' }}>by {v.artist} · open on verso<span style={{ color: MARK }}>.</span> ↗</a>
     </div>
   );
 }
@@ -305,8 +316,8 @@ export default function Stage({ v, children }: { v: V; children: ReactNode }) {
           <div style={{ ...fill, background: 'rgba(var(--paper-rgb),.74)' }} />
         </div>
       )}
-      <TopBar v={v} />
-      <Title v={v} />
+      {!v.embed && <TopBar v={v} />}
+      {v.embed ? <EmbedTitle v={v} /> : <Title v={v} />}
       <div ref={v.stageRef} onPointerDown={v.onDown} onPointerMove={v.onMove} onPointerUp={v.onUp} onPointerCancel={v.onUp} onWheel={v.onWheel} style={{ position: 'relative', flex: 1, minHeight: 0, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', perspective: 2200, cursor: 'grab', touchAction: 'none' }}>
         <Carousel v={v} />
         <Book3D v={v} />
@@ -315,7 +326,7 @@ export default function Stage({ v, children }: { v: V; children: ReactNode }) {
       {v.swipeHint && <SwipeHint v={v} />}
       <Controls v={v} />
       <div style={{ height: 'var(--tabbar)', flexShrink: 0 }} />
-      {v.notMob && (v.isMine || v.isOther) && <KeyGuide v={v} />}
+      {v.notMob && (v.isMine || v.isOther) && !v.embed && <KeyGuide v={v} />}
       {v.showHandle && <button onClick={v.toggleMenu} className={hover('background:rgba(var(--paper-rgb),.95)')} style={{ position: 'absolute', right: 24, bottom: 24, zIndex: 3, height: 34, padding: '0 14px', borderRadius: 2, border: 'none', background: 'rgba(var(--paper-rgb),.75)', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>{v.handleLbl}</button>}
       {v.showRail && (
         <div style={{ position: 'absolute', right: 20, top: '50%', transform: 'translateY(-50%)', zIndex: 3, display: 'flex', flexDirection: 'column', gap: 10, padding: 6, borderRadius: 2, background: 'rgba(var(--paper-rgb),.7)', opacity: v.railOp }}>

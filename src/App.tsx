@@ -8,6 +8,7 @@ import * as store from './storage';
 import * as sound from './sound';
 import * as themeMode from './themeMode';
 import * as installer from './install';
+import { currentPrompt } from './prompts';
 import { COVER_INSIDE, pageWear } from './wear';
 import { ADJUSTERS, NO_ADJUST, applyToCanvas, feValues, isAdjusted } from './adjust';
 import type { Adjust } from './adjust';
@@ -16,7 +17,7 @@ import { INK, MARK, PAPER, STONE } from './theme';
 import Stage from './views/Stage';
 import { AuthPage, Explore, HomeScreen, Profile, Settings } from './views/Screens';
 import { Admin, Legal, NotFound } from './views/Pages';
-import { Editor, EditProfile, Manager, NewBookPicker, ReportModal, Toast, Welcome } from './views/Overlays';
+import { Editor, EditProfile, EmbedModal, Manager, NewBookPicker, ReportModal, Toast, Welcome } from './views/Overlays';
 
 export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound';
 /** A report with what it points at, for the moderation page. */
@@ -67,6 +68,10 @@ interface State {
   banned?: string[]; admin?: boolean; adReports?: AdminItem[] | null; adBusy?: string; adErr?: string;
   /** Resend on the confirm-email reminder rests until this time. */
   vfUntil?: number;
+  /** Saved tab: the collection shown ('' = all), and collections made but still empty. */
+  pfCol?: string; newCols?: string[];
+  /** Shown inside an iframe on someone's site (/embed/<id>): just the book. And the embed-code dialog. */
+  embed?: boolean; embedFor?: { id: string; title: string } | null;
   tagDraft?: string; soundOn?: boolean; dark?: boolean; welcome?: boolean;
   /** Shared sketchbooks: invitations waiting for an answer, and the invite form on the Pages screen. */
   invites?: BookDoc[]; shDraft?: string; shBusy?: boolean; shErr?: string;
@@ -247,6 +252,14 @@ export default class App extends Component<object, State> {
   notFound(nf: string) { cancelAnimationFrame(this.raf); this.target = 0; this.setState(s => ({ mode: 'notfound', nf, other: null, images: s.books[s.active].images, p: 0, focus: false, fz: 0, managing: false })); }
   openLegal(legal: 'privacy' | 'terms') { cancelAnimationFrame(this.raf); this.setState({ mode: 'legal', legal, other: null, focus: false, fz: 0, managing: false, draft: null }); }
   openAdmin() { cancelAnimationFrame(this.raf); this.setState({ mode: 'admin', other: null, focus: false, fz: 0, managing: false, draft: null }); if (this.state.admin) this.loadReports(); }
+  collections(): string[] { return [...new Set([...(this.state.saved || []).map(x => x.col || '').filter(Boolean), ...(this.state.newCols || [])])].sort((a, b) => a.localeCompare(b)); }
+  moveSaved(id: string, col: string) {
+    const a = this.state.acct; if (!a) return;
+    if (col === '__new') { const n = (window.prompt('Name your collection') || '').trim().slice(0, 40); if (!n) return; col = n; }
+    this.setState(st => ({ saved: (st.saved || []).map(x => x.id === id ? { ...x, col } : x) }));
+    this.toast(col ? `Moved to ${col}` : 'Removed from the collection');
+    api.setCollection(a.uid, id, col).catch(e => { console.error(e); this.toast('Couldn’t move that. Try again.'); });
+  }
   isSaved(id?: string) { return !!id && (this.state.saved || []).some(x => x.id === id); }
   toggleSave(b: OtherBook) {
     const a = this.state.acct; if (!a) return this.openJoin();
@@ -378,7 +391,7 @@ export default class App extends Component<object, State> {
       case 'admin': return '/admin';
       case 'notfound': return here;
       case 'mine': { const b = s.books[s.active]; return s.acct && b && !b.id.startsWith('local') ? '/sketchbooks/' + b.id : '/sketchbooks'; }
-      case 'other': { const o = s.other as OtherBook | null; return o?.handle ? `/@${o.handle}/${o.id}` : here; }
+      case 'other': { const o = s.other as OtherBook | null; if (s.embed && o) return '/embed/' + o.id; return o?.handle ? `/@${o.handle}/${o.id}` : here; }
       case 'profile': {
         if (!s.profileOf) return s.acct ? '/@' + s.acct.handle : '/';
         const h = (s.pf?.uid === s.profileOf.uid && s.pf?.profile?.handle) || s.profileOf.handle;
@@ -408,6 +421,11 @@ export default class App extends Component<object, State> {
         return this.setLabel(m ? 'm:' + m : t ? 't:' + tagSlug(t) : '');
       }
       if (a === 'privacy' || a === 'terms') return this.openLegal(a);
+      if (a === 'embed' && b) {
+        const d = await api.getBook(b);
+        if (!d) return this.notFound('sketchbook');
+        this.setState({ embed: true }); return this.openOtherBook(toOther(d, 0));
+      }
       if (a === 'admin') return s.acct ? this.openAdmin() : this.openAuth('signin');
       if (a === 'signin' || a === 'join' || a === 'reset') { if (s.acct) return this.goMode('mine'); this.openAuth(a === 'join' ? 'join' : 'signin'); if (a === 'reset') this.setState({ suMode: 'reset' }); return; }
       if (a === 'settings') return s.acct ? this.openSettings() : this.openAuth('signin');
@@ -865,6 +883,7 @@ export default class App extends Component<object, State> {
         const hh = Math.round(base * shapes[i].s);
         return { key: b.id, name: b.name, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, title: b.name + ' — ' + b.artist, h: hh, w: Math.round(hh * shapes[i].a), fs: Math.max(11, Math.round(hh / 17)), rot: [0, -2, 0, 1.5, 0, -1, 1, 0, -1.5, 1][i] || 0, open: () => this.openOtherBook(b) };
       }),
+      hmPrompt: currentPrompt().word, hmPromptOpen: () => this.openLabel('t:' + currentPrompt().tag),
       startOwn: () => { if (!this.state.acct) return this.openProfile(null); this.goMode('mine'); this.openNewPick(); },
     };
   }
@@ -880,7 +899,7 @@ export default class App extends Component<object, State> {
     if (mine) {
       const tab = pv ? 'books' : s.pfTab || 'books';
       list = tab === 'saved'
-        ? (s.saved || []).filter(x => !(s.blocked || []).includes(x.ownerId)).map(x => ({ ...card({ id: x.id, name: x.name, color: x.color, shape: x.shape, coverImg: x.cover, images: [] } as Book, x.cover ? `url("${x.cover}") center/cover no-repeat ${x.color}` : x.color, !x.cover, 0, () => this.openBookById(x.id)), count: `by ${x.ownerName}` }))
+        ? (s.saved || []).filter(x => !(s.blocked || []).includes(x.ownerId) && (!s.pfCol || (x.col || '') === s.pfCol)).map(x => ({ ...card({ id: x.id, name: x.name, color: x.color, shape: x.shape, coverImg: x.cover, images: [] } as Book, x.cover ? `url("${x.cover}") center/cover no-repeat ${x.color}` : x.color, !x.cover, 0, () => this.openBookById(x.id)), count: `by ${x.ownerName}`, col: x.col || '', moveTo: (col: string) => this.moveSaved(x.id, col) }))
         : tab === 'following' ? []
         : s.books.map((b, j) => card(b, this.coverBg(b), !b.coverImg, b.images.length, () => { cancelAnimationFrame(this.raf); this.target = 0; this.setState({ mode: 'mine', profileOf: null, active: j, images: b.images, p: 0, other: null }); }));
       p = {
@@ -919,7 +938,11 @@ export default class App extends Component<object, State> {
         const uid = s.profileOf?.uid || '', blockedOn = !!uid && (s.blocked || []).includes(uid), name = p.name || 'this artist', handle = p.handle || s.profileOf?.handle;
         return {
           pfTabs: mine && !pv ? ([['books', 'Sketchbooks', s.books.length], ['saved', 'Saved', (s.saved || []).length], ['following', 'Following', (s.follows || []).length]] as const).map(([k, l, n]) => ({ key: k, label: l, n, on: tab === k, pick: () => setTab(k) })) : null,
-          pfTab: tab, pfEmptyNote: tab === 'saved' ? 'Save sketchbooks you love with ♡ Save. Only you can see this list.' : '',
+          pfTab: tab, pfEmptyNote: tab === 'saved' ? (s.pfCol ? `Nothing in “${s.pfCol}” yet. Use the menu under a saved sketchbook to move it here.` : 'Save sketchbooks you love with Save. Only you can see this list.') : '',
+          // Collections: shelves for saved sketchbooks (private, like Saved).
+          pfColl: tab === 'saved' ? this.collections() : null, pfColOn: s.pfCol || '',
+          pfPickCol: (c: string) => this.setState({ pfCol: c }),
+          pfNewCol: () => { const n = (window.prompt('Name your collection (e.g. Inspiration, Ink, Faces)') || '').trim().slice(0, 40); if (n) this.setState(st => ({ newCols: [...new Set([...(st.newCols || []), n])], pfCol: n })); },
           pfPeople: tab === 'following' ? (s.followPeople || []).map(x => ({ key: x.uid, name: x.name, handle: '@' + x.handle, avBg: avatarBg(x.av), init: x.av ? '' : ini(x.name), open: () => this.openProfile({ uid: x.uid, name: x.name, handle: x.handle }) })) : null,
           pfBlocked: blockedOn, pfUnblock: () => this.toggleBlock(uid, name),
           pfSuspended: !mine && !!uid && (s.banned || []).includes(uid),
@@ -1135,6 +1158,8 @@ export default class App extends Component<object, State> {
       exMediums: [{ key: '', label: 'All mediums', on: !s.exLabel?.startsWith('m:'), pick: () => this.setLabel('') },
         ...MEDIUMS.map(m => ({ key: m, label: m, on: s.exLabel === 'm:' + mediumKey(m), pick: () => this.setLabel(s.exLabel === 'm:' + mediumKey(m) ? '' : 'm:' + mediumKey(m)) }))],
       exTag: s.exLabel?.startsWith('t:') ? '#' + s.exLabel.slice(2) : '', clearLabel: () => this.setLabel(''),
+      exPrompt: s.exLabel === 't:' + currentPrompt().tag ? currentPrompt() : null, exPromptEnds: currentPrompt().ends.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' }),
+      exPromptJoin: () => { if (!s.acct) return this.openJoin(); this.goMode('mine'); this.setState({ managing: true }); setTimeout(() => this.setState({ mgTab: 'details' }), 0); },
       exCanMore: !s.exLabel && !!s.exMore, exBusy: !!s.exBusy, loadMore: () => this.loadCommunity(true),
       onExScroll: (e: { currentTarget: HTMLElement }) => { const el = e.currentTarget; if (!s.exLabel && el.scrollHeight - el.scrollTop - el.clientHeight < 700) this.loadCommunity(true); },
       stDir: mob ? 'column' : 'row', stGap: mob ? 4 : 48, stMaxW: mob ? '100%' : '60%', stFlex: mob ? '1 1 0' : '0 0 auto', stInfoGap: mob ? 4 : 10,
@@ -1387,7 +1412,14 @@ export default class App extends Component<object, State> {
       sideBooks, sbBase: `rotateX(${tilt}deg)`, ghostT: sideT(books.length), ghostW: ghostD.W, ghostH: ghostD.H, ghostTop: -ghostD.H / 2,
       newBook: this.openNewPick, stopPD: (e: PointerEvent) => e.stopPropagation(),
       vw: s.vw, isTouch: IS_TOUCH,
-      tabBar: m && !!s.acct && mode !== 'auth',
+      tabBar: m && !!s.acct && mode !== 'auth' && !s.embed,
+      embed: !!s.embed, embedHref: (() => { const o = other as OtherBook | null; return o ? `${location.origin}/@${o.handle}/${o.id}` : location.origin; })(),
+      // Embed code for a public sketchbook.
+      bkEmbed: () => { const o = other as OtherBook | null, mb = books[active]; const id = o?.id || mb?.id, title = o?.name || mb?.name; if (id && !id.startsWith('local')) this.setState({ embedFor: { id, title }, more: null }); },
+      emOpen: !!s.embedFor, emTitle: s.embedFor?.title || '',
+      emCode: s.embedFor ? `<iframe src="${location.origin}/embed/${s.embedFor.id}" title="${(s.embedFor.title || 'sketchbook').replace(/"/g, '&quot;')} on verso" width="100%" height="520" style="border:0;max-width:900px" loading="lazy" allowfullscreen></iframe>` : '',
+      emCopy: () => { const f = s.embedFor; if (!f) return; navigator.clipboard.writeText(`<iframe src="${location.origin}/embed/${f.id}" title="${(f.title || 'sketchbook').replace(/"/g, '&quot;')} on verso" width="100%" height="520" style="border:0;max-width:900px" loading="lazy" allowfullscreen></iframe>`).then(() => this.toast('Embed code copied'), () => this.toast('Select the code and copy it')); },
+      emClose: () => this.setState({ embedFor: null }),
       tbOn: mode === 'explore' || mode === 'other' ? 'explore' : mode === 'mine' ? 'mine' : mode === 'profile' && !s.profileOf ? 'me' : '',
       tbNew: () => { if (mode !== 'mine') this.goMode('mine'); this.openNewPick(); },
       swipeHint: IS_TOUCH && !s.hintDone && store.loadHints() < 3 && (mode === 'mine' || mode === 'other') && !s.focus && (images.length > 0 || !!other) && !s.switching,
@@ -1450,6 +1482,8 @@ export default class App extends Component<object, State> {
           } })),
           mgTags: tags.map(t => ({ key: t, label: '#' + t, remove: () => this.updateBook({ tags: (mine.tags || []).filter(x => x !== t) }) })),
           mgTagFull: tags.length >= MAX_TAGS, tagDraft: s.tagDraft || '',
+          mgPrompt: currentPrompt().word, mgPromptTag: currentPrompt().tag, mgPromptIn: tags.includes(currentPrompt().tag),
+          mgJoinPrompt: () => { const t = currentPrompt().tag, cur = this.state.books[this.state.active].tags || []; if (cur.includes(t)) return; if (cur.length >= MAX_TAGS) return this.toast(`Remove a tag first (up to ${MAX_TAGS})`); this.updateBook({ tags: [...cur, t] }); },
           onTagDraft: (e: ChangeEvent<HTMLInputElement>) => { const v = e.target.value; if (/[,\s]$/.test(v)) addTags(v); else this.setState({ tagDraft: v.slice(0, 30) }); },
           onTagKey: (e: { key: string; preventDefault(): void }) => {
             if (e.key === 'Enter') { e.preventDefault(); if (s.tagDraft) addTags(s.tagDraft); }
@@ -1567,6 +1601,7 @@ export default class App extends Component<object, State> {
         {v.isNotFound && <NotFound v={v} />}
         {v.isAdminPage && <Admin v={v} />}
         {v.reportOpen && <ReportModal v={v} />}
+        {v.emOpen && <EmbedModal v={v} />}
         {v.toastMsg && <Toast msg={v.toastMsg} />}
         {v.isAuth && <AuthPage v={v} />}
         {v.pfEditing && <EditProfile v={v} />}

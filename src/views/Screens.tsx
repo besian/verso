@@ -41,6 +41,9 @@ export function HomeScreen({ v }: { v: V }) {
             : <button onClick={v.startOwn} className={hoverLine} style={underlineBtn(15)}>Start your own →</button>}
         </div>
         {signedOut && <div style={{ fontSize: 13, color: STONE }}>Already a member? <button onClick={v.openSignin} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${STONE}`, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Sign in</button></div>}
+        <button onClick={v.hmPromptOpen} className={hover(`border-color:${MARK}`)} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, padding: '7px 14px', border: '1px solid rgba(var(--ink-rgb),.2)', borderRadius: 20, background: 'none', color: INK, cursor: 'pointer', font: `500 13px ${SANS}` }}>
+          <span style={label(MARK, 10)}>This week</span><span style={{ font: `italic 400 17px/1 ${SERIF}` }}>{v.hmPrompt}</span><span style={{ color: MUTED }}>→</span>
+        </button>
         {signedOut && <LegalLinks v={v} />}
       </section>
       <section style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10, paddingTop: mob ? 0 : 28 }}>
@@ -111,6 +114,16 @@ export function Explore({ v }: { v: V }) {
           {v.exTag && <button onClick={v.clearLabel} title="Clear tag" style={{ ...chipStyle(true), background: MARK, borderColor: MARK }}>{v.exTag} ×</button>}
           {v.exMediums.map((m: V) => <button key={m.key} onClick={m.pick} aria-pressed={m.on} className={m.on ? undefined : hover('border-color:rgba(var(--ink-rgb),.6)')} style={chipStyle(m.on && !v.exTag)}>{m.label}</button>)}
         </div>
+        {v.exPrompt && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px 20px', flexWrap: 'wrap', padding: '16px 18px', background: 'rgba(173,73,58,.06)', borderLeft: `2px solid ${MARK}` }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={label(MARK, 10)}>This week’s prompt · until {v.exPromptEnds}</span>
+              <span style={serif(v.notMob ? 34 : 28, 1.05)}><em>{v.exPrompt.word}</em></span>
+              <span style={{ fontSize: 13, color: MUTED }}>Draw it however you like, then add it from your sketchbook’s Details. Everyone’s pages for it are here.</span>
+            </div>
+            <button onClick={v.exPromptJoin} className={hoverMark} style={{ height: 40, padding: '0 18px', border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer' }}>Join with a sketchbook</button>
+          </div>
+        )}
         {v.exPeople?.length > 0 && (
           <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <span style={label()}>Artists</span>
@@ -212,6 +225,13 @@ function ShelfBook({ pb, zone }: { pb: V; zone: number }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
         <span style={{ ...serif(20, 1.15, 'normal'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pb.name}</span>
         <span style={{ fontSize: 13, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pb.count}</span>
+        {pb.moveTo && (
+          <select value={pb.col} onClick={e => e.stopPropagation()} onChange={e => pb.moveTo(e.target.value)} aria-label={`Collection for ${pb.name}`} style={{ marginTop: 4, maxWidth: '100%', height: 30, padding: '0 6px', border: '1px solid rgba(var(--ink-rgb),.2)', borderRadius: 2, background: PAPER, color: INK, font: `500 12px ${SANS}`, cursor: 'pointer' }}>
+            <option value="">No collection</option>
+            {pb.cols.map((c: string) => <option key={c} value={c}>{c}</option>)}
+            <option value="__new">New collection…</option>
+          </select>
+        )}
       </div>
     </div>
   );
@@ -295,6 +315,12 @@ export function Profile({ v }: { v: V }) {
               <button onClick={v.pfUnblock} className={hoverLine} style={underlineBtn(14)}>Unblock</button>
             </div>
           )}
+          {v.pfColl && (
+            <div role="group" aria-label="Collections" style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none' } as CSSProperties}>
+              {['', ...v.pfColl].map((c: string) => <button key={c || 'all'} onClick={() => v.pfPickCol(c)} aria-pressed={v.pfColOn === c} style={chipStyle(v.pfColOn === c)}>{c || 'All saved'}</button>)}
+              <button onClick={v.pfNewCol} className={hover(`border-color:${INK}`)} style={{ ...chipStyle(false), borderStyle: 'dashed' }}>+ New collection</button>
+            </div>
+          )}
           {v.pfEmptyNote && !v.pfBooks.length && <div style={{ fontSize: 14, color: MUTED }}>{v.pfEmptyNote}</div>}
           {v.pfOther && !v.pfBooks.length && !v.pfBlocked && !v.pfSuspended && <div style={{ fontSize: 14, color: MUTED }}>No public sketchbooks yet.</div>}
           {v.pfPeople && (v.pfPeople.length ? (
@@ -309,7 +335,7 @@ export function Profile({ v }: { v: V }) {
           ) : <div style={{ fontSize: 14, color: MUTED }}>You’re not following anyone yet. Follow artists from their profile to see their new pages on your home shelf.</div>)}
           {(v.pfBooks.length > 0 || v.pfShowNew) && (
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${mob ? 140 : 180}px, 1fr))`, gap: mob ? '28px 16px' : '40px 28px' }}>
-              {v.pfBooks.map((pb: V) => <ShelfBook key={pb.key} pb={pb} zone={zone} />)}
+              {v.pfBooks.map((pb: V) => <ShelfBook key={pb.key} pb={pb.moveTo ? { ...pb, cols: v.pfColl || [] } : pb} zone={zone} />)}
               {v.pfShowNew && (
                 <div onClick={v.pfNew} style={{ display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer', minWidth: 0 }}>
                   <div style={{ height: zone, display: 'flex', alignItems: 'flex-end' }}>

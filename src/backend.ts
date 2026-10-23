@@ -470,7 +470,7 @@ export async function addGoal(me: Account, goal: string) {
 // ---------- saved, blocked, reports, following shelf ----------
 
 /** What a saved sketchbook shows in your Saved list (copied so the list renders without extra reads). */
-export interface Saved { id: string; name: string; color: string; shape: ShapeKey; cover: string | null; ownerId: string; ownerName: string; ownerHandle: string; at: number }
+export interface Saved { id: string; name: string; color: string; shape: ShapeKey; cover: string | null; ownerId: string; ownerName: string; ownerHandle: string; at: number; /** Collection name ('' = unsorted). */ col?: string }
 
 export async function savedBooks(uid: string): Promise<Saved[]> {
   const s = await getDocs(collection(need().db, 'users', uid, 'saved'));
@@ -480,6 +480,9 @@ export async function setSaved(uid: string, b: Saved, on: boolean) {
   const r = doc(need().db, 'users', uid, 'saved', b.id);
   if (on) { const { id: _id, ...rest } = b; await setDoc(r, rest); } else await deleteDoc(r);
 }
+
+/** Moves a saved sketchbook into a collection ('' takes it out of one). */
+export async function setCollection(uid: string, bookId: string, col: string) { await updateDoc(doc(need().db, 'users', uid, 'saved', bookId), { col: col.slice(0, 40) }); }
 
 export async function blockedUsers(uid: string): Promise<string[]> {
   return (await getDocs(collection(need().db, 'users', uid, 'blocked'))).docs.map(d => d.id);
