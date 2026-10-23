@@ -1,0 +1,54 @@
+rules_version = '2';
+
+// Profiles, handles, books and follows are public to read (Explore and artist
+// profiles work signed out); only the owner can change their own data.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isUser(uid) { return signedIn() && request.auth.uid == uid; }
+    function str(v, max) { return v is string && v.size() <= max; }
+
+    match /users/{uid} {
+      allow read: if true;
+      // The handle must be reserved by this user in the same write (see handles below).
+      allow create, update: if isUser(uid)
+        && request.resource.data.keys().hasOnly(['name', 'handle', 'bio', 'loc', 'web', 'accent', 'av', 'joined'])
+        && str(request.resource.data.name, 80)
+        && str(request.resource.data.bio, 160)
+        && str(request.resource.data.loc, 80)
+        && str(request.resource.data.web, 200)
+        && getAfter(/databases/$(database)/documents/handles/$(request.resource.data.handle)).data.uid == uid;
+      allow delete: if false;
+
+      match /following/{target} {
+        allow read: if true;
+        allow write: if isUser(uid) && target != uid;
+      }
+    }
+
+    // One document per handle so handles stay unique.
+    match /handles/{handle} {
+      allow read: if true;
+      allow create: if signedIn()
+        && handle.matches('^[a-z0-9._]{1,24}$')
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow update: if false;
+    }
+
+    match /books/{bookId} {
+      function valid(d) {
+        return d.keys().hasOnly(['ownerId', 'ownerName', 'ownerHandle', 'name', 'color', 'shape', 'cover', 'pages', 'pageCount', 'createdAt', 'updatedAt'])
+          && str(d.name, 120)
+          && d.shape in ['pocket', 'portrait', 'square', 'landscape', 'panorama']
+          && d.pages is list && d.pages.size() <= 1000 && d.pageCount == d.pages.size();
+      }
+      allow read: if true;
+      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid && valid(request.resource.data);
+      allow update: if signedIn() && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId && valid(request.resource.data);
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+    }
+  }
+}

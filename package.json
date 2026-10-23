@@ -7,9 +7,13 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "emulators": "npx -y firebase-tools@15 emulators:start --only auth,firestore,storage --project demo-verso",
+    "dev:emulators": "VITE_FIREBASE_EMULATORS=1 VITE_FIREBASE_API_KEY=demo VITE_FIREBASE_PROJECT_ID=demo-verso VITE_FIREBASE_STORAGE_BUCKET=demo-verso.appspot.com VITE_FIREBASE_AUTH_DOMAIN=localhost vite",
+    "deploy:rules": "npx -y firebase-tools@15 deploy --only firestore:rules,storage"
   },
   "dependencies": {
+    "firebase": "^12.19.0",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },

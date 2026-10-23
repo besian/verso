@@ -21,18 +21,22 @@ export const CONFIG = {
   minPages: 12,
 };
 
+/** One of the signed-in user's sketchbooks. Images are download URLs, or data URLs until uploaded. */
 export interface Book {
-  id: number | string;
+  id: string;
   name: string;
   color: string;
   images: string[];
   shape?: ShapeKey;
   coverImg?: string | null;
+  createdAt?: number;
 }
 
+/** Someone else's sketchbook (or a sample one): read-only. `likes` drives the Featured sort. */
 export interface OtherBook {
   id: string; idx: number; shape: ShapeKey; likes: number; artist: string; name: string;
-  color: string; images: string[]; pages: number; initials: string; coverImg?: null;
+  color: string; images: string[]; pages: number; initials: string; coverImg?: string | null;
+  ownerId?: string; updatedAt?: number;
 }
 
 export const EXPLORE: OtherBook[] = ([
@@ -64,6 +68,7 @@ export const GRID_WIDTH: Record<ShapeKey, number> = { pocket: 64, portrait: 78, 
 export const PANEL_WIDTH: Record<ShapeKey, number> = { pocket: 48, portrait: 58, square: 66, landscape: 78, panorama: 84 };
 
 export interface Account {
+  uid: string;
   name: string; handle: string; email: string; bio: string; loc: string; web: string;
   accent: string; av: string | null; joined: number;
 }

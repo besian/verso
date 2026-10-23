@@ -43,7 +43,7 @@ function PanelCard({ b, labelFs, nameFs }: { b: V; labelFs: number; nameFs: numb
     <div onClick={b.open} style={{ display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer', minWidth: 0 }}>
       <div style={{ position: 'relative', aspectRatio: '4/5', background: CANVAS, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
         <div className={hover('transform:translateY(-6px) rotate(-1deg)')} style={{ position: 'relative', aspectRatio: b.ar, width: `${b.tw}%`, transition: 'transform .6s cubic-bezier(.2,.8,.2,1)' }}>
-          <ClosedBook size="sm" bg={b.color} board={b.color} label={b.name} labelStyle={{ padding: '8px 10px', font: `400 ${labelFs}px/1.1 ${SERIF}` }} />
+          <ClosedBook size="sm" bg={b.bg} board={b.color} label={b.showLabel ? b.name : null} labelStyle={{ padding: '8px 10px', font: `400 ${labelFs}px/1.1 ${SERIF}` }} />
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
@@ -89,7 +89,7 @@ export function Landing({ v }: { v: V }) {
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: v.ldShelfJust, gap: v.ldShelfGap, width: 'max-content', minWidth: '100%', boxSizing: 'border-box', padding: '0 12px', borderBottom: `1px solid ${INK}` }}>
             {v.ldShelf.map((sh: V) => (
               <div key={sh.key} onClick={sh.open} title={sh.title} className={hover('transform:translateY(-14px)')} style={{ position: 'relative', flexShrink: 0, width: sh.w, height: sh.h, transform: `rotate(${sh.rot}deg)`, transformOrigin: '50% 100%', cursor: 'pointer', transition: 'transform .5s cubic-bezier(.2,.8,.2,1)' }}>
-                <ClosedBook size="sm" bg={sh.color} board={sh.color} label={sh.name} labelStyle={{ padding: '6px 8px', font: `400 ${sh.fs}px/1.1 ${SERIF}` }} />
+                <ClosedBook size="sm" bg={sh.bg} board={sh.color} label={sh.showLabel ? sh.name : null} labelStyle={{ padding: '6px 8px', font: `400 ${sh.fs}px/1.1 ${SERIF}` }} />
               </div>
             ))}
           </div>
@@ -202,7 +202,7 @@ export function Explore({ v }: { v: V }) {
               {v.exploreList.map((xb: V) => (
                 <div key={xb.key} onClick={xb.open} style={{ display: 'flex', flexDirection: 'column', gap: 8, cursor: 'pointer', minWidth: 0 }}>
                   <div className={hover('transform:translateY(-8px)')} style={{ position: 'relative', aspectRatio: xb.ar, width: `calc(${xb.wp}% - 7px)`, marginRight: 7, transition: 'transform .35s cubic-bezier(.2,.8,.2,1)' }}>
-                    <ClosedBook bg={xb.color} board={xb.color} label={xb.name} />
+                    <ClosedBook bg={xb.bg} board={xb.color} label={xb.showLabel ? xb.name : null} />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
                     <span style={label(STONE, 10)}>{xb.no}</span>
@@ -226,10 +226,10 @@ export function Explore({ v }: { v: V }) {
                     <div style={stackEdge('top', PAGE_EDGES)} />
                     <div style={stackEdge('right', 'repeating-linear-gradient(90deg,#f3efe6 0 2px,#d8d1c1 2px 3px)')} />
                     <div style={stackEdge('left', sk.color, 'brightness(.7)')} />
-                    <div style={{ position: 'absolute', inset: 0, borderRadius: '2px 10px 10px 2px', overflow: 'hidden', background: sk.color }}>
+                    <div style={{ position: 'absolute', inset: 0, borderRadius: '2px 10px 10px 2px', overflow: 'hidden', background: sk.bg }}>
                       <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '7%', background: SPINE }} />
                       <div style={{ position: 'absolute', right: '13%', top: 0, bottom: 0, width: 8, background: '#1d1d26' }} />
-                      <div style={{ position: 'absolute', left: '16%', right: '26%', top: '14%', padding: '10px 12px', background: '#f6f2e9', borderRadius: 2, color: INK, fontSize: 15, fontWeight: 600 }}>{sk.name}</div>
+                      {sk.showLabel && <div style={{ position: 'absolute', left: '16%', right: '26%', top: '14%', padding: '10px 12px', background: '#f6f2e9', borderRadius: 2, color: INK, fontSize: 15, fontWeight: 600 }}>{sk.name}</div>}
                       <div style={{ position: 'absolute', inset: 0, background: '#1c1d30', opacity: sk.shade }} />
                     </div>
                   </div>
