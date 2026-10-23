@@ -145,7 +145,7 @@ export default class App extends Component<object, State> {
       this.target = 0;
       // Signed-in visitors start on their own sketchbooks rather than the home page.
       this.setState(s => ({ acct: a, verified: acct ? false : !!u.verified, follows, saved, blocked, books, active: 0, images: books[0].images, p: 0, authReady: true, mode: this.routed && (s.mode === 'home' || s.mode === 'auth') ? 'mine' : s.mode }),
-        () => { if (fresh || legacy) this.persist(books); this.backfillThumbs(); this.loadFollowFeed(); });
+        () => { if (fresh || legacy) this.persist(books); this.backfillThumbs(); this.loadFollowFeed(); api.mirrorFollows(u.uid, follows).catch(e => console.warn('follower backfill', e)); });
     } catch (e) {
       console.error(e);
       this.setState({ authReady: true });
@@ -231,7 +231,10 @@ export default class App extends Component<object, State> {
     if (bookId) want.set('bc:' + bookId, () => api.watch(['bookCounts', bookId], d => this.setState(st => ({ counts: { ...st.counts, ['b:' + bookId]: Math.max(0, d?.likes || 0) } }))));
     if (bookId && me && s.mode === 'other') want.set(`lk:${bookId}:${me}`, () => api.watch(['books', bookId, 'likes', me], d => this.setState(st => ({ liked: { ...st.liked, [bookId]: !!d } }))));
     const pu = s.mode === 'profile' ? s.profileOf?.uid || me : undefined;
-    for (const u of new Set([pu, me])) if (u) want.set('uc:' + u, () => api.watch(['userCounts', u], d => this.setState(st => ({ counts: { ...st.counts, ['f:' + u]: Math.max(0, d?.followers || 0), ['l:' + u]: Math.max(0, d?.likes || 0) } }))));
+    for (const u of new Set([pu, me])) if (u) {
+      want.set('uc:' + u, () => api.watch(['userCounts', u], d => this.setState(st => ({ counts: { ...st.counts, ['l:' + u]: Math.max(0, d?.likes || 0) } }))));
+      want.set('fo:' + u, () => api.watchSize(['users', u, 'followers'], n => this.setState(st => ({ counts: { ...st.counts, ['f:' + u]: n } }))));
+    }
     if (me) want.set('nt:' + me, () => api.watchNotifications(me, notifs => this.setState({ notifs })));
     for (const [k, stop] of this.watches) if (!want.has(k)) { stop(); this.watches.delete(k); }
     for (const [k, start] of want) if (!this.watches.has(k)) this.watches.set(k, start());

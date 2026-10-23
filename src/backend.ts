@@ -298,13 +298,28 @@ export async function following(uid: string): Promise<string[]> {
   return s.docs.map(x => x.id);
 }
 
-/** Follows or unfollows, moving the target's follower count and (on follow) notifying them, all in one write. */
+/** Follows or unfollows. Each follow is mirrored as users/{target}/followers/{me}, so a follower
+ *  count is just the size of that collection: exact, live, and it can't drift. */
 export async function setFollow(me: Account, target: string, on: boolean) {
-  const { db: d } = need(), batch = writeBatch(d), r = doc(d, 'users', me.uid, 'following', target);
-  if (on) batch.set(r, { at: Date.now() }); else batch.delete(r);
-  batch.set(doc(d, 'userCounts', target), { followers: increment(on ? 1 : -1) }, { merge: true });
+  const { db: d } = need(), batch = writeBatch(d), r = doc(d, 'users', me.uid, 'following', target), m = doc(d, 'users', target, 'followers', me.uid);
+  if (on) { batch.set(r, { at: Date.now() }); batch.set(m, { at: Date.now() }); } else { batch.delete(r); batch.delete(m); }
   if (on) batch.set(doc(collection(d, 'users', target, 'notifications')), note(me, 'follow'));
   await batch.commit();
+}
+
+/** Adds follower entries for follows made before they existed (idempotent; run on sign-in). */
+export async function mirrorFollows(me: string, targets: string[]) {
+  if (!targets.length) return;
+  const { db: d } = need(), batch = writeBatch(d);
+  targets.forEach(t => batch.set(doc(d, 'users', t, 'followers', me), { at: Date.now() }, { merge: true }));
+  await batch.commit();
+}
+
+/** Live size of a collection (used for follower counts). */
+export function watchSize(path: string[], cb: (n: number) => void): () => void {
+  if (!db) return () => {};
+  const [c, ...rest] = path;
+  return onSnapshot(collection(db, c, ...rest), s => cb(s.size), () => cb(0));
 }
 
 // ---------- likes, counts, notifications ----------
@@ -371,7 +386,7 @@ export async function setBlocked(uid: string, target: string, on: boolean, wasFo
   if (!on) return deleteDoc(r);
   const batch = writeBatch(d);
   batch.set(r, { at: Date.now() });
-  if (wasFollowing) { batch.delete(doc(d, 'users', uid, 'following', target)); batch.set(doc(d, 'userCounts', target), { followers: increment(-1) }, { merge: true }); }
+  if (wasFollowing) { batch.delete(doc(d, 'users', uid, 'following', target)); batch.delete(doc(d, 'users', target, 'followers', uid)); }
   await batch.commit();
 }
 
@@ -438,9 +453,10 @@ async function removeFolder(path: string) {
 export async function deleteAccount(pw: string, acct: Account) {
   const u = await reauth(pw), { db: d } = need();
   const books = await getDocs(query(collection(d, 'books'), where('ownerId', '==', acct.uid)));
-  const subs = await Promise.all(['following', 'saved', 'blocked', 'notifications'].map(c => getDocs(collection(d, 'users', acct.uid, c))));
+  const subs = await Promise.all(['following', 'followers', 'saved', 'blocked', 'notifications'].map(c => getDocs(collection(d, 'users', acct.uid, c))));
   const batch = writeBatch(d);
   books.forEach(b => batch.delete(b.ref)); subs.forEach(c => c.forEach(f => batch.delete(f.ref)));
+  subs[0].forEach(f => batch.delete(doc(d, 'users', f.id, 'followers', acct.uid)));
   batch.delete(doc(d, 'handles', acct.handle)); batch.delete(doc(d, 'users', acct.uid));
   await batch.commit();
   await removeFolder(`users/${acct.uid}`).catch(() => {});

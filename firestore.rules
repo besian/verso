@@ -25,6 +25,13 @@ service cloud.firestore {
         allow read: if true;
         allow write: if isUser(uid) && target != uid;
       }
+      // One entry per follower, written by the follower; its size is the follower count.
+      // The profile owner can also remove entries (account deletion).
+      match /followers/{fid} {
+        allow read: if true;
+        allow create, update: if isUser(fid) && fid != uid;
+        allow delete: if isUser(fid) || isUser(uid);
+      }
       // Saved sketchbooks and blocked artists are private to their owner.
       match /saved/{bookId} {
         allow read, write: if isUser(uid);
