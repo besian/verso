@@ -100,6 +100,7 @@ export default class App extends Component<object, State> {
     }
     const t = e.target as HTMLElement;
     if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || s.managing || s.edit) return;
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); return this.openClose(e.key === 'ArrowUp'); }
     const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0; if (!dir) return;
     if (e.shiftKey) this.switchBook(s.active + dir); else this.go(dir);
   };
@@ -304,6 +305,19 @@ export default class App extends Component<object, State> {
       this.setState({ p: p + d * 0.14 }); this.raf = requestAnimationFrame(step);
     };
     this.raf = requestAnimationFrame(step);
+  }
+  /** ↑ opens a closed book (first spread from the front, last from the back); ↓ closes it onto its front cover. */
+  openClose(open: boolean) {
+    if (this.state.switching) return;
+    const N = this.nLeaves(), at = Math.round(this.target);
+    if (open) {
+      if (at !== 0 && at !== N) return;
+      this.target = at === 0 ? 1 : N - 1;
+    } else {
+      if (this.state.focus) this.setFocus(false);
+      this.target = 0;
+    }
+    this.animate();
   }
   go(dir: number) {
     if (this.state.focus) return this.focusGo(dir);
