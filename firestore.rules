@@ -18,7 +18,8 @@ service cloud.firestore {
         && str(request.resource.data.loc, 80)
         && str(request.resource.data.web, 200)
         && getAfter(/databases/$(database)/documents/handles/$(request.resource.data.handle)).data.uid == uid;
-      allow delete: if false;
+      // Account deletion removes the profile along with everything else.
+      allow delete: if isUser(uid);
 
       match /following/{target} {
         allow read: if true;
@@ -39,8 +40,9 @@ service cloud.firestore {
 
     match /books/{bookId} {
       function valid(d) {
-        return d.keys().hasOnly(['ownerId', 'ownerName', 'ownerHandle', 'name', 'color', 'shape', 'cover', 'pages', 'pageCount', 'createdAt', 'updatedAt', 'isPublic'])
+        return d.keys().hasOnly(['ownerId', 'ownerName', 'ownerHandle', 'name', 'color', 'shape', 'cover', 'pages', 'pageCount', 'createdAt', 'updatedAt', 'isPublic', 'thumbs', 'coverThumb'])
           && (!('isPublic' in d) || d.isPublic is bool)
+          && (!('thumbs' in d) || (d.thumbs is list && d.thumbs.size() <= 1000))
           && str(d.name, 120)
           && d.shape in ['pocket', 'portrait', 'square', 'landscape', 'panorama']
           && d.pages is list && d.pages.size() <= 1000 && d.pageCount == d.pages.size();

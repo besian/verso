@@ -4,8 +4,9 @@
 import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported as analyticsSupported } from 'firebase/analytics';
 import {
-  connectAuthEmulator, createUserWithEmailAndPassword, getAuth, onAuthStateChanged,
-  sendPasswordResetEmail, signInWithEmailAndPassword, signOut as fbSignOut,
+  EmailAuthProvider, connectAuthEmulator, createUserWithEmailAndPassword, deleteUser, getAuth, onAuthStateChanged,
+  reauthenticateWithCredential, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut as fbSignOut,
+  updatePassword, verifyBeforeUpdateEmail,
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import {
@@ -13,7 +14,7 @@ import {
   query, runTransaction, setDoc, where, writeBatch,
 } from 'firebase/firestore';
 import type { DocumentData } from 'firebase/firestore';
-import { connectStorageEmulator, deleteObject, getStorage, ref, uploadBytes } from 'firebase/storage';
+import { connectStorageEmulator, deleteObject, getStorage, listAll, ref, uploadBytes } from 'firebase/storage';
 import type { Account, Book, ShapeKey } from './data';
 
 const env = import.meta.env;
@@ -64,17 +65,19 @@ export function errMsg(e: unknown): string {
     'auth/network-request-failed': 'Couldn’t reach the server. Check your connection.',
     'permission-denied': 'You don’t have permission to do that.',
     'storage/unauthorized': 'Upload refused. Images must be under 10 MB.',
+    'auth/requires-recent-login': 'For your security, sign in again and retry.',
+    'auth/missing-password': 'Enter your current password.',
   };
   return msgs[code] || 'Something went wrong. Please try again.';
 }
 
 // ---------- auth ----------
 
-export interface AuthUser { uid: string; email: string }
+export interface AuthUser { uid: string; email: string; verified?: boolean }
 
 export function watchAuth(cb: (u: AuthUser | null) => void): () => void {
   if (!auth) { cb(null); return () => {}; }
-  return onAuthStateChanged(auth, (u: User | null) => cb(u ? { uid: u.uid, email: u.email || '' } : null));
+  return onAuthStateChanged(auth, (u: User | null) => cb(u ? { uid: u.uid, email: u.email || '', verified: u.emailVerified } : null));
 }
 
 export async function signIn(email: string, pw: string) { await signInWithEmailAndPassword(need().auth, email, pw); }
@@ -86,6 +89,7 @@ export async function signUp(email: string, pw: string, name: string, handle: st
   const { auth: a } = need();
   if (!(await handleFree(handle))) throw Object.assign(new Error('handle taken'), { code: 'handle-taken' });
   const cred = await createUserWithEmailAndPassword(a, email, pw);
+  sendEmailVerification(cred.user).catch(() => {});
   const profile: Omit<Account, 'uid' | 'email'> = { name, handle, bio: '', loc: '', web: '', accent: '#C9C3B4', av: null, joined: Date.now() };
   try {
     await writeProfile(cred.user.uid, profile, null);
@@ -169,15 +173,24 @@ export interface BookDoc {
   createdAt: number; updatedAt: number;
   /** Private books are visible only to their owner. Books saved before this field existed count as public. */
   isPublic: boolean; legacy: boolean;
+  /** Small (≈480px) versions: `thumbs[i]` belongs to `pages[i]` ('' when missing). */
+  thumbs: string[]; coverThumb: string | null;
 }
 
 const bookDoc = (id: string, d: DocumentData): BookDoc => ({
   id, ownerId: d.ownerId, ownerName: d.ownerName || '', ownerHandle: d.ownerHandle || '', name: d.name || 'sketchbook',
   color: d.color || '#b8243a', shape: d.shape || 'portrait', cover: d.cover || null, pages: d.pages || [], pageCount: d.pageCount || 0,
   createdAt: d.createdAt || 0, updatedAt: d.updatedAt || 0, isPublic: d.isPublic !== false, legacy: d.isPublic === undefined,
+  thumbs: d.thumbs || [], coverThumb: d.coverThumb || null,
 });
 
-export const toBook = (b: BookDoc): Book => ({ id: b.id, name: b.name, color: b.color, shape: b.shape, coverImg: b.cover, images: b.pages, createdAt: b.createdAt, isPublic: b.isPublic });
+export const thumbMap = (b: BookDoc): Record<string, string> => {
+  const m: Record<string, string> = {};
+  b.pages.forEach((u, i) => { if (b.thumbs[i]) m[u] = b.thumbs[i]; });
+  if (b.cover && b.coverThumb) m[b.cover] = b.coverThumb;
+  return m;
+};
+export const toBook = (b: BookDoc): Book => ({ id: b.id, name: b.name, color: b.color, shape: b.shape, coverImg: b.cover, images: b.pages, createdAt: b.createdAt, isPublic: b.isPublic, thumbs: thumbMap(b) });
 
 export function newBookId(): string { return doc(collection(need().db, 'books')).id; }
 
@@ -196,22 +209,46 @@ export async function communityBooks(): Promise<BookDoc[]> {
   return s.docs.map(x => bookDoc(x.id, x.data())).filter(b => b.pageCount > 0).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 60);
 }
 
-/** Uploads data URLs for a book's pages/cover; returns data URL → download URL. */
-export async function uploadImages(uid: string, bookId: string, dataUrls: string[]): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
+/** Uploads data URLs for a book's pages/cover, each with a small thumbnail; returns data URL → URLs. */
+export async function uploadImages(uid: string, bookId: string, dataUrls: string[]): Promise<Map<string, { full: string; thumb: string }>> {
+  const out = new Map<string, { full: string; thumb: string }>();
   await Promise.all([...new Set(dataUrls)].map(async du => {
-    out.set(du, await upload(`users/${uid}/books/${bookId}/${crypto.randomUUID()}.jpg`, du));
+    const id = crypto.randomUUID(), base = `users/${uid}/books/${bookId}/${id}`;
+    const [full, thumb] = await Promise.all([upload(`${base}.jpg`, du), makeThumb(du).then(t => upload(`${base}_t.jpg`, t))]);
+    out.set(du, { full, thumb });
   }));
   return out;
 }
 
+/** Makes and uploads a thumbnail for an already-stored image (used to backfill older pages). */
+export async function thumbFor(uid: string, bookId: string, url: string): Promise<string> {
+  const blob = await (await fetch(url)).blob();
+  const du = await new Promise<string>(res => { const fr = new FileReader(); fr.onload = () => res(fr.result as string); fr.readAsDataURL(blob); });
+  return upload(`users/${uid}/books/${bookId}/${crypto.randomUUID()}_t.jpg`, await makeThumb(du));
+}
+
+/** Downscales an image to at most `maxH` px tall as a JPEG data URL. */
+function makeThumb(dataUrl: string, maxH = 480): Promise<string> {
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => {
+      const k = Math.min(1, maxH / im.naturalHeight), c = document.createElement('canvas');
+      c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+      const ctx = c.getContext('2d')!; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(im, 0, 0, c.width, c.height);
+      res(c.toDataURL('image/jpeg', 0.8));
+    };
+    im.onerror = rej; im.src = dataUrl;
+  });
+}
+
 export async function writeBook(owner: Account, b: Book) {
   const { db: d } = need();
-  const pages = b.images.filter(u => !u.startsWith('data:'));
+  const pages = b.images.filter(u => !u.startsWith('data:')), cover = b.coverImg && !b.coverImg.startsWith('data:') ? b.coverImg : null, t = b.thumbs || {};
   await setDoc(doc(d, 'books', String(b.id)), {
     ownerId: owner.uid, ownerName: owner.name, ownerHandle: owner.handle,
-    name: b.name, color: b.color, shape: b.shape || 'portrait', cover: b.coverImg && !b.coverImg.startsWith('data:') ? b.coverImg : null,
+    name: b.name, color: b.color, shape: b.shape || 'portrait', cover,
     pages, pageCount: pages.length, createdAt: b.createdAt || Date.now(), updatedAt: Date.now(), isPublic: b.isPublic !== false,
+    thumbs: pages.map(u => t[u] || ''), coverThumb: (cover && t[cover]) || null,
   });
 }
 
@@ -264,4 +301,52 @@ export async function following(uid: string): Promise<string[]> {
 export async function setFollow(uid: string, target: string, on: boolean) {
   const r = doc(need().db, 'users', uid, 'following', target);
   if (on) await setDoc(r, { at: Date.now() }); else await deleteDoc(r);
+}
+
+// ---------- links ----------
+
+export async function uidForHandle(handle: string): Promise<string | null> {
+  const s = await getDoc(doc(need().db, 'handles', handle.toLowerCase()));
+  return s.exists() ? s.data().uid : null;
+}
+
+/** One book by id, or null if it's missing or private to someone else. */
+export async function getBook(id: string): Promise<BookDoc | null> {
+  try { const s = await getDoc(doc(need().db, 'books', id)); return s.exists() ? bookDoc(s.id, s.data()) : null; } catch { return null; }
+}
+
+// ---------- account ----------
+
+async function reauth(pw: string) {
+  const u = need().auth.currentUser; if (!u?.email) throw Object.assign(new Error('signed out'), { code: 'auth/no-current-user' });
+  await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, pw));
+  return u;
+}
+
+export async function resendVerification() { const u = need().auth.currentUser; if (u) await sendEmailVerification(u); }
+
+/** Reloads the signed-in user and reports whether their email is confirmed. */
+export async function refreshVerified(): Promise<boolean> { const u = need().auth.currentUser; if (!u) return false; await u.reload(); return u.emailVerified; }
+
+/** Sends a confirmation link to the new address; the email changes once it's clicked. */
+export async function changeEmail(pw: string, next: string) { await verifyBeforeUpdateEmail(await reauth(pw), next); }
+
+export async function changePassword(pw: string, next: string) { await updatePassword(await reauth(pw), next); }
+
+async function removeFolder(path: string) {
+  const r = await listAll(ref(need().storage, path));
+  await Promise.all([...r.items.map(i => deleteObject(i).catch(() => {})), ...r.prefixes.map(p => removeFolder(p.fullPath))]);
+}
+
+/** Deletes everything the user owns (books, images, follows, handle, profile), then the account itself. */
+export async function deleteAccount(pw: string, acct: Account) {
+  const u = await reauth(pw), { db: d } = need();
+  const books = await getDocs(query(collection(d, 'books'), where('ownerId', '==', acct.uid)));
+  const follows = await getDocs(collection(d, 'users', acct.uid, 'following'));
+  const batch = writeBatch(d);
+  books.forEach(b => batch.delete(b.ref)); follows.forEach(f => batch.delete(f.ref));
+  batch.delete(doc(d, 'handles', acct.handle)); batch.delete(doc(d, 'users', acct.uid));
+  await batch.commit();
+  await removeFolder(`users/${acct.uid}`).catch(() => {});
+  await deleteUser(u);
 }

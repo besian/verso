@@ -1,0 +1,10 @@
+{
+  "rewrites": [
+    {
+      "source": "/:path(@.*)",
+      "has": [{ "type": "header", "key": "user-agent", "value": "(?i).*(bot|crawler|spider|facebookexternalhit|facebot|twitterbot|slackbot|discordbot|whatsapp|telegrambot|linkedinbot|embedly|pinterest|skypeuripreview|redditbot|applebot|iframely|vkshare|bluesky|mastodon).*" }],
+      "destination": "/api/meta?path=/:path"
+    },
+    { "source": "/((?!assets/|api/).*)", "destination": "/index.html" }
+  ]
+}

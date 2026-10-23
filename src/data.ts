@@ -32,13 +32,15 @@ export interface Book {
   createdAt?: number;
   /** Defaults to public. */
   isPublic?: boolean;
+  /** Full image URL → thumbnail URL. */
+  thumbs?: Record<string, string>;
 }
 
 /** Someone else's sketchbook: read-only. `likes` drives the Featured sort. */
 export interface OtherBook {
   id: string; idx: number; shape: ShapeKey; likes: number; artist: string; name: string;
   color: string; images: string[]; pages: number; initials: string; coverImg?: string | null;
-  ownerId?: string; handle?: string; updatedAt?: number;
+  ownerId?: string; handle?: string; updatedAt?: number; thumbs?: Record<string, string>;
 }
 
 /** Cover width (% of its grid cell) per shape, so books in a row read as a shelf. */

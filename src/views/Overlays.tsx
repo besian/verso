@@ -68,7 +68,10 @@ export function EditProfile({ v }: { v: V }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', paddingTop: 14, borderTop: '1px solid rgba(34,35,32,.12)' }}>
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 160 }}>
           <span style={{ fontSize: 12, color: 'rgba(34,35,32,.6)' }}>Signed in as {v.dEmail}</span>
-          <button onClick={v.signOut} style={{ ...linkBtn(MARK), alignSelf: 'flex-start', padding: '2px 0' }}>Sign out</button>
+          <span style={{ display: 'flex', gap: 14 }}>
+            <button onClick={v.signOut} style={{ ...linkBtn(MARK), padding: '2px 0' }}>Sign out</button>
+            <button onClick={v.openSettings} style={{ ...linkBtn('rgba(34,35,32,.75)'), padding: '2px 0' }}>Account settings</button>
+          </span>
         </div>
         <button onClick={v.pfCancel} className={hoverTint} style={{ ...ghostBtn, height: 44, padding: '0 18px', fontSize: 14 }}>Cancel</button>
         <button onClick={v.pfSave} disabled={v.dBusy} style={{ height: 44, padding: '0 22px', borderRadius: 2, border: 'none', background: MARK, color: PAPER, font: `500 14px ${SANS}`, cursor: v.dBusy ? 'progress' : 'pointer', opacity: v.dBusy ? 0.6 : 1 }}>{v.dBusy ? 'Saving…' : 'Save'}</button>

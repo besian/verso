@@ -190,6 +190,7 @@ export function Profile({ v }: { v: V }) {
         {v.pfPreviewing && <div style={{ position: 'absolute', left: '50%', bottom: 20, transform: 'translateX(-50%)', padding: '6px 12px', border: `1px solid ${MARK}`, whiteSpace: 'nowrap', ...label(MARK) }}>Previewing as a visitor</div>}
       </div>
       <div style={{ position: 'relative', maxWidth: 1080, margin: '0 auto', padding: `0 ${v.pfPadX}px 48px`, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 40 }}>
+        {v.pfMine && !v.acVerified && <VerifyBanner v={v} />}
         <div style={{ display: 'flex', flexDirection: v.pfDir, alignItems: v.pfAlign, gap: v.pfHeadGap, textAlign: v.pfTA }}>
           <div style={{ width: 112, height: 112, flexShrink: 0, borderRadius: '50%', background: v.pfAvBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 44px ${SERIF}` }}>{v.pfInit}</div>
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8, paddingTop: v.pfInfoTop, alignItems: v.pfAlign }}>
@@ -211,6 +212,7 @@ export function Profile({ v }: { v: V }) {
               <>
                 <button onClick={v.editProfile} className={hoverMark} style={actionBtn(true)}>Edit profile</button>
                 <button onClick={v.togglePreview} className={hover('background:rgba(34,35,32,.1)')} style={actionBtn(false)}>View as public</button>
+                <button onClick={v.openSettings} className={hover('background:rgba(34,35,32,.1)')} style={actionBtn(false)}>Settings</button>
               </>
             )}
             {v.pfPreviewing && <button onClick={v.togglePreview} className={hoverMark} style={actionBtn(true)}>Exit preview</button>}
@@ -288,6 +290,76 @@ export function AuthPage({ v }: { v: V }) {
             <button type="button" onClick={v.closeAuth} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'rgba(34,35,32,.75)', font: `500 13px ${SANS}`, cursor: 'pointer' }}>Not now</button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function VerifyBanner({ v }: { v: V }) {
+  return (
+    <div role="status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 20px', flexWrap: 'wrap', padding: '12px 16px', border: `1px solid ${MARK}`, fontSize: 14, color: INK }}>
+      <span><b style={{ fontWeight: 600 }}>Confirm your email.</b> We sent a link to {v.acEmail}.</span>
+      <span style={{ display: 'flex', gap: 16 }}>
+        <button onClick={v.resendVerify} disabled={v.acBusy === 'verify'} className={hoverLine} style={underlineBtn(13)}>Resend</button>
+        <button onClick={v.checkVerified} disabled={v.acBusy === 'verify'} className={hoverLine} style={underlineBtn(13)}>I’ve confirmed</button>
+      </span>
+    </div>
+  );
+}
+
+function SettingsSection({ title, note, children }: { title: string; note?: ReactNode; children: ReactNode }) {
+  return (
+    <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: '14px 48px', paddingTop: 20, borderTop: `1px solid ${INK}` }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={serif(28, 1.1)}>{title}</span>
+        {note && <span style={{ fontSize: 14, lineHeight: 1.5, color: MUTED, textWrap: 'pretty' } as CSSProperties}>{note}</span>}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{children}</div>
+    </section>
+  );
+}
+
+const formBtn = (danger = false): CSSProperties => ({ alignSelf: 'flex-start', height: 44, padding: '0 20px', borderRadius: 2, border: danger ? `1.5px solid ${MARK}` : 'none', background: danger ? 'none' : INK, color: danger ? MARK : PAPER, font: `500 14px ${SANS}`, cursor: 'pointer' });
+
+/** Account settings: email confirmation, email and password changes, account deletion. */
+export function Settings({ v }: { v: V }) {
+  const f = v.acF, on = v.onAc, mob = !v.notMob;
+  return (
+    <div style={screen()}>
+      <div style={{ maxWidth: 1080, margin: '0 auto', boxSizing: 'border-box', padding: `${mob ? 84 : 108}px ${mob ? 16 : 40}px 48px`, display: 'flex', flexDirection: 'column', gap: 32 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <button onClick={v.closeSettings} className={hoverText} style={{ alignSelf: 'flex-start', padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(INK) }}>← Your profile</button>
+          <h1 style={{ margin: 0, ...serif(mob ? 44 : 64, 1, '-.02em') }}>Account <em>settings</em></h1>
+          <span style={{ fontSize: 14, color: MUTED }}>Signed in as {v.acEmail}</span>
+        </div>
+        {(v.acErr || v.acInfo) && <Notice err={v.acErr} info={v.acInfo} />}
+        <SettingsSection title="Email" note={v.acVerified ? 'Your email is confirmed.' : <>Not confirmed yet. Open the link we sent to <b style={{ fontWeight: 600 }}>{v.acEmail}</b>.</>}>
+          {!v.acVerified && (
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              <button onClick={v.resendVerify} disabled={v.acBusy === 'verify'} style={formBtn()}>Resend confirmation</button>
+              <button onClick={v.checkVerified} disabled={v.acBusy === 'verify'} className={hoverLine} style={{ ...underlineBtn(14), alignSelf: 'center' }}>I’ve confirmed</button>
+            </div>
+          )}
+          <form onSubmit={v.changeEmail} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <TextField label="New email" value={f.email} onChange={on.email} type="email" placeholder="you@example.com" autoComplete="email" />
+            <TextField label="Current password" value={f.pwEmail} onChange={on.pwEmail} type="password" autoComplete="current-password" />
+            <button type="submit" disabled={v.acBusy === 'email'} style={{ ...formBtn(), opacity: v.acBusy === 'email' ? 0.6 : 1 }}>{v.acBusy === 'email' ? 'Sending…' : 'Change email'}</button>
+          </form>
+        </SettingsSection>
+        <SettingsSection title="Password">
+          <form onSubmit={v.changePassword} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <TextField label="Current password" value={f.pwOld} onChange={on.pwOld} type="password" autoComplete="current-password" />
+            <TextField label="New password" value={f.pwNew} onChange={on.pwNew} type="password" placeholder="At least 6 characters" autoComplete="new-password" />
+            <button type="submit" disabled={v.acBusy === 'password'} style={{ ...formBtn(), opacity: v.acBusy === 'password' ? 0.6 : 1 }}>{v.acBusy === 'password' ? 'Saving…' : 'Change password'}</button>
+          </form>
+        </SettingsSection>
+        <SettingsSection title="Delete account" note="Permanently deletes your profile, handle, follows and every sketchbook with all its pages. This can’t be undone.">
+          <form onSubmit={v.deleteAccount} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <TextField label={`Type your handle (${v.acHandle}) to confirm`} value={f.delHandle} onChange={on.delHandle} placeholder={v.acHandle} />
+            <TextField label="Password" value={f.pwDel} onChange={on.pwDel} type="password" autoComplete="current-password" />
+            <button type="submit" disabled={v.acBusy === 'delete'} className={hover(`background:${MARK};color:${PAPER}`)} style={{ ...formBtn(true), opacity: v.acBusy === 'delete' ? 0.6 : 1 }}>{v.acBusy === 'delete' ? 'Deleting…' : 'Delete my account'}</button>
+          </form>
+        </SettingsSection>
       </div>
     </div>
   );

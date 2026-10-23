@@ -9,13 +9,13 @@ import { COVER_INSIDE, pageWear } from './wear';
 import type { Wear } from './wear';
 import { INK, MARK, PAPER } from './theme';
 import Stage from './views/Stage';
-import { AuthPage, Explore, HomeScreen, Profile } from './views/Screens';
+import { AuthPage, Explore, HomeScreen, Profile, Settings } from './views/Screens';
 import { Editor, EditProfile, Manager, NewBookPicker } from './views/Overlays';
 
-export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth';
+export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings';
 type AnyBook = Book | OtherBook;
 /** Whose profile is open; name shows while the profile loads. */
-type Who = { name: string; uid?: string };
+type Who = { name: string; uid?: string; handle?: string };
 type PublicProfile = Omit<Account, 'uid' | 'email'>;
 // Everything a view reads: computed styles/labels plus handlers (mirrors the design's template bindings).
 export type V = Record<string, any>;
@@ -33,6 +33,8 @@ interface State {
   books: Book[]; active: number; images: string[];
   other?: AnyBook | null; profileOf?: Who | null; pfPreview?: boolean;
   pf?: { uid: string; profile: PublicProfile | null; books: OtherBook[] } | null;
+  acErr?: string; acInfo?: string; acBusy?: string; verified?: boolean;
+  ac?: { email?: string; pwEmail?: string; pwOld?: string; pwNew?: string; delHandle?: string; pwDel?: string };
   community?: OtherBook[]; people?: Person[];
   p: number; zoom: number; managing: boolean;
   vw: number; vh: number; sw?: number; sh?: number;
@@ -55,13 +57,16 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const CURL_DEG = 110;
 const avatarBg = (av?: string | null) => av ? `url("${av}") center/cover no-repeat ${INK}` : INK;
 const isData = (u?: string | null): u is string => !!u && u.startsWith('data:');
-const bookUrls = (b: Book) => [...b.images, ...(b.coverImg ? [b.coverImg] : [])];
+/** Every stored file a book uses: pages, cover and their thumbnails (for cleaning up removed ones). */
+const bookUrls = (b: Book) => { const main = [...b.images, ...(b.coverImg ? [b.coverImg] : [])]; return [...main, ...main.map(u => b.thumbs?.[u]).filter((u): u is string => !!u)]; };
+/** Drops thumbnails for pages and covers the book no longer has. */
+const pruneThumbs = (b: Book) => Object.fromEntries([...b.images, b.coverImg].filter((u): u is string => !!u && !!b.thumbs?.[u]).map(u => [u, b.thumbs![u]]));
 const localBook = (): Book => ({ id: 'local', name: 'sketchbook', color: '#b8243a', images: [] });
 /** A Firestore book shown read-only (Explore, profiles). */
 const toOther = (b: BookDoc, idx: number): OtherBook => ({
   id: b.id, idx, shape: b.shape, likes: b.pageCount, artist: b.ownerName || '@' + b.ownerHandle, name: b.name, color: b.color,
   images: b.pages, pages: Math.max(CONFIG.minPages, b.pageCount + (b.pageCount % 2)), initials: ini(b.ownerName), coverImg: b.cover,
-  ownerId: b.ownerId, handle: b.ownerHandle, updatedAt: b.updatedAt,
+  ownerId: b.ownerId, handle: b.ownerHandle, updatedAt: b.updatedAt, thumbs: api.thumbMap(b),
 });
 
 export default class App extends Component<object, State> {
@@ -112,7 +117,7 @@ export default class App extends Component<object, State> {
   componentDidMount() {
     this.onResize();
     requestAnimationFrame(this.onResize);
-    addEventListener('resize', this.onResize); addEventListener('keydown', this.onKey);
+    addEventListener('resize', this.onResize); addEventListener('keydown', this.onKey); addEventListener('popstate', this.onPop);
     this.unAuth = api.watchAuth(u => { if (!this.signingUp) this.loadUser(u); });
     this.loadCommunity();
   }
@@ -133,8 +138,8 @@ export default class App extends Component<object, State> {
       if (fresh) books = [{ id: api.newBookId(), name: 'sketchbook', color: '#b8243a', images: [], createdAt: Date.now() }];
       this.target = 0;
       // Signed-in visitors start on their own sketchbooks rather than the home page.
-      this.setState(s => ({ acct: a, follows, books, active: 0, images: books[0].images, p: 0, authReady: true, mode: !s.mode || s.mode === 'home' || s.mode === 'auth' ? 'mine' : s.mode }),
-        () => { if (fresh || legacy) this.persist(books); });
+      this.setState(s => ({ acct: a, verified: acct ? false : !!u.verified, follows, books, active: 0, images: books[0].images, p: 0, authReady: true, mode: this.routed && (s.mode === 'home' || s.mode === 'auth') ? 'mine' : s.mode }),
+        () => { if (fresh || legacy) this.persist(books); this.backfillThumbs(); });
     } catch (e) {
       console.error(e);
       this.setState({ authReady: true });
@@ -160,6 +165,16 @@ export default class App extends Component<object, State> {
   }
   componentDidUpdate(_: object, prev: State) {
     const s = this.state;
+    // The first route is applied once we know who's signed in; after that the URL follows the screen.
+    if (s.authReady && !this.routed) { this.routed = true; this.applyRoute(); }
+    else if (this.routed) {
+      const want = this.pathFor(), cur = location.pathname + location.search;
+      if (want !== cur) {
+        const newScreen = prev.mode !== s.mode || prev.other !== s.other || prev.profileOf !== s.profileOf || prev.active !== s.active;
+        history[newScreen && !this.applying ? 'pushState' : 'replaceState'](null, '', want);
+      }
+      document.title = this.titleFor();
+    }
     // Pages of the open book, nearest to the current spread first.
     if (s.images !== prev.images || s.other !== prev.other) {
       const at = Math.max(0, 2 * Math.round(this.target) - 2);
@@ -167,10 +182,10 @@ export default class App extends Component<object, State> {
       this.preload([(s.other || s.books[s.active])?.coverImg]);
     }
     if (s.books !== prev.books) this.preload(s.books.map(b => b.coverImg));
-    if (s.community !== prev.community) this.preload((s.community || []).flatMap(b => [b.coverImg, b.images[0]]));
+    if (s.community !== prev.community) this.preload((s.community || []).flatMap(b => [b.coverImg && this.thumbOf(b, b.coverImg), b.images[0]]));
   }
   componentWillUnmount() {
-    removeEventListener('resize', this.onResize); removeEventListener('keydown', this.onKey);
+    removeEventListener('resize', this.onResize); removeEventListener('keydown', this.onKey); removeEventListener('popstate', this.onPop);
     this.unAuth?.(); this.ro?.disconnect(); cancelAnimationFrame(this.raf); cancelAnimationFrame(this.exRaf);
   }
   stageRef = (el: HTMLDivElement | null) => {
@@ -194,6 +209,67 @@ export default class App extends Component<object, State> {
     this.setState(s => ({ mode: 'auth', authFrom: s.mode === 'auth' ? s.authFrom : s.mode || 'home', suMode, su: s.mode === 'auth' ? s.su : { name: '', handle: '', email: '', pw: '' }, suHT: false, suErr: '', suInfo: '', focus: false, fz: 0, managing: false, newPick: false }));
   }
   openJoin = () => this.openAuth('join');
+
+  // ---------- links ----------
+  routed = false; applying = false;
+  onPop = () => { this.applyRoute(); };
+  /** The address for whatever is on screen. */
+  pathFor(): string {
+    const s = this.state, here = location.pathname + location.search;
+    switch (s.mode || 'home') {
+      case 'explore': return '/explore' + (s.exQ ? '?q=' + encodeURIComponent(s.exQ) : '');
+      case 'mine': { const b = s.books[s.active]; return s.acct && b && !b.id.startsWith('local') ? '/sketchbooks/' + b.id : '/sketchbooks'; }
+      case 'other': { const o = s.other as OtherBook | null; return o?.handle ? `/@${o.handle}/${o.id}` : here; }
+      case 'profile': {
+        if (!s.profileOf) return s.acct ? '/@' + s.acct.handle : '/';
+        const h = (s.pf?.uid === s.profileOf.uid && s.pf?.profile?.handle) || s.profileOf.handle;
+        return h ? '/@' + h : here;
+      }
+      case 'auth': return s.suMode === 'signin' ? '/signin' : s.suMode === 'reset' ? '/reset' : '/join';
+      case 'settings': return '/settings';
+      default: return '/';
+    }
+  }
+  titleFor(): string {
+    const s = this.state, mode = s.mode || 'home', o = s.other as OtherBook | null;
+    const t = mode === 'other' && o ? `${o.name} by ${o.artist}` : mode === 'mine' ? s.books[s.active]?.name : mode === 'explore' ? 'Explore'
+      : mode === 'profile' ? (s.profileOf ? (s.pf?.profile?.name || s.profileOf.name) : s.acct?.name) : mode === 'settings' ? 'Account settings' : mode === 'auth' ? (s.suMode === 'join' ? 'Join' : 'Sign in') : '';
+    return t ? `${t} · verso.` : 'verso. — A place for the unfinished';
+  }
+  /** Shows the screen for the current address (first load, back/forward, pasted links). */
+  async applyRoute() {
+    this.applying = true;
+    try {
+      const s = this.state, parts = location.pathname.split('/').filter(Boolean).map(decodeURIComponent), [a, b] = parts;
+      if (!a) return s.acct ? this.goMode('mine') : this.goMode('home');
+      if (a === 'explore') { this.goMode('explore'); return this.setState({ exQ: new URLSearchParams(location.search).get('q') || '' }); }
+      if (a === 'signin' || a === 'join' || a === 'reset') { if (s.acct) return this.goMode('mine'); this.openAuth(a === 'join' ? 'join' : 'signin'); if (a === 'reset') this.setState({ suMode: 'reset' }); return; }
+      if (a === 'settings') return s.acct ? this.openSettings() : this.openAuth('signin');
+      if (a === 'sketchbooks') {
+        if (!s.acct) return this.openAuth('signin');
+        const j = b ? s.books.findIndex(x => x.id === b) : -1;
+        this.goMode('mine'); if (j >= 0) this.setState({ active: j, images: s.books[j].images });
+        return;
+      }
+      if (a.startsWith('@')) {
+        const handle = a.slice(1).toLowerCase();
+        if (b) {
+          const d = await api.getBook(b);
+          if (!d) return this.goMode('explore');
+          if (d.ownerId === this.state.acct?.uid) { const j = this.state.books.findIndex(x => x.id === d.id); this.goMode('mine'); if (j >= 0) this.setState(st => ({ active: j, images: st.books[j].images })); return; }
+          return this.openOtherBook(toOther(d, 0));
+        }
+        const uid = await api.uidForHandle(handle).catch(() => null);
+        if (!uid) return this.goMode('home');
+        return this.openProfile(uid === this.state.acct?.uid ? null : { uid, name: '@' + handle, handle });
+      }
+      this.goMode('home');
+    } finally {
+      // Let the screen settle before URL changes count as new history entries again.
+      setTimeout(() => { this.applying = false; }, 0);
+    }
+  }
+  openSettings = () => { cancelAnimationFrame(this.raf); this.setState({ mode: 'settings', other: null, focus: false, fz: 0, managing: false, draft: null, acErr: '', acInfo: '' }); };
   closeAuth = () => this.setState(s => ({ mode: s.authFrom && s.authFrom !== 'auth' ? s.authFrom : 'home', suErr: '', suInfo: '', su: null }));
   openProfile(who: Who | null, force?: boolean) {
     if (!who && !this.state.acct && !force) return this.openJoin();
@@ -205,7 +281,7 @@ export default class App extends Component<object, State> {
       if (this.state.profileOf?.uid === uid) this.setState({ pf: { uid, profile, books: docs.filter(b => b.pageCount > 0).map(toOther) } });
     }).catch(e => console.error(e));
   }
-  whoOf(b: OtherBook): Who { return { name: b.artist, uid: b.ownerId }; }
+  whoOf(b: OtherBook): Who { return { name: b.artist, uid: b.ownerId, handle: b.handle }; }
   openNewPick = () => this.setState({ newPick: true, pickShape: this.state.pickShape || 'portrait' });
 
   // ---------- books ----------
@@ -221,6 +297,21 @@ export default class App extends Component<object, State> {
     const next = (this.syncQ.get(id) || Promise.resolve()).then(job).catch(e => console.error('sync failed', e));
     this.syncQ.set(id, next);
   }
+  /** Makes thumbnails for the signed-in user's older pages and covers, one book at a time, in the background. */
+  backfillThumbs() {
+    const acct = this.state.acct; if (!acct) return;
+    for (const b of this.state.books) {
+      const missing = [...b.images, ...(b.coverImg ? [b.coverImg] : [])].filter(u => !isData(u) && !b.thumbs?.[u]);
+      if (!missing.length) continue;
+      this.enqueue(b.id, async () => {
+        const made: Record<string, string> = {};
+        for (const u of missing) { try { made[u] = await api.thumbFor(acct.uid, b.id, u); } catch (e) { console.warn('thumbnail failed', e); } }
+        if (!Object.keys(made).length) return;
+        await new Promise<void>(done => this.setState(s => ({ books: s.books.map(x => x.id === b.id ? { ...x, thumbs: { ...x.thumbs, ...made } } : x) }), done));
+        await this.syncBook(b.id);
+      });
+    }
+  }
   findBook(id: string) { return this.state.books.find(b => b.id === id); }
   /** Uploads any new images of a book, swaps in their URLs, then writes the book and removes files it no longer uses. */
   async syncBook(id: string) {
@@ -228,15 +319,17 @@ export default class App extends Component<object, State> {
     const pending = bookUrls(b).filter(isData);
     if (pending.length) {
       const m = await api.uploadImages(acct.uid, id, pending);
-      m.forEach((url, du) => { const bu = this.blobs.get(du); if (bu) this.blobs.set(url, bu); });
-      const swap = (u: string) => m.get(u) || u;
+      m.forEach(({ full }, du) => { const bu = this.blobs.get(du); if (bu) this.blobs.set(full, bu); });
+      const swap = (u: string) => m.get(u)?.full || u, thumbs: Record<string, string> = {};
+      m.forEach(({ full, thumb }) => { thumbs[full] = thumb; });
       await new Promise<void>(done => this.setState(s => ({
-        books: s.books.map(x => x.id === id ? { ...x, images: x.images.map(swap), coverImg: x.coverImg && swap(x.coverImg) } : x),
+        books: s.books.map(x => x.id === id ? { ...x, images: x.images.map(swap), coverImg: x.coverImg && swap(x.coverImg), thumbs: { ...x.thumbs, ...thumbs } } : x),
         images: s.books[s.active]?.id === id ? s.images.map(swap) : s.images,
       }), done));
       b = this.findBook(id); if (!b) return;
       if (bookUrls(b).some(isData)) return; // newer images arrived meanwhile; their own sync follows
     }
+    b = { ...b, thumbs: pruneThumbs(b) };
     await api.writeBook(this.state.acct || acct, b);
     const now = bookUrls(b), before = this.synced.get(id) || [];
     api.removeFiles(before.filter(u => !now.includes(u)));
@@ -301,7 +394,13 @@ export default class App extends Component<object, State> {
     } catch { u = d; }
     this.blobs.set(d, u); return u;
   }
-  coverBg(b?: Partial<AnyBook>) { b = b || {}; return b.coverImg ? `url("${this.blobUrl(b.coverImg)}") center/cover no-repeat ${b.color}` : b.color || '#b8243a'; }
+  /** Cover background; the thumbnail unless `full` (the open book's own cover). */
+  coverBg(b?: Partial<AnyBook>, full = false) {
+    b = b || {}; if (!b.coverImg) return b.color || '#b8243a';
+    const u = full ? b.coverImg : b.thumbs?.[b.coverImg] || b.coverImg;
+    return `url("${this.blobUrl(u)}") center/cover no-repeat ${b.color}`;
+  }
+  thumbOf(b: Partial<AnyBook> | undefined, u: string) { return b?.thumbs?.[u] || u; }
   shapeOf(b?: Partial<AnyBook> | null): Shape {
     const sh = b?.shape && SHAPES[b.shape]; if (sh) return sh;
     return { a: CONFIG.aspect === 'square' ? 1 : CONFIG.aspect === 'landscape' ? 1.35 : 0.72, s: 1 };
@@ -316,7 +415,7 @@ export default class App extends Component<object, State> {
   /** Background + page number for one side of a leaf. Leaf 0 is the front cover, the last leaf the back cover. */
   face(leaf: number, side: 0 | 1, w = 0): { bg: string; num: string; idx: number; wear: Wear | null; inside?: boolean } {
     const N = this.nLeaves(), book = this.curBook(), cover = book?.color ?? '#b8243a', inner = '#e9e2d3';
-    if (leaf === 0) return side ? { bg: inner, num: '', idx: -1, wear: null, inside: true } : { bg: this.coverBg(book), num: '', idx: -1, wear: null };
+    if (leaf === 0) return side ? { bg: inner, num: '', idx: -1, wear: null, inside: true } : { bg: this.coverBg(book, true), num: '', idx: -1, wear: null };
     if (leaf === N - 1) return side ? { bg: cover, num: '', idx: -1, wear: null } : { bg: inner, num: '', idx: -1, wear: null, inside: true };
     const pi = 2 * (leaf - 1) + side, img = this.state.images[pi], wear = this.wear(`${book?.id}:${pi}`, side ? 'l' : 'r', w), paper = wear.paper;
     return { bg: img ? `url("${this.blobUrl(img)}") center/cover no-repeat ${paper}` : paper, num: String(pi + 1), idx: img ? pi : -1, wear };
@@ -590,6 +689,7 @@ export default class App extends Component<object, State> {
         }
       },
       closeAuth: this.closeAuth,
+      ...this.settingsVals(),
       pfEditing: !!s.draft, dName: d.name || '', dHandle: d.handle || '', dBio: d.bio || '', dLoc: d.loc || '', dWeb: d.web || '', dEmail: a?.email || '', dBioCount: `${(d.bio || '').length}/160`,
       onDName: setD('name'), onDHandle: setD('handle'), onDBio: setD('bio'), onDLoc: setD('loc'), onDWeb: setD('web'),
       dAvBg: avatarBg(d.av), dInit: d.av ? '' : ini(d.name), dHasAv: !!d.av,
@@ -620,6 +720,35 @@ export default class App extends Component<object, State> {
       },
       pfCancel: () => this.setState({ draft: null, dErr: '' }), pfClose: (e: MouseEvent) => { if (e.target === e.currentTarget) this.setState({ draft: null }); },
       signOut: async () => { if (!window.confirm('Sign out of your account?')) return; await api.signOut(); this.setState({ draft: null }); this.goMode('home'); },
+    };
+  }
+
+  settingsVals(): V {
+    const s = this.state, a = s.acct, f = s.ac || {};
+    const set = (k: keyof NonNullable<State['ac']>) => (e: ChangeEvent<HTMLInputElement>) => { const v = e.target.value; this.setState(st => ({ ac: { ...st.ac, [k]: v } })); };
+    const run = async (key: string, fn: () => Promise<string | void>) => {
+      this.setState({ acBusy: key, acErr: '', acInfo: '' });
+      try { const info = await fn(); if (info) this.setState({ acInfo: info }); }
+      catch (e) { this.setState({ acErr: api.errMsg(e) }); }
+      finally { this.setState({ acBusy: '' }); }
+    };
+    return {
+      isSettings: s.mode === 'settings', openSettings: this.openSettings, closeSettings: () => this.openProfile(null),
+      acEmail: a?.email || '', acVerified: !!s.verified, acErr: s.acErr || '', acInfo: s.acInfo || '', acBusy: s.acBusy || '',
+      acF: { email: f.email || '', pwEmail: f.pwEmail || '', pwOld: f.pwOld || '', pwNew: f.pwNew || '', delHandle: f.delHandle || '', pwDel: f.pwDel || '' },
+      onAc: { email: set('email'), pwEmail: set('pwEmail'), pwOld: set('pwOld'), pwNew: set('pwNew'), delHandle: set('delHandle'), pwDel: set('pwDel') },
+      acHandle: a?.handle || '',
+      resendVerify: () => run('verify', async () => { await api.resendVerification(); return `Sent. Check ${a?.email} for the link.`; }),
+      checkVerified: () => run('verify', async () => { const ok = await api.refreshVerified(); this.setState({ verified: ok }); return ok ? 'Thanks, your email is confirmed.' : 'Not confirmed yet. Open the link in the email we sent, then try again.'; }),
+      changeEmail: (e?: { preventDefault(): void }) => { e?.preventDefault(); const next = (f.email || '').trim();
+        if (!/\S+@\S+\.\S+/.test(next)) return this.setState({ acErr: 'Enter the new email address.' });
+        run('email', async () => { await api.changeEmail(f.pwEmail || '', next); this.setState(st => ({ ac: { ...st.ac, email: '', pwEmail: '' } })); return `We sent a link to ${next}. Your email changes once you click it.`; }); },
+      changePassword: (e?: { preventDefault(): void }) => { e?.preventDefault();
+        if ((f.pwNew || '').length < 6) return this.setState({ acErr: 'Choose a new password of at least 6 characters.' });
+        run('password', async () => { await api.changePassword(f.pwOld || '', f.pwNew || ''); this.setState(st => ({ ac: { ...st.ac, pwOld: '', pwNew: '' } })); return 'Your password has been changed.'; }); },
+      deleteAccount: (e?: { preventDefault(): void }) => { e?.preventDefault(); if (!a) return;
+        if ((f.delHandle || '').replace(/^@/, '').toLowerCase() !== a.handle) return this.setState({ acErr: `Type your handle, ${a.handle}, to confirm.` });
+        run('delete', async () => { await api.deleteAccount(f.pwDel || '', a); this.setState({ ac: {} }); this.goMode('home'); }); },
     };
   }
 
@@ -786,7 +915,7 @@ export default class App extends Component<object, State> {
     });
 
     const pagesList = images.map((u, i) => ({
-      key: u.length + ':' + i + ':' + u.slice(-24), bg: `url("${this.blobUrl(u)}") center/cover no-repeat #f3efe6`, num: String(i + 1),
+      key: u.length + ':' + i + ':' + u.slice(-24), bg: `url("${this.blobUrl(this.thumbOf(book, u))}") center/cover no-repeat #f3efe6`, num: String(i + 1),
       edit: () => this.startEdit([images[i]], i), remove: () => this.setImages(images.filter((_, k) => k !== i)),
       left: () => this.movePage(i, i - 1), right: () => this.movePage(i, i + 1),
       dragStart: (e: DragEvent) => { this.dragIdx = i; e.dataTransfer.effectAllowed = 'move'; },
@@ -803,7 +932,7 @@ export default class App extends Component<object, State> {
       fz: fz.toFixed(3), uiOp: (1 - fz).toFixed(3), uiPE: fz > 0.5 ? 'none' : 'auto', bgRefA: this.bgRefA, bgRefB: this.bgRefB,
       focusBg: (() => {
         const r = Math.round(p), f = fL || r >= N - 1 ? this.face(Math.max(1, Math.min(N - 2, r - 1)), 1) : this.face(Math.max(1, r), 0);
-        return f.idx >= 0 ? `url("${this.blobUrl(images[f.idx])}") center/cover no-repeat ${PAPER}` : `radial-gradient(circle at 30% 35%, ${book.color} 0, transparent 55%), radial-gradient(circle at 72% 68%, #C9C3B4 0, transparent 55%), ${PAPER}`;
+        return f.idx >= 0 ? `url("${this.blobUrl(this.thumbOf(book, images[f.idx]))}") center/cover no-repeat ${PAPER}` : `radial-gradient(circle at 30% 35%, ${book.color} 0, transparent 55%), radial-gradient(circle at 72% 68%, #C9C3B4 0, transparent 55%), ${PAPER}`;
       })(),
       isMine: mode === 'mine', isOther: mode === 'other', isExplore: mode === 'explore', notOther: !other, showGhost: !other,
       navMineLine: mode === 'mine' ? INK : 'transparent', navMineFg: mode === 'mine' ? INK : '#85867C',
@@ -904,6 +1033,7 @@ export default class App extends Component<object, State> {
         {(v.isLanding || v.isHome) && <HomeScreen v={v} />}
         {v.isExplore && <Explore v={v} />}
         {v.isProfile && <Profile v={v} />}
+        {v.isSettings && <Settings v={v} />}
         {v.isAuth && <AuthPage v={v} />}
         {v.pfEditing && <EditProfile v={v} />}
         <input ref={this.avRef} type="file" accept="image/*" onChange={v.onAvFile} style={{ display: 'none' }} />
