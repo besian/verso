@@ -21,154 +21,45 @@ function Kicker() {
   );
 }
 
-function Footer() {
+/** Home page for everyone, sized to the window so it never scrolls: headline and actions,
+ *  then a shelf of community sketchbooks along the bottom. */
+export function HomeScreen({ v }: { v: V }) {
+  const mob = v.hmMob, signedOut = v.isLanding;
   return (
-    <footer style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, flexWrap: 'wrap', ...ruleTop('rgba(34,35,32,.25)') }}>
-      <span style={{ font: `400 22px ${SERIF}` }}>verso<span style={{ color: MARK }}>.</span> <em style={{ color: MUTED }}>A place for the unfinished.</em></span>
-      <span style={label()}>© 2026</span>
-    </footer>
-  );
-}
-
-function Page({ v, children }: { v: V; children: ReactNode }) {
-  return (
-    <div style={screen()}>
-      <div style={{ maxWidth: 1320, margin: '0 auto', boxSizing: 'border-box', padding: `${v.hmPadT}px ${v.hmPadX}px 40px`, display: 'flex', flexDirection: 'column', gap: v.hmGap }}>{children}</div>
-    </div>
-  );
-}
-
-/** A book standing on a canvas-coloured 4:5 panel, like a work on a gallery wall, with archive metadata below. */
-function PanelCard({ b, labelFs, nameFs }: { b: V; labelFs: number; nameFs: number }) {
-  return (
-    <div onClick={b.open} style={{ display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer', minWidth: 0 }}>
-      <div style={{ position: 'relative', aspectRatio: '4/5', background: CANVAS, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-        <div className={hover('transform:translateY(-6px) rotate(-1deg)')} style={{ position: 'relative', aspectRatio: b.ar, width: `${b.tw}%`, transition: 'transform .6s cubic-bezier(.2,.8,.2,1)' }}>
-          <ClosedBook size="sm" bg={b.bg} board={b.color} label={b.showLabel ? b.name : null} labelStyle={{ padding: '8px 10px', font: `400 ${labelFs}px/1.1 ${SERIF}` }} />
-        </div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, ...label(STONE, 10) }}><span>{b.no}</span><span>{b.pg}</span></div>
-        <div style={serif(nameFs)}>{b.name}</div>
-        <div style={{ fontSize: 13, color: MUTED }}>by <span onClick={b.openArtist} className={hoverLine} style={{ color: INK, borderBottom: '1px solid rgba(34,35,32,.3)', cursor: 'pointer' }}>{b.artist}</span></div>
-      </div>
-    </div>
-  );
-}
-
-function SectionHead({ n, title, onAll }: { n: string; title: string; onAll: () => void }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, ...ruleTop() }}>
-      <div style={{ display: 'flex', gap: 16, alignItems: 'baseline', minWidth: 0 }}><span style={label(MARK)}>{n}</span><span style={serif(32, 1)}>{title}</span></div>
-      <button onClick={onAll} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap', ...label(INK) }}>View all →</button>
-    </div>
-  );
-}
-
-const STEPS = [
-  ['01', 'Bind a sketchbook', 'Pick a shape — pocket, portrait, square, landscape or panorama — and give it a name and a cover.'],
-  ['02', 'Fill the pages', 'Drop in scans or phone photos of your pages. Crop and straighten each one as it goes in.'],
-  ['03', 'Leave it open', 'Anyone can leaf through your pages and follow along, long before the work is finished.'],
-];
-
-/** Signed-out homepage. */
-export function Landing({ v }: { v: V }) {
-  return (
-    <Page v={v}>
-      <section style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 28 }}>
+    <div style={{ ...screen('hidden'), display: 'flex', flexDirection: 'column', boxSizing: 'border-box', padding: `${v.hmPadT}px ${v.hmPadX}px ${mob ? 16 : 22}px` }}>
+      <section style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: mob ? 18 : 'clamp(14px, 2.6vh, 26px)' }}>
         <Kicker />
-        <h1 style={{ margin: 0, maxWidth: 1100, ...serif(v.ldH1, .92, '-.03em'), textWrap: 'balance' } as CSSProperties}>Every great idea starts <em style={{ color: MARK }}>somewhere.</em></h1>
-        <p style={{ margin: 0, maxWidth: 480, fontSize: 18, lineHeight: 1.55, color: MUTED, textWrap: 'pretty' } as CSSProperties}>A home for sketchbooks, unfinished thoughts, and the creative process. Share your pages. Discover someone else’s world.</p>
-        <div style={{ display: 'flex', gap: 28, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', marginTop: 6 }}>
-          <button onClick={v.openMe} className={hoverMark} style={primaryBtn(52, 15, 28)}>Start your own sketchbook</button>
-          <button onClick={v.goExplore} className={hoverLine} style={underlineBtn(15)}>Explore sketchbooks ↗</button>
+        <h1 style={{ margin: 0, maxWidth: 1100, font: `400 ${mob ? 'clamp(40px, 12vw, 56px)' : 'clamp(48px, min(8.5vw, 12vh), 132px)'}/.92 ${SERIF}`, letterSpacing: '-.03em', textWrap: 'balance' } as CSSProperties}>Every great idea starts <em style={{ color: MARK }}>somewhere.</em></h1>
+        {!mob && <p style={{ margin: 0, maxWidth: 480, fontSize: 'clamp(15px, 2vh, 18px)', lineHeight: 1.5, color: MUTED, textWrap: 'pretty' } as CSSProperties}>A home for sketchbooks, unfinished thoughts, and the creative process. Share your pages. Discover someone else’s world.</p>}
+        <div style={{ display: 'flex', flexDirection: mob ? 'column' : 'row', gap: mob ? 14 : 28, alignItems: 'center', justifyContent: 'center', marginTop: mob ? 4 : 2, width: mob ? '100%' : undefined }}>
+          {signedOut
+            ? <button onClick={v.openMe} className={hoverMark} style={{ ...primaryBtn(mob ? 48 : 50, 15, 28), width: mob ? '100%' : undefined, maxWidth: 320 }}>Start your own sketchbook</button>
+            : <button onClick={v.goExplore} className={hoverMark} style={{ ...primaryBtn(mob ? 48 : 50, 15, 28), width: mob ? '100%' : undefined, maxWidth: 320 }}>Explore sketchbooks ↗</button>}
+          {signedOut
+            ? <button onClick={v.goExplore} className={hoverLine} style={underlineBtn(15)}>Explore sketchbooks ↗</button>
+            : <button onClick={v.startOwn} className={hoverLine} style={underlineBtn(15)}>Start your own →</button>}
         </div>
-        <div style={{ fontSize: 13, color: STONE }}>Free to join. Already a member? <button onClick={v.openSignin} className={hoverText} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${STONE}`, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Sign in</button></div>
+        {signedOut && <div style={{ fontSize: 13, color: STONE }}>Already a member? <button onClick={v.openSignin} className={hoverText} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${STONE}`, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Sign in</button></div>}
       </section>
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ overflowX: 'auto', overflowY: 'hidden', paddingTop: 48 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: v.ldShelfJust, gap: v.ldShelfGap, width: 'max-content', minWidth: '100%', boxSizing: 'border-box', padding: '0 12px', borderBottom: `1px solid ${INK}` }}>
-            {!v.ldShelf.length && (
-              <div onClick={v.openMe} className={hover(`border-color:${MARK};color:${MARK}`)} style={{ width: 168, height: 232, margin: '0 auto', boxSizing: 'border-box', border: '2px dashed rgba(34,35,32,.35)', borderBottom: 'none', borderRadius: '2px 8px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 16, cursor: 'pointer', color: 'rgba(34,35,32,.7)', font: `400 22px/1.1 ${SERIF}` }}>Your sketchbook<br />goes here</div>
+      <section style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10, paddingTop: mob ? 20 : 28 }}>
+        <div style={{ overflow: 'hidden', paddingTop: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: v.hmShelfGap, boxSizing: 'border-box', padding: '0 12px', borderBottom: `1px solid ${INK}` }}>
+            {!v.hmShelf.length && (
+              <div onClick={signedOut ? v.openMe : v.startOwn} className={hover(`border-color:${MARK};color:${MARK}`)} style={{ width: Math.round(v.hmShelfH * 0.72), height: v.hmShelfH, boxSizing: 'border-box', border: '2px dashed rgba(34,35,32,.35)', borderBottom: 'none', borderRadius: '2px 8px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 12, cursor: 'pointer', color: 'rgba(34,35,32,.7)', font: `400 ${mob ? 17 : 20}px/1.1 ${SERIF}` }}>Your sketchbook<br />goes here</div>
             )}
-            {v.ldShelf.map((sh: V) => (
-              <div key={sh.key} onClick={sh.open} title={sh.title} className={hover('transform:translateY(-14px)')} style={{ position: 'relative', flexShrink: 0, width: sh.w, height: sh.h, transform: `rotate(${sh.rot}deg)`, transformOrigin: '50% 100%', cursor: 'pointer', transition: 'transform .5s cubic-bezier(.2,.8,.2,1)' }}>
+            {v.hmShelf.map((sh: V) => (
+              <div key={sh.key} onClick={sh.open} title={sh.title} className={hover('transform:translateY(-12px)')} style={{ position: 'relative', flexShrink: 0, width: sh.w, height: sh.h, transform: `rotate(${sh.rot}deg)`, transformOrigin: '50% 100%', cursor: 'pointer', transition: 'transform .5s cubic-bezier(.2,.8,.2,1)' }}>
                 <ClosedBook size="sm" bg={sh.bg} board={sh.color} label={sh.showLabel ? sh.name : null} labelStyle={{ padding: '6px 8px', font: `400 ${sh.fs}px/1.1 ${SERIF}` }} />
               </div>
             ))}
           </div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', ...label() }}>{v.ldShelf.length ? <><span>From the community — open any book to leaf through it</span><span>No account needed to look</span></> : <><span>The shelf is empty — be the first to put a sketchbook on it</span><span>Free to join</span></>}</div>
-      </section>
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'baseline' }}><span style={label(MARK)}>How it works</span></div>
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${v.ldStepCols},minmax(0,1fr))`, gap: '40px 32px' }}>
-          {STEPS.map(([n, t, d]) => (
-            <div key={n} style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 16, borderTop: `1px solid ${INK}` }}>
-              <span style={label(MARK)}>{n}</span>
-              <div style={serif(34)}>{t}</div>
-              <p style={{ margin: 0, fontSize: 15, lineHeight: 1.55, color: MUTED, maxWidth: 340, textWrap: 'pretty' } as CSSProperties}>{d}</p>
-            </div>
-          ))}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, ...label() }}>
+          <span>{v.hmShelf.length ? (mob ? 'From the community' : 'From the community — open any book to leaf through it') : 'The shelf is empty — yours could be first'}</span>
+          {v.hmShelf.length > 0 && <button onClick={v.goExplore} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap', ...label(INK) }}>View all →</button>}
         </div>
       </section>
-      <section style={{ display: 'grid', gridTemplateColumns: v.ldQuoteCols, gap: '24px 48px', padding: `${v.ldQuotePad}px 0`, borderTop: '1px solid rgba(34,35,32,.25)', borderBottom: '1px solid rgba(34,35,32,.25)' }}>
-        <span style={{ ...label(), paddingTop: 12 }}>Why “verso”</span>
-        <p style={{ margin: 0, font: `italic 400 ${v.ldQuote}px/1.08 ${SERIF}`, letterSpacing: '-.015em', textWrap: 'balance' } as CSSProperties}>The verso is the back of the page — the side nobody frames. It’s where the trying happens.</p>
-      </section>
-      <section style={{ display: 'flex', flexDirection: v.ldCtaDir, justifyContent: 'space-between', alignItems: v.ldCtaAlign, gap: 28 }}>
-        <h2 style={{ margin: 0, ...serif(v.ldCta, .95, '-.025em') }}>Your next page<br />starts <em style={{ color: MARK }}>here.</em></h2>
-        <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button onClick={v.openMe} className={hoverMark} style={primaryBtn(52, 15, 28)}>Join verso</button>
-          <button onClick={v.openSignin} className={hoverLine} style={{ ...underlineBtn(15), transition: undefined }}>Sign in</button>
-        </div>
-      </section>
-      <Footer />
-    </Page>
-  );
-}
-
-/** Signed-in homepage. */
-export function Home({ v }: { v: V }) {
-  return (
-    <Page v={v}>
-      <section style={{ display: 'grid', gridTemplateColumns: v.hmHeroCols, gap: '56px 72px', alignItems: 'end' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 28, minWidth: 0 }}>
-          <Kicker />
-          <h1 style={{ margin: 0, ...serif(v.hmH1, .94, '-.025em'), textWrap: 'balance' } as CSSProperties}>Every great idea starts <em style={{ color: MARK }}>somewhere.</em></h1>
-          <p style={{ margin: 0, maxWidth: 440, fontSize: 17, lineHeight: 1.55, color: MUTED, textWrap: 'pretty' } as CSSProperties}>A home for sketchbooks, unfinished thoughts, and the creative process. Share your pages. Discover someone else’s world.</p>
-          <div style={{ display: 'flex', gap: 28, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
-            <button onClick={v.goExplore} className={hoverMark} style={primaryBtn(50, 14, 24)}>Explore sketchbooks ↗</button>
-            <button onClick={v.startOwn} className={hoverLine} style={underlineBtn(14)}>Start your own →</button>
-          </div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, width: '100%', maxWidth: 520, justifySelf: v.hmHeroJustify }}>
-          <div style={label()}>On the desk this week</div>
-          {v.hmHero.map((b: V) => <PanelCard key={b.key} b={b} labelFs={18} nameFs={30} />)}
-          {v.hmEmpty && (
-            <div onClick={v.startOwn} style={{ display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer' }}>
-              <div style={{ aspectRatio: '4/5', background: CANVAS, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div className={hover(`border-color:${MARK};color:${MARK}`)} style={{ width: '58%', aspectRatio: '.72', boxSizing: 'border-box', border: '2px dashed rgba(34,35,32,.35)', borderRadius: '2px 8px 8px 2px', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 16, color: 'rgba(34,35,32,.7)', font: `400 22px/1.1 ${SERIF}` }}>Nothing on the desk yet</div>
-              </div>
-              <div style={{ fontSize: 13, color: MUTED }}>No one has shared a sketchbook yet. Start yours and it could be the first one here.</div>
-            </div>
-          )}
-        </div>
-      </section>
-      {v.hmFeat.length > 0 && <section style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
-        <SectionHead n="01" title="Featured sketchbooks" onAll={v.goExplore} />
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${v.hmFeatCols},minmax(0,1fr))`, gap: '48px 28px' }}>
-          {v.hmFeat.map((b: V) => <PanelCard key={b.key} b={b} labelFs={15} nameFs={27} />)}
-        </div>
-      </section>}
-      {v.hmComm.length > 0 && <section style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
-        <SectionHead n="02" title="From the community" onAll={v.goExplore} />
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${v.hmCommCols},minmax(0,1fr))`, gap: '48px 24px' }}>
-          {v.hmComm.map((b: V) => <PanelCard key={b.key} b={b} labelFs={13} nameFs={25} />)}
-        </div>
-      </section>}
-      <Footer />
-    </Page>
+    </div>
   );
 }
 

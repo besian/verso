@@ -4,7 +4,7 @@ import ClosedBook from '../ClosedBook';
 import { hover } from '../pseudo';
 import { earClip } from '../wear';
 import type { Wear } from '../wear';
-import { INK, MARK, PAGE_EDGES, PAPER, SANS, SERIF, label } from '../theme';
+import { INK, MARK, PAGE_EDGES, PAPER, SANS, SERIF, STONE, label } from '../theme';
 
 const navLink: CSSProperties = { border: 'none', background: 'none', padding: '4px 0', cursor: 'pointer', ...label() };
 const textBtn: CSSProperties = { height: 34, padding: 0, border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap', ...label(INK) };
@@ -142,6 +142,24 @@ function Controls({ v }: { v: V }) {
   );
 }
 
+const kbd: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 22, height: 22, padding: '0 5px', boxSizing: 'border-box', border: '1px solid rgba(34,35,32,.28)', borderBottomWidth: 2, borderRadius: 4, background: 'rgba(244,241,233,.85)', color: INK, font: `500 13px/1 ${SANS}`, letterSpacing: 0 };
+
+/** Quiet key reference in the corner of the book view (desktop only). */
+function KeyGuide({ v }: { v: V }) {
+  const rows: [string[], string][] = [[['←', '→'], 'Turn pages'], [['↑'], 'Open · zoom in'], [['↓'], 'Zoom out · close']];
+  if (v.multi) rows.push([['⇧', '←', '→'], 'Switch sketchbook']);
+  return (
+    <div aria-label="Keyboard shortcuts" style={{ position: 'absolute', left: 24, bottom: 24, zIndex: 2, display: 'flex', flexDirection: 'column', gap: 7, opacity: v.uiOp, pointerEvents: 'none', ...label(STONE, 10) }}>
+      {rows.map(([keys, what]) => (
+        <div key={what} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ display: 'flex', gap: 3, minWidth: 74 }}>{keys.map(k => <span key={k} style={kbd}>{k}</span>)}</span>
+          <span>{what}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** App shell: focus backdrop, top bar, book title, the 3D stage and its controls. Screens and overlays render as children above it. */
 export default function Stage({ v, children }: { v: V; children: ReactNode }) {
   return (
@@ -159,6 +177,7 @@ export default function Stage({ v, children }: { v: V; children: ReactNode }) {
       </div>
       <div style={{ marginBottom: 14, fontSize: 13, color: 'rgba(34,35,32,.75)', opacity: v.emptyOp, transition: 'opacity .3s', pointerEvents: 'none' }}>Open pages to add your drawings, or drop images here</div>
       <Controls v={v} />
+      {v.notMob && (v.isMine || v.isOther) && <KeyGuide v={v} />}
       {v.showHandle && <button onClick={v.toggleMenu} className={hover('background:rgba(244,241,233,.95)')} style={{ position: 'absolute', right: 24, bottom: 24, zIndex: 3, height: 34, padding: '0 14px', borderRadius: 2, border: 'none', background: 'rgba(244,241,233,.75)', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>{v.handleLbl}</button>}
       {v.showRail && (
         <div style={{ position: 'absolute', right: 20, top: '50%', transform: 'translateY(-50%)', zIndex: 3, display: 'flex', flexDirection: 'column', gap: 10, padding: 6, borderRadius: 2, background: 'rgba(244,241,233,.7)', opacity: v.railOp }}>

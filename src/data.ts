@@ -41,8 +41,6 @@ export interface OtherBook {
 
 /** Cover width (% of its grid cell) per shape, so books in a row read as a shelf. */
 export const GRID_WIDTH: Record<ShapeKey, number> = { pocket: 64, portrait: 78, square: 88, landscape: 100, panorama: 100 };
-/** Cover width (% of its 4:5 canvas panel) on the home page. */
-export const PANEL_WIDTH: Record<ShapeKey, number> = { pocket: 48, portrait: 58, square: 66, landscape: 78, panorama: 84 };
 
 export interface Account {
   uid: string;

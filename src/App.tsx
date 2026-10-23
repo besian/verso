@@ -1,6 +1,6 @@
 import { Component, createRef } from 'react';
 import type { ChangeEvent, DragEvent, MouseEvent, PointerEvent, WheelEvent } from 'react';
-import { CONFIG, GRID_WIDTH, PALETTE, PANEL_WIDTH, SHAPES } from './data';
+import { CONFIG, GRID_WIDTH, PALETTE, SHAPES } from './data';
 import type { Account, Book, OtherBook, Shape, ShapeKey } from './data';
 import * as api from './backend';
 import type { AuthUser, BookDoc, Person } from './backend';
@@ -9,7 +9,7 @@ import { COVER_INSIDE, pageWear } from './wear';
 import type { Wear } from './wear';
 import { INK, MARK, PAPER } from './theme';
 import Stage from './views/Stage';
-import { AuthPage, Explore, Home, Landing, Profile } from './views/Screens';
+import { AuthPage, Explore, HomeScreen, Profile } from './views/Screens';
 import { Editor, EditProfile, Manager, NewBookPicker } from './views/Overlays';
 
 export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth';
@@ -306,18 +306,17 @@ export default class App extends Component<object, State> {
     };
     this.raf = requestAnimationFrame(step);
   }
-  /** ↑ opens a closed book (first spread from the front, last from the back); ↓ closes it onto its front cover. */
-  openClose(open: boolean) {
+  /** ↑ steps closed → open → zoomed into a page; ↓ steps back: zoomed → open → closed on its front cover. */
+  openClose(up: boolean) {
     if (this.state.switching) return;
-    const N = this.nLeaves(), at = Math.round(this.target);
-    if (open) {
-      if (at !== 0 && at !== N) return;
-      this.target = at === 0 ? 1 : N - 1;
+    const N = this.nLeaves(), at = Math.round(this.target), closed = at === 0 || at === N;
+    if (up) {
+      if (closed) { this.target = at === 0 ? 1 : N - 1; return this.animate(); }
+      if (!this.state.focus) this.focusOn(at, this.autoSide(at));
     } else {
-      if (this.state.focus) this.setFocus(false);
-      this.target = 0;
+      if (this.state.focus) return this.setFocus(false);
+      if (at !== 0) { this.target = 0; this.animate(); }
     }
-    this.animate();
   }
   go(dir: number) {
     if (this.state.focus) return this.focusGo(dir);
@@ -425,26 +424,20 @@ export default class App extends Component<object, State> {
 
   // ---------- computed values per screen ----------
   homeVals(): V {
-    const vw = this.state.vw, mob = vw < 640, tab = vw < 1000;
+    const { vw, vh } = this.state, mob = vw < 640;
     const list = [...this.community()].sort((a, b) => b.likes - a.likes);
-    const mk = (b: OtherBook) => ({
-      key: b.id, name: b.name, artist: b.artist, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, ar: String(this.shapeOf(b).a), tw: String(PANEL_WIDTH[b.shape] || 58),
-      no: 'Sketchbook ' + String(b.idx + 1).padStart(3, '0'), pg: 'Pages 01—' + String(b.pages).padStart(2, '0'),
-      open: () => this.openOtherBook(b), openArtist: (e: MouseEvent) => { e.stopPropagation(); this.openProfile(this.whoOf(b)); },
-    });
-    const sel = list.slice(0, 6), gap = mob ? 16 : 28, rel = sel.map(b => { const s = this.shapeOf(b); return { s, w: s.s * s.a }; }), sumW = rel.reduce((t, r) => t + r.w, 0);
-    const avail = Math.min(vw, 1320) - 2 * (mob ? 16 : 40) - 24 - gap * (sel.length - 1), base = mob ? 170 : Math.max(150, Math.min(300, avail / sumW));
+    // One screen: the shelf takes what height is left after the headline block, and its books
+    // shrink further if they'd be wider than the page.
+    const sel = list.slice(0, mob ? 3 : 7), gap = mob ? 14 : 26, shapes = sel.map(b => this.shapeOf(b)), sumW = shapes.reduce((t, sh) => t + sh.s * sh.a, 0);
+    const avail = (Math.min(vw, 1320) - 2 * (mob ? 16 : 40) - 24 - gap * Math.max(0, sel.length - 1)) * 0.9; // room for the tilt and back boards
+    const maxH = mob ? Math.max(90, Math.min(180, vh * 0.23)) : Math.max(110, Math.min(300, vh * 0.31));
+    const base = sumW ? Math.min(maxH, avail / sumW) : maxH;
     return {
-      hmEmpty: !!this.state.community && !list.length, hmHero: list.slice(0, 1).map(mk), hmFeat: list.slice(1, 4).map(mk), hmComm: list.slice(4).map(mk),
-      hmPadT: mob ? 96 : 140, hmPadX: mob ? 16 : 40, hmHeroCols: tab ? 'minmax(0,1fr)' : 'minmax(0,7fr) minmax(0,5fr)', hmHeroJustify: tab ? 'start' : 'end', hmH1: mob ? 58 : tab ? 92 : 120,
-      hmFeatCols: mob ? 1 : 3, hmCommCols: mob || tab ? 2 : 4, hmGap: mob ? 72 : 120,
-      ldShelf: sel.map((b, i) => {
-        const hh = Math.round(base * rel[i].s.s);
-        return { key: b.id, name: b.name, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, title: b.name + ' — ' + b.artist, h: hh, w: Math.round(hh * rel[i].s.a), fs: Math.max(11, Math.round(hh / 17)), rot: [0, -2, 0, 1.5, 0, -1][i], open: () => this.openOtherBook(b) };
+      hmMob: mob, hmPadX: mob ? 16 : 40, hmPadT: mob ? 70 : 84, hmEmpty: !!this.state.community && !list.length, hmShelfGap: gap, hmShelfH: Math.round(base),
+      hmShelf: sel.map((b, i) => {
+        const hh = Math.round(base * shapes[i].s);
+        return { key: b.id, name: b.name, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, title: b.name + ' — ' + b.artist, h: hh, w: Math.round(hh * shapes[i].a), fs: Math.max(11, Math.round(hh / 17)), rot: [0, -2, 0, 1.5, 0, -1, 1][i], open: () => this.openOtherBook(b) };
       }),
-      ldShelfGap: gap, ldShelfJust: mob ? 'flex-start' : 'center', ldH1: mob ? 60 : tab ? 104 : 148, ldStepCols: mob ? 1 : 3,
-      ldQuoteCols: mob ? 'minmax(0,1fr)' : 'minmax(0,3fr) minmax(0,9fr)', ldQuote: mob ? 34 : 60, ldQuotePad: mob ? 40 : 72,
-      ldCta: mob ? 52 : 88, ldCtaDir: tab ? 'column' : 'row', ldCtaAlign: tab ? 'flex-start' : 'flex-end',
       startOwn: () => { if (!this.state.acct) return this.openProfile(null); this.goMode('mine'); this.openNewPick(); },
     };
   }
@@ -749,7 +742,7 @@ export default class App extends Component<object, State> {
       bookOp: sw ? 0 : 1, titleName: other ? other.name : (books[Math.round(car)] || book).name,
       titleOp: ((sw ? 1 - Math.sin(Math.PI * (s.swT || 0)) * 0.85 : 1) * (1 - fz)).toFixed(3),
       bookName: book.name,
-      bookMeta: other ? `by ${(other as OtherBook).artist} · ${(other as OtherBook).pages} pages` : books.length > 1 ? `${images.length} pages · ${active + 1} of ${books.length}` : `${images.length} pages`,
+      bookMeta: other ? `by ${(other as OtherBook).artist} · ${(other as OtherBook).pages} pages` : books.length > 1 ? `${images.length} ${images.length === 1 ? 'page' : 'pages'} · ${active + 1} of ${books.length}` : `${images.length} ${images.length === 1 ? 'page' : 'pages'}`,
       multi: !other && books.length > 1, prevBook: () => this.switchBook(active - 1), nextBook: () => this.switchBook(active + 1),
       prevOp: active > 0 ? 1 : 0.3, nextOp: active < books.length - 1 ? 1 : 0.3,
       sideBooks, sbBase: `rotateX(${tilt}deg)`, sbTop: -H / 2, ghostT: sideT(books.length - car),
@@ -825,8 +818,7 @@ export default class App extends Component<object, State> {
     };
     return (
       <Stage v={v}>
-        {v.isLanding && <Landing v={v} />}
-        {v.isHome && <Home v={v} />}
+        {(v.isLanding || v.isHome) && <HomeScreen v={v} />}
         {v.isExplore && <Explore v={v} />}
         {v.isProfile && <Profile v={v} />}
         {v.isAuth && <AuthPage v={v} />}
