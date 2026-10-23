@@ -688,18 +688,33 @@ export default class App extends Component<object, State> {
       };
     });
 
-    // Carousel of closed books either side of the open one.
-    const ext = W / 2 * (1 + clamp01(Math.min(p, N - p))), sbw = W * 0.78, gap = W * 0.32;
-    const sw = !!s.switching, car = sw ? s.car! : active;
-    const pos = (d: number) => { const a = Math.abs(d); return Math.sign(d) * (Math.min(1, a) * (ext + gap + sbw / 2) + Math.max(0, a - 1) * (sbw + gap)) - W / 2; };
+    // Carousel of closed books either side of the open one. Each book is laid out at its own size
+    // (books can be different shapes) with a fixed gap, so nothing re-spaces when the middle book
+    // changes; mid-switch, positions blend between the layouts centred on the two nearest books.
+    const sw = !!s.switching, car = sw ? s.car! : active, SIDE = 0.78;
+    const shelf = (other ? [] : books) as Book[];
+    const ghostD = this.dims({ shape: 'portrait' } as Book, true);
+    const widths = [...shelf.map(b => this.dims(b, true).W), ghostD.W]; // last slot is "+ New sketchbook"
+    const gap = Math.round((s.sh || s.vh * 0.5) * 0.1);
+    const openExt = W / 2 * (1 + clamp01(Math.min(p, N - p)));
+    /** Centre x of slot j when slot k is in the middle. */
+    const layout = (k: number, j: number) => {
+      if (j === k) return 0;
+      const half = k === active && !sw ? openExt : widths[k] / 2, dir = Math.sign(j - k);
+      let x = half + gap;
+      for (let i = k + dir; i !== j; i += dir) x += widths[i] * SIDE + gap;
+      return dir * (x + widths[j] * SIDE / 2);
+    };
+    const kMax = widths.length - 1, k0 = Math.max(0, Math.min(kMax, Math.floor(car))), k1 = Math.min(kMax, k0 + 1), f = car - k0;
+    const centre = (j: number) => layout(k0, j) * (1 - f) + layout(k1, j) * f;
     const zTop = (b: Book) => { const n = (b?.images || []).length; return (Math.max(CONFIG.minPages, n + (n % 2)) / 2 + 2) * 0.5; };
-    const sideT = (d: number, z0 = 0, bw = W) => { const m = Math.min(1, Math.abs(d)); return `translateX(${(pos(d) + W / 2 - bw / 2).toFixed(1)}px) translateZ(${(-60 * m + z0 * (1 - m)).toFixed(2)}px) scale(${(1 - 0.22 * m).toFixed(3)})`; };
-    const sideBooks = (other ? [] : books).map((b, j) => ({ b, j })).filter(x => sw || x.j !== active).map(({ b, j }) => {
+    const sideT = (j: number, z0 = 0) => { const m = Math.min(1, Math.abs(j - car)); return `translateX(${(centre(j) - widths[j] / 2).toFixed(1)}px) translateZ(${(-60 * m + z0 * (1 - m)).toFixed(2)}px) scale(${(1 - (1 - SIDE) * m).toFixed(3)})`; };
+    const sideBooks = shelf.map((b, j) => ({ b, j })).filter(x => sw || x.j !== active).map(({ b, j }) => {
       const d = this.dims(b, true);
       return {
-        key: b.id, w: d.W, h: d.H, top: -d.H / 2, transform: sideT(j - car, zTop(b), d.W),
+        key: b.id, w: d.W, h: d.H, top: -d.H / 2, transform: sideT(j, zTop(b)),
         opacity: clamp01(3 - Math.abs(j - car)).toFixed(3), labelOp: Math.min(1, Math.abs(j - car)).toFixed(3),
-        shade: (0.35 * Math.min(1, Math.abs(j - car))).toFixed(3), bg: this.coverBg(b), board: b.color, showLabel: !b.coverImg, name: b.name, count: `${b.images.length} pages`,
+        shade: (0.35 * Math.min(1, Math.abs(j - car))).toFixed(3), bg: this.coverBg(b), board: b.color, showLabel: !b.coverImg, name: b.name, count: `${b.images.length} ${b.images.length === 1 ? 'page' : 'pages'}`,
         stop: (e: PointerEvent) => e.stopPropagation(), open: () => this.switchBook(j),
       };
     });
@@ -745,7 +760,7 @@ export default class App extends Component<object, State> {
       bookMeta: other ? `by ${(other as OtherBook).artist} · ${(other as OtherBook).pages} pages` : books.length > 1 ? `${images.length} ${images.length === 1 ? 'page' : 'pages'} · ${active + 1} of ${books.length}` : `${images.length} ${images.length === 1 ? 'page' : 'pages'}`,
       multi: !other && books.length > 1, prevBook: () => this.switchBook(active - 1), nextBook: () => this.switchBook(active + 1),
       prevOp: active > 0 ? 1 : 0.3, nextOp: active < books.length - 1 ? 1 : 0.3,
-      sideBooks, sbBase: `rotateX(${tilt}deg)`, sbTop: -H / 2, ghostT: sideT(books.length - car),
+      sideBooks, sbBase: `rotateX(${tilt}deg)`, ghostT: sideT(books.length), ghostW: ghostD.W, ghostH: ghostD.H, ghostTop: -ghostD.H / 2,
       newBook: this.openNewPick, stopPD: (e: PointerEvent) => e.stopPropagation(),
       navMineLbl: m ? 'Yours' : 'Your sketchbooks', mNavGap: m ? 14 : 40, notMob: !m, mPad: m ? 14 : 24, mTop: m ? 14 : 20, mGap: m ? 14 : 24,
       newLbl: m ? '+ New' : '+ New sketchbook', mTitleTop: m ? 72 : 76, mTitleSize: m ? 32 : 46, mBottom: m ? 16 : 36, mModalPad: m ? 18 : 28, mOptMin: m ? 92 : 120, mOptH: m ? 130 : 170,

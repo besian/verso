@@ -67,7 +67,7 @@ function Carousel({ v }: { v: V }) {
         </div>
       ))}
       {v.showGhost && (
-        <div onPointerDown={v.stopPD} onClick={v.newBook} className={hover('border-color:rgba(34,35,32,.7)')} style={{ position: 'absolute', left: 0, top: v.sbTop, width: v.W, height: v.H, transform: v.ghostT, border: '2px dashed rgba(34,35,32,.35)', borderRadius: '4px 12px 12px 4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 500, color: 'rgba(34,35,32,.75)', cursor: 'pointer', boxSizing: 'border-box' }}>+ New sketchbook</div>
+        <div onPointerDown={v.stopPD} onClick={v.newBook} className={hover('border-color:rgba(34,35,32,.7)')} style={{ position: 'absolute', left: 0, top: v.ghostTop, width: v.ghostW, height: v.ghostH, transform: v.ghostT, border: '2px dashed rgba(34,35,32,.35)', borderRadius: '4px 12px 12px 4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 500, color: 'rgba(34,35,32,.75)', cursor: 'pointer', boxSizing: 'border-box' }}>+ New sketchbook</div>
       )}
     </div>
   );
