@@ -83,6 +83,8 @@ const CURL_DEG = 110;
 /** Page width as a share of a phone's screen: closed, and open (two pages side by side, plus the fan of turning pages). */
 const PHONE_CLOSED = 0.6, PHONE_OPEN = 0.44;
 const IS_TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+/** Zooming into a page, and sliding between the two pages of a spread while zoomed (ms). */
+const FOCUS_MS = 300, FOCUS_SHIFT_MS = 280;
 /** Likes and followers each artist is working toward. */
 const GOAL = 100;
 const avatarBg = (av?: string | null) => av ? `url("${av}") center/cover no-repeat ${INK}` : INK;
@@ -668,12 +670,14 @@ export default class App extends Component<object, State> {
     if (n && IS_TOUCH && !this.state.hintDone) { store.saveHints(store.loadHints() + 1); this.setState({ hintDone: true }); }
     this.target = t;
   }
+  /** Eases the page position toward the target. Time-based, so a turn takes the same time on a slow phone (fewer frames) as on a fast screen. */
   animate(onDone?: () => void) {
     cancelAnimationFrame(this.raf);
-    const step = () => {
-      const p = this.state.p, d = this.target - p;
+    let last = performance.now();
+    const step = (now: number) => {
+      const p = this.state.p, d = this.target - p, dt = Math.min(64, now - last); last = now;
       if (Math.abs(d) < 0.002) { this.setState({ p: this.target }); onDone?.(); return; }
-      this.setState({ p: p + d * 0.14 }); this.raf = requestAnimationFrame(step);
+      this.setState({ p: p + d * (1 - Math.pow(1 - 0.16, dt / 16.7)) }); this.raf = requestAnimationFrame(step);
     };
     this.raf = requestAnimationFrame(step);
   }
@@ -725,7 +729,7 @@ export default class App extends Component<object, State> {
     if (this.state.switching) return;
     this.setState({ fside: side }); cancelAnimationFrame(this.sraf);
     const from = this.state.fsx || 0, to = side === 'L' ? 1 : 0, t0 = performance.now();
-    const tick = (now: number) => { const t = Math.min(1, (now - t0) / 600), e = 1 - Math.pow(1 - t, 3); this.setState({ fsx: from + (to - from) * e }); if (t < 1) this.sraf = requestAnimationFrame(tick); };
+    const tick = (now: number) => { const t = Math.min(1, (now - t0) / FOCUS_SHIFT_MS), e = 1 - Math.pow(1 - t, 3); this.setState({ fsx: from + (to - from) * e }); if (t < 1) this.sraf = requestAnimationFrame(tick); };
     if (this.state.focus) this.sraf = requestAnimationFrame(tick); else this.setState({ fsx: to });
     if (Math.abs(this.state.p - p) > 0.01) { this.turnTo(p); this.animate(); }
     this.setFocus(true);
@@ -735,19 +739,36 @@ export default class App extends Component<object, State> {
     this.setState({ focus: on, ctrlShow: true, menuOpen: false });
     clearTimeout(this.wakeT); if (on) this.wakeT = setTimeout(() => this.state.focus && this.setState({ ctrlShow: false }), 1800);
     cancelAnimationFrame(this.fraf);
-    const from = this.state.fz || 0, to = on ? 1 : 0, t0 = performance.now(), dur = 700;
+    const from = this.state.fz || 0, to = on ? 1 : 0, t0 = performance.now(), dur = FOCUS_MS;
     const tick = (now: number) => { const t = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - t, 3); this.setState({ fz: from + (to - from) * e }); if (t < 1) this.fraf = requestAnimationFrame(tick); };
     this.fraf = requestAnimationFrame(tick);
+  }
+  /** A tiny, colour-boosted copy of a page (made once per image) that the browser stretches into a soft blur. */
+  soft = new Map<string, string | null>();
+  softCopy(u: string): string | null {
+    if (this.soft.has(u)) return this.soft.get(u) || null;
+    this.soft.set(u, null);
+    const im = new Image(); if (!/^(data|blob):/.test(u)) im.crossOrigin = 'anonymous';
+    im.onload = () => {
+      try {
+        const c = document.createElement('canvas'); c.width = 14; c.height = 18; const x = c.getContext('2d')!;
+        x.drawImage(im, 0, 0, c.width, c.height);
+        const d = x.getImageData(0, 0, c.width, c.height);
+        for (let i = 0; i < d.data.length; i += 4) { const [r, g, b] = [d.data[i], d.data[i + 1], d.data[i + 2]], l = 0.2126 * r + 0.7152 * g + 0.0722 * b; d.data[i] = l + (r - l) * 1.5; d.data[i + 1] = l + (g - l) * 1.5; d.data[i + 2] = l + (b - l) * 1.5; }
+        x.putImageData(d, 0, 0); this.soft.set(u, c.toDataURL()); this.forceUpdate();
+      } catch { /* image not readable (CORS): keep the plain backdrop */ }
+    };
+    im.src = this.blobUrl(u);
+    return null;
   }
   drift(el: (HTMLDivElement & { _anim?: Animation }) | null, kf: Keyframe[], dur: number) {
     if (el && !el._anim && el.animate) el._anim = el.animate(kf, { duration: dur, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out' });
   }
   bgRefA = (el: HTMLDivElement | null) => this.drift(el, [{ transform: 'translate(-6%,-4%) rotate(0deg) scale(1.1)' }, { transform: 'translate(5%,4%) rotate(10deg) scale(1.3)' }], 16000);
-  bgRefB = (el: HTMLDivElement | null) => this.drift(el, [{ transform: 'translate(6%,5%) rotate(0deg) scale(1.3)' }, { transform: 'translate(-5%,-6%) rotate(-14deg) scale(1.1)' }], 21000);
 
   // ---------- fit-your-page editor ----------
-  startEdit(queue: string[], replaceIdx: number | null, target?: 'cover') {
-    this.setState({ edit: { queue, i: 0, replaceIdx, target, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, adj: NO_ADJUST, mode: 'fit' } });
+  startEdit(queue: string[], replaceIdx: number | null, target?: 'cover', mode: 'fit' | 'adjust' = 'fit') {
+    this.setState({ edit: { queue, i: 0, replaceIdx, target, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, adj: NO_ADJUST, mode } });
     this.loadEditImg(queue[0]);
   }
   loadEditImg(src: string) {
@@ -1310,7 +1331,7 @@ export default class App extends Component<object, State> {
       caption: notes[u]?.c || '', date: notes[u]?.d || '',
       onCaption: (e: ChangeEvent<HTMLInputElement>) => setNote(u, { c: e.target.value.slice(0, 140) }),
       onDate: (e: ChangeEvent<HTMLInputElement>) => setNote(u, { d: e.target.value }),
-      edit: () => this.startEdit([images[i]], i), remove: () => this.setImages(images.filter((_, k) => k !== i)),
+      edit: () => this.startEdit([images[i]], i), adjust: () => this.startEdit([images[i]], i, undefined, 'adjust'), remove: () => this.setImages(images.filter((_, k) => k !== i)),
       left: () => { this.movePage(i, i - 1); if (s.mgPage === i && i > 0) this.setState({ mgPage: i - 1 }); },
       right: () => { this.movePage(i, i + 1); if (s.mgPage === i && i < images.length - 1) this.setState({ mgPage: i + 1 }); },
       dragStart: (e: DragEvent) => { this.dragIdx = i; e.dataTransfer.effectAllowed = 'move'; },
@@ -1324,10 +1345,11 @@ export default class App extends Component<object, State> {
     const vis = !foc || (focusMode === 'auto-hide' ? s.ctrlShow !== false : focusMode === 'toggle' ? !!s.menuOpen : false);
 
     return {
-      fz: fz.toFixed(3), uiOp: (1 - fz).toFixed(3), uiPE: fz > 0.5 ? 'none' : 'auto', bgRefA: this.bgRefA, bgRefB: this.bgRefB,
+      fz: fz.toFixed(3), uiOp: (1 - fz).toFixed(3), uiPE: fz > 0.5 ? 'none' : 'auto', bgRefA: this.bgRefA,
       focusBg: (() => {
         const r = Math.round(p), f = fL || r >= N - 1 ? this.face(Math.max(1, Math.min(N - 2, r - 1)), 1) : this.face(Math.max(1, r), 0);
-        return f.idx >= 0 ? `url("${this.blobUrl(this.thumbOf(book, images[f.idx]))}") center/cover no-repeat ${PAPER}` : `radial-gradient(circle at 30% 35%, ${book.color} 0, transparent 55%), radial-gradient(circle at 72% 68%, #C9C3B4 0, transparent 55%), ${PAPER}`;
+        const soft = f.idx >= 0 ? this.softCopy(this.thumbOf(book, images[f.idx])) : null;
+        return soft ? `url("${soft}") center/100% 100% no-repeat ${PAPER}` : `radial-gradient(circle at 30% 35%, ${book.color} 0, transparent 55%), radial-gradient(circle at 72% 68%, #C9C3B4 0, transparent 55%), ${PAPER}`;
       })(),
       isMine: mode === 'mine', isOther: mode === 'other', isExplore: mode === 'explore', notOther: !other, showGhost: !other,
       navMineLine: mode === 'mine' ? INK : 'transparent', navMineFg: mode === 'mine' ? INK : STONE,

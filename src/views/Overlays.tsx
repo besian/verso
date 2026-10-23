@@ -255,7 +255,8 @@ function PageSheet({ v, pg }: { v: V; pg: V }) {
           </label>
           <span style={hint}>Written in the page’s margin in the book.</span>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button onClick={() => { v.closePage(); pg.edit(); }} className={hoverTint} style={act}>Re-fit image</button>
+            <button onClick={() => { v.closePage(); pg.adjust(); }} className={hoverTint} style={act}>Adjust photo</button>
+            <button onClick={() => { v.closePage(); pg.edit(); }} className={hoverTint} style={act}>Crop & fit</button>
             <button onClick={pg.left} disabled={v.mgPage === 0} className={hoverTint} style={{ ...act, opacity: v.mgPage === 0 ? 0.4 : 1 }}>← Earlier</button>
             <button onClick={pg.right} disabled={v.mgPage === v.pagesList.length - 1} className={hoverTint} style={{ ...act, opacity: v.mgPage === v.pagesList.length - 1 ? 0.4 : 1 }}>Later →</button>
           </div>

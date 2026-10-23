@@ -297,11 +297,14 @@ function KeyGuide({ v }: { v: V }) {
 export default function Stage({ v, children }: { v: V; children: ReactNode }) {
   return (
     <div onDragOver={v.onDragOver} onDrop={v.onDrop} onMouseMove={v.wake} onPointerDown={v.wake} onClick={v.closeMore} style={{ ['--tabbar' as string]: v.tabBar ? 'calc(57px + env(safe-area-inset-bottom))' : '0px', position: 'fixed', inset: 0, background: PAPER, color: INK, fontFamily: SANS, display: 'flex', flexDirection: 'column', alignItems: 'center', userSelect: 'none' }}>
-      <div style={{ ...fill, overflow: 'hidden', pointerEvents: 'none', opacity: v.fz }}>
-        <div ref={v.bgRefA} style={{ position: 'absolute', inset: '-25%', background: v.focusBg, filter: 'blur(80px) saturate(1.5)', transition: 'background .9s' }} />
-        <div ref={v.bgRefB} style={{ position: 'absolute', inset: '-25%', background: v.focusBg, filter: 'blur(110px) saturate(1.3)', opacity: .55, mixBlendMode: 'screen', transition: 'background .9s' }} />
-        <div style={{ ...fill, background: 'rgba(var(--paper-rgb),.74)' }} />
-      </div>
+      {/* Focus backdrop, only while zoomed: a tiny pre-blurred copy of the page stretched across the screen.
+          (A CSS blur on a screen-sized layer had to be recomputed every frame and made zooming stutter.) */}
+      {+v.fz > 0.001 && (
+        <div style={{ ...fill, overflow: 'hidden', pointerEvents: 'none', opacity: v.fz }}>
+          <div ref={v.bgRefA} style={{ position: 'absolute', inset: '-25%', background: v.focusBg, transition: 'background .9s' }} />
+          <div style={{ ...fill, background: 'rgba(var(--paper-rgb),.74)' }} />
+        </div>
+      )}
       <TopBar v={v} />
       <Title v={v} />
       <div ref={v.stageRef} onPointerDown={v.onDown} onPointerMove={v.onMove} onPointerUp={v.onUp} onPointerCancel={v.onUp} onWheel={v.onWheel} style={{ position: 'relative', flex: 1, minHeight: 0, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', perspective: 2200, cursor: 'grab', touchAction: 'none' }}>
