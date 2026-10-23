@@ -430,7 +430,7 @@ export default class App extends Component<object, State> {
     // shrink further if they'd be wider than the page.
     const sel = list.slice(0, mob ? 3 : 7), gap = mob ? 14 : 26, shapes = sel.map(b => this.shapeOf(b)), sumW = shapes.reduce((t, sh) => t + sh.s * sh.a, 0);
     const avail = (Math.min(vw, 1320) - 2 * (mob ? 16 : 40) - 24 - gap * Math.max(0, sel.length - 1)) * 0.9; // room for the tilt and back boards
-    const maxH = mob ? Math.max(90, Math.min(180, vh * 0.23)) : Math.max(110, Math.min(300, vh * 0.31));
+    const maxH = mob ? Math.max(90, Math.min(170, vh * 0.21)) : Math.max(110, Math.min(290, vh * 0.29));
     const base = sumW ? Math.min(maxH, avail / sumW) : maxH;
     return {
       hmMob: mob, hmPadX: mob ? 16 : 40, hmPadT: mob ? 70 : 84, hmEmpty: !!this.state.community && !list.length, hmShelfGap: gap, hmShelfH: Math.round(base),

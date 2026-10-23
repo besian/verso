@@ -43,7 +43,7 @@ export function HomeScreen({ v }: { v: V }) {
       </section>
       <section style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10, paddingTop: mob ? 20 : 28 }}>
         <div style={{ overflow: 'hidden', paddingTop: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: v.hmShelfGap, boxSizing: 'border-box', padding: '0 12px', borderBottom: `1px solid ${INK}` }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: v.hmShelfGap, boxSizing: 'border-box', padding: `0 12px ${v.hmMob ? 12 : 16}px`, borderBottom: `1px solid ${INK}` }}>
             {!v.hmShelf.length && (
               <div onClick={signedOut ? v.openMe : v.startOwn} className={hover(`border-color:${MARK};color:${MARK}`)} style={{ width: Math.round(v.hmShelfH * 0.72), height: v.hmShelfH, boxSizing: 'border-box', border: '2px dashed rgba(34,35,32,.35)', borderBottom: 'none', borderRadius: '2px 8px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 12, cursor: 'pointer', color: 'rgba(34,35,32,.7)', font: `400 ${mob ? 17 : 20}px/1.1 ${SERIF}` }}>Your sketchbook<br />goes here</div>
             )}
