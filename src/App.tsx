@@ -3,7 +3,7 @@ import type { ChangeEvent, DragEvent, MouseEvent, PointerEvent, WheelEvent } fro
 import { CONFIG, GRID_WIDTH, PALETTE, PANEL_WIDTH, SHAPES } from './data';
 import type { Account, Book, OtherBook, Shape, ShapeKey } from './data';
 import * as api from './backend';
-import type { AuthUser, BookDoc } from './backend';
+import type { AuthUser, BookDoc, Person } from './backend';
 import * as store from './storage';
 import { COVER_INSIDE, pageWear } from './wear';
 import type { Wear } from './wear';
@@ -33,7 +33,7 @@ interface State {
   books: Book[]; active: number; images: string[];
   other?: AnyBook | null; profileOf?: Who | null; pfPreview?: boolean;
   pf?: { uid: string; profile: PublicProfile | null; books: OtherBook[] } | null;
-  community?: OtherBook[];
+  community?: OtherBook[]; people?: Person[];
   p: number; zoom: number; managing: boolean;
   vw: number; vh: number; sw?: number; sh?: number;
   switching?: boolean; car?: number; swT?: number;
@@ -59,7 +59,7 @@ const localBook = (): Book => ({ id: 'local', name: 'sketchbook', color: '#b8243
 const toOther = (b: BookDoc, idx: number): OtherBook => ({
   id: b.id, idx, shape: b.shape, likes: b.pageCount, artist: b.ownerName || '@' + b.ownerHandle, name: b.name, color: b.color,
   images: b.pages, pages: Math.max(CONFIG.minPages, b.pageCount + (b.pageCount % 2)), initials: ini(b.ownerName), coverImg: b.cover,
-  ownerId: b.ownerId, updatedAt: b.updatedAt,
+  ownerId: b.ownerId, handle: b.ownerHandle, updatedAt: b.updatedAt,
 });
 
 export default class App extends Component<object, State> {
@@ -155,6 +155,7 @@ export default class App extends Component<object, State> {
   goMode(mode: Mode) {
     cancelAnimationFrame(this.raf); this.target = 0;
     if (mode === 'explore' || mode === 'home') this.loadCommunity();
+    if (mode === 'explore') api.people().then(people => this.setState({ people })).catch(e => console.error(e));
     this.setState(s => ({ mode, other: null, images: s.books[s.active].images, p: 0, focus: false, fz: 0, managing: false }));
   }
   /** Opens the sign-in page; other, profileOf etc. are left alone so closing it returns to the same screen. */
@@ -394,7 +395,7 @@ export default class App extends Component<object, State> {
 
   // ---------- explore ----------
   exSorted() {
-    const q = (this.state.exQ || '').trim().toLowerCase(), l = this.community().filter(b => !q || (b.name + ' ' + b.artist).toLowerCase().includes(q));
+    const q = (this.state.exQ || '').trim().toLowerCase(), l = this.community().filter(b => !q || `${b.name} ${b.artist} @${b.handle || ''}`.toLowerCase().includes(q));
     if ((this.state.exSort || 'trending') === 'trending') return l.sort((a, b) => b.likes - a.likes);
     return l[0]?.updatedAt ? l.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)) : l.reverse();
   }
@@ -599,6 +600,13 @@ export default class App extends Component<object, State> {
       stDown0: (e: PointerEvent) => { this.stY = e.clientY; },
       stUp0: (e: PointerEvent) => { if (this.stY == null) return; const dy = e.clientY - this.stY; this.stY = null; if (Math.abs(dy) > 40) this.stackStep(dy < 0 ? 1 : -1); },
       exLoading: !s.community, exEmpty: !!s.community && !s.community.length,
+      exPeople: (() => {
+        const q = (s.exQ || '').trim().toLowerCase().replace(/^@/, '');
+        if (!q) return [];
+        return (s.people || []).filter(p => p.name && `${p.name} ${p.handle}`.toLowerCase().includes(q)).slice(0, 12).map(p => ({
+          key: p.uid, name: p.name, handle: '@' + p.handle, avBg: avatarBg(p.av), init: p.av ? '' : ini(p.name), open: () => this.openProfile({ uid: p.uid, name: p.name }),
+        }));
+      })(),
       exQ: s.exQ || '', onExQ: (e: ChangeEvent<HTMLInputElement>) => { cancelAnimationFrame(this.exRaf); this.stT = 0; this.setState({ exQ: e.target.value, stS: 0 }); }, exNone: n === 0,
       exCols: Math.max(2, Math.min(6, Math.floor((s.vw - (mob ? 32 : 80) + 18) / (mob ? 150 : 200)))),
       exPadT: mob ? 84 : 108, exPadX: mob ? 16 : 40, exGap: mob ? 14 : 24, exSearchBasis: mob ? '100%' : 'auto', exSearchMax: mob ? 'none' : '380px',
@@ -715,7 +723,8 @@ export default class App extends Component<object, State> {
       isProfile: mode === 'profile', isHome: mode === 'home' && !!s.acct, isLanding: mode === 'home' && !s.acct,
       goHome: () => this.goMode('home'), goMine: () => this.goMode('mine'), goExplore: () => this.goMode('explore'),
       openArtist: () => other && 'artist' in other && this.openProfile(this.whoOf(other)),
-      artist: (other as OtherBook | null)?.artist || '', artistInitials: (other as OtherBook | null)?.initials || '',
+      otherPages: (other as OtherBook | null)?.pages || 0,
+      artist: (other as OtherBook | null)?.artist || '',
       coverRef: this.coverRef, pickCover: () => this.coverRef.current?.click(),
       onCoverFile: (e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; const fr = new FileReader(); fr.onload = () => this.startEdit([fr.result as string], null, 'cover'); fr.readAsDataURL(f); },
       hasCoverImg: !!book.coverImg, removeCover: () => this.updateBook({ coverImg: null }),

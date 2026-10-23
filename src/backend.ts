@@ -235,6 +235,18 @@ export function removeFiles(urls: string[]) {
   for (const u of urls) if (/^https?:/.test(u)) deleteObject(ref(storage, u)).catch(() => {});
 }
 
+// ---------- people ----------
+
+export interface Person { uid: string; name: string; handle: string; av: string | null }
+
+/** Public profiles for Explore search. Firestore has no text search, so this loads a page of
+ *  profiles and the caller filters them; fine while the community is small. */
+export async function people(): Promise<Person[]> {
+  if (!db) return [];
+  const s = await getDocs(query(collection(db, 'users'), limit(500)));
+  return s.docs.map(d => ({ uid: d.id, name: d.data().name || '', handle: d.data().handle || '', av: d.data().av || null }));
+}
+
 // ---------- follows ----------
 
 export async function following(uid: string): Promise<string[]> {

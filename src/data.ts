@@ -36,7 +36,7 @@ export interface Book {
 export interface OtherBook {
   id: string; idx: number; shape: ShapeKey; likes: number; artist: string; name: string;
   color: string; images: string[]; pages: number; initials: string; coverImg?: string | null;
-  ownerId?: string; updatedAt?: number;
+  ownerId?: string; handle?: string; updatedAt?: number;
 }
 
 /** Cover width (% of its grid cell) per shape, so books in a row read as a shelf. */

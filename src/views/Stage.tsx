@@ -22,15 +22,7 @@ function TopBar({ v }: { v: V }) {
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {v.isOther && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button onClick={v.openArtist} title="View profile" className={hover('opacity:.8')} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 0, border: 'none', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>
-              <div style={{ width: 30, height: 30, borderRadius: '50%', background: INK, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600 }}>{v.artistInitials}</div>
-              {v.notMob && <span style={{ fontSize: 13, fontWeight: 500 }}>{v.artist}</span>}
-            </button>
-            <button onClick={v.goExplore} className={hover(`color:${MARK}`)} style={{ ...textBtn, marginLeft: 10 }}>← Explore</button>
-          </div>
-        )}
+        {v.isOther && <button onClick={v.goExplore} className={hover(`color:${MARK}`)} style={textBtn}>← Explore</button>}
         {v.isMine && <button onClick={v.newBook} className={hover(`color:${MARK}`)} style={textBtn}>{v.newLbl}</button>}
         {v.hasAcct && <button onClick={v.openMe} title="Your profile" className={hover('transform:scale(1.06)')} style={{ width: 34, height: 34, flexShrink: 0, borderRadius: '50%', border: 'none', padding: 0, background: v.meAvBg, color: PAPER, font: `500 11px ${SANS}`, cursor: 'pointer', boxShadow: v.meRing }}>{v.meInit}</button>}
         {v.noAcct && (
@@ -50,7 +42,11 @@ function Title({ v }: { v: V }) {
       {v.multi && <button onClick={v.prevBook} title="Previous sketchbook" style={{ ...arrowBtn, opacity: v.prevOp }}>‹</button>}
       <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', minWidth: 0, opacity: v.titleOp }}>
         <div style={{ fontSize: v.mTitleSize, fontFamily: SERIF, fontWeight: 400, letterSpacing: '-.01em', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.titleName}</div>
-        <div style={label()}>{v.bookMeta}</div>
+        <div style={label()}>
+          {v.isOther
+            ? <>by <button onClick={v.openArtist} title="View profile" className={hover(`color:${MARK};border-color:${MARK}`)} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: INK, cursor: 'pointer' }}>{v.artist}</button> · {v.otherPages} pages</>
+            : v.bookMeta}
+        </div>
       </div>
       {v.multi && <button onClick={v.nextBook} title="Next sketchbook" style={{ ...arrowBtn, opacity: v.nextOp }}>›</button>}
     </div>

@@ -207,6 +207,22 @@ export function Explore({ v }: { v: V }) {
             <button onClick={v.viewStack} title="Stack" style={iconSeg(v.vStackBg, v.vStackFg)}>≡</button>
           </div>
         </div>
+        {v.exPeople?.length > 0 && (
+          <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <span style={label()}>Artists</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 28px', paddingBottom: 18, borderBottom: '1px solid rgba(34,35,32,.2)' }}>
+              {v.exPeople.map((p: V) => (
+                <button key={p.key} onClick={p.open} className={hover(`color:${MARK}`)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', textAlign: 'left', minWidth: 0 }}>
+                  <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: '50%', background: p.avBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 17px ${SERIF}` }}>{p.init}</span>
+                  <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                    <span style={{ ...serif(22, 1.1, 'normal'), color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                    <span style={{ fontSize: 13, color: MUTED }}>{p.handle}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
         {v.exNone && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, textAlign: 'center', fontSize: 14, color: 'rgba(34,35,32,.7)' }}>
             {v.exLoading ? 'Opening the archive…'
@@ -216,13 +232,13 @@ export function Explore({ v }: { v: V }) {
         )}
         {v.exGrid && (
           <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${v.exCols},minmax(0,1fr))`, gap: '28px 18px', width: '100%', alignItems: 'end' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${v.exCols},minmax(0,1fr))`, gap: '44px 18px', width: '100%', alignItems: 'end' }}>
               {v.exploreList.map((xb: V) => (
-                <div key={xb.key} onClick={xb.open} style={{ display: 'flex', flexDirection: 'column', gap: 8, cursor: 'pointer', minWidth: 0 }}>
+                <div key={xb.key} onClick={xb.open} style={{ display: 'flex', flexDirection: 'column', gap: 20, cursor: 'pointer', minWidth: 0 }}>
                   <div className={hover('transform:translateY(-8px)')} style={{ position: 'relative', aspectRatio: xb.ar, width: `calc(${xb.wp}% - 7px)`, marginRight: 7, transition: 'transform .35s cubic-bezier(.2,.8,.2,1)' }}>
                     <ClosedBook bg={xb.bg} board={xb.color} label={xb.showLabel ? xb.name : null} />
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
                     <span style={label(STONE, 10)}>{xb.no}</span>
                     <span style={{ ...serif(22, 1.1, 'normal'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{xb.name}</span>
                     <span style={{ fontSize: 13, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>by <span onClick={xb.openArtist} className={hoverText} style={{ color: INK, cursor: 'pointer', borderBottom: '1px solid rgba(34,35,32,.3)' }}>{xb.artist}</span> · {xb.count}</span>
@@ -317,18 +333,18 @@ export function Profile({ v }: { v: V }) {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${v.pfCols},minmax(0,1fr))`, gap: '28px 18px', alignItems: 'end' }}>
             {v.pfBooks.map((pb: V) => (
-              <div key={pb.key} onClick={pb.open} style={{ display: 'flex', flexDirection: 'column', gap: 10, cursor: 'pointer', minWidth: 0 }}>
+              <div key={pb.key} onClick={pb.open} style={{ display: 'flex', flexDirection: 'column', gap: 20, cursor: 'pointer', minWidth: 0 }}>
                 <div className={hover('transform:translateY(-8px)')} style={{ position: 'relative', aspectRatio: pb.ar, width: `calc(${pb.wp}% - 7px)`, marginRight: 7, transition: 'transform .35s cubic-bezier(.2,.8,.2,1)' }}>
                   <ClosedBook bg={pb.bg} board={pb.color} label={pb.showLabel ? pb.name : null} />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
                   <span style={{ ...serif(22, 1.1, 'normal'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pb.name}</span>
                   <span style={{ fontSize: 13, color: 'rgba(34,35,32,.7)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pb.count}</span>
                 </div>
               </div>
             ))}
             {v.pfShowNew && (
-              <div onClick={v.pfNew} style={{ display: 'flex', flexDirection: 'column', gap: 10, cursor: 'pointer', minWidth: 0 }}>
+              <div onClick={v.pfNew} style={{ display: 'flex', flexDirection: 'column', gap: 20, cursor: 'pointer', minWidth: 0 }}>
                 <div className={hover(`border-color:${MARK};color:${MARK}`)} style={{ aspectRatio: '.72', width: 'calc(78% - 7px)', boxSizing: 'border-box', border: '2px dashed rgba(34,35,32,.35)', borderRadius: '2px 10px 10px 2px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 600, color: 'rgba(34,35,32,.8)' }}>+ New</div>
                 <div style={{ height: 38 }} />
               </div>
