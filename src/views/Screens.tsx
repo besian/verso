@@ -41,9 +41,6 @@ export function HomeScreen({ v }: { v: V }) {
             : <button onClick={v.startOwn} className={hoverLine} style={underlineBtn(15)}>Start your own →</button>}
         </div>
         {signedOut && <div style={{ fontSize: 13, color: STONE }}>Already a member? <button onClick={v.openSignin} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${STONE}`, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Sign in</button></div>}
-        <button onClick={v.hmPromptOpen} className={hover(`border-color:${MARK}`)} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, padding: '7px 14px', border: '1px solid rgba(var(--ink-rgb),.2)', borderRadius: 20, background: 'none', color: INK, cursor: 'pointer', font: `500 13px ${SANS}` }}>
-          <span style={label(MARK, 10)}>This week</span><span style={{ font: `italic 400 17px/1 ${SERIF}` }}>{v.hmPrompt}</span><span style={{ color: MUTED }}>→</span>
-        </button>
         {signedOut && <LegalLinks v={v} />}
       </section>
       <section style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10, paddingTop: mob ? 0 : 28 }}>
@@ -114,16 +111,6 @@ export function Explore({ v }: { v: V }) {
           {v.exTag && <button onClick={v.clearLabel} title="Clear tag" style={{ ...chipStyle(true), background: MARK, borderColor: MARK }}>{v.exTag} ×</button>}
           {v.exMediums.map((m: V) => <button key={m.key} onClick={m.pick} aria-pressed={m.on} className={m.on ? undefined : hover('border-color:rgba(var(--ink-rgb),.6)')} style={chipStyle(m.on && !v.exTag)}>{m.label}</button>)}
         </div>
-        {v.exPrompt && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px 20px', flexWrap: 'wrap', padding: '16px 18px', background: 'rgba(173,73,58,.06)', borderLeft: `2px solid ${MARK}` }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={label(MARK, 10)}>This week’s prompt · until {v.exPromptEnds}</span>
-              <span style={serif(v.notMob ? 34 : 28, 1.05)}><em>{v.exPrompt.word}</em></span>
-              <span style={{ fontSize: 13, color: MUTED }}>Draw it however you like, then add it from your sketchbook’s Details. Everyone’s pages for it are here.</span>
-            </div>
-            <button onClick={v.exPromptJoin} className={hoverMark} style={{ height: 40, padding: '0 18px', border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer' }}>Join with a sketchbook</button>
-          </div>
-        )}
         {v.exPeople?.length > 0 && (
           <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <span style={label()}>Artists</span>

@@ -221,11 +221,6 @@ export function Manager({ v }: { v: V }) {
                       {!v.mgTagFull && <input value={v.tagDraft} onChange={v.onTagDraft} onKeyDown={v.onTagKey} onBlur={v.commitTag} placeholder={v.mgTags.length ? 'Add a tag' : 'Add tags'} aria-label="Add a tag" style={{ flex: 1, minWidth: 120, height: 30, border: 'none', outline: 'none', background: 'none', color: INK, font: `500 14px ${SANS}` }} />}
                     </div>
                   </Row>
-                  <Row label="This week’s prompt" note="A new theme every Monday. Joining adds its tag, so your sketchbook shows up with everyone else’s in Explore.">
-                    {v.mgPromptIn
-                      ? <span style={{ fontSize: 14 }}>You’re in: <b style={{ fontWeight: 600 }}>#{v.mgPromptTag}</b></span>
-                      : <button onClick={v.mgJoinPrompt} className={hoverTint} style={{ ...ghostBtn, alignSelf: 'flex-start', height: 38, padding: '0 14px' }}>Join “{v.mgPrompt}”</button>}
-                  </Row>
                   <button onClick={v.deleteBook} className={hover('text-decoration:underline')} style={{ ...linkBtn(MARK), alignSelf: 'flex-start', padding: '4px 0' }}>Delete this sketchbook</button>
                 </>
               )}
