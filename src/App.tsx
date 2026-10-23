@@ -38,7 +38,7 @@ interface State {
   vw: number; vh: number; sw?: number; sh?: number;
   switching?: boolean; car?: number; swT?: number;
   focus?: boolean; fz?: number; fside?: 'L' | 'R'; fsx?: number; ctrlShow?: boolean; menuOpen?: boolean;
-  edit?: EditState | null;
+  edit?: EditState | null; edTool?: string;
   newPick?: boolean; pickShape?: ShapeKey;
   /** Sign-in page: which form, and the screen to return to. */
   authFrom?: Mode; suMode?: 'join' | 'signin' | 'reset'; su?: { name: string; handle: string; email: string; pw: string } | null; suHT?: boolean;
@@ -74,6 +74,9 @@ export default class App extends Component<object, State> {
   target = 0;
   drag: { x: number; p0: number; id: number } | null = null; moved = false;
   edDrag: { x: number; y: number; tx: number; ty: number } | null = null;
+  /** Active pointers on the editor frame, and the two-finger gesture baseline (pinch zoom + twist rotate). */
+  edPts = new Map<number, { x: number; y: number }>();
+  edPinch: { dist: number; ang: number; mx: number; my: number; scale: number; rot: number; tx: number; ty: number } | null = null;
   dragIdx: number | null = null;
   wheelLock = false; stLock = false; stT = 0; stY: number | null = null;
   wakeT?: ReturnType<typeof setTimeout>;
@@ -383,8 +386,20 @@ export default class App extends Component<object, State> {
     im.onload = () => { this.editImg = im; this.setState(s => s.edit ? { edit: { ...s.edit, nw: im.naturalWidth, nh: im.naturalHeight } } : null); };
     im.src = this.blobUrl(src);
   }
-  frame() { const fh = Math.round(Math.max(200, Math.min(this.state.vh * 0.58, 520))); return { fh, fw: Math.round(fh * this.aspect()) }; }
+  frame() {
+    const { vw, vh } = this.state, a = this.aspect();
+    // Phones: the frame fills the width, capped so the controls below still fit.
+    if (vw < 640) { let fw = vw - 32, fh = fw / a; const maxH = vh * 0.5; if (fh > maxH) { fh = maxH; fw = fh * a; } return { fw: Math.round(fw), fh: Math.round(fh) }; }
+    const fh = Math.round(Math.max(200, Math.min(vh * 0.58, 520))); return { fh, fw: Math.round(fh * a) };
+  }
   baseSize() { const e = this.state.edit!, { fw, fh } = this.frame(); if (!e.nw) return { bw: fw, bh: fh }; const s = Math.min(fw / e.nw, fh / e.nh); return { bw: e.nw * s, bh: e.nh * s }; }
+  /** Re-baselines the drag / pinch gesture whenever a finger is added or lifted. */
+  edGestureStart() {
+    const e = this.state.edit, pts = [...this.edPts.values()]; this.edDrag = null; this.edPinch = null;
+    if (!e || !pts.length) return;
+    if (pts.length === 1) this.edDrag = { x: pts[0].x, y: pts[0].y, tx: e.tx, ty: e.ty };
+    else { const [a, b] = pts; this.edPinch = { dist: Math.hypot(b.x - a.x, b.y - a.y) || 1, ang: Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, scale: e.scale, rot: e.rot, tx: e.tx, ty: e.ty }; }
+  }
   setEd(patch: Partial<EditState>) { this.setState(s => ({ edit: { ...s.edit!, ...patch } })); }
   /** Renders the framed image exactly as shown into a 1600px-tall page. */
   applyEdit() {
@@ -649,9 +664,25 @@ export default class App extends Component<object, State> {
       resetEd: () => this.setEd({ scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0 }),
       applyEdit: () => this.applyEdit(), skipEdit: () => this.nextEdit(), cancelEdit: () => this.setState({ edit: null }),
       applyLbl: ed.target === 'cover' ? 'Save cover' : ed.replaceIdx != null ? 'Save page' : 'Add to sketchbook',
-      edDown: (e: PointerEvent<HTMLDivElement>) => { e.stopPropagation(); this.edDrag = { x: e.clientX, y: e.clientY, tx: ed.tx, ty: ed.ty }; e.currentTarget.setPointerCapture?.(e.pointerId); },
-      edMove: (e: PointerEvent) => { const d = this.edDrag; if (d) this.setEd({ tx: d.tx + e.clientX - d.x, ty: d.ty + e.clientY - d.y }); },
-      edUp: () => { this.edDrag = null; },
+      // One pointer drags the image; two pinch to zoom and twist to rotate.
+      edDown: (e: PointerEvent<HTMLDivElement>) => {
+        e.stopPropagation(); try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* pointer already gone */ }
+        this.edPts.set(e.pointerId, { x: e.clientX, y: e.clientY }); this.edGestureStart();
+      },
+      edMove: (e: PointerEvent) => {
+        if (!this.edPts.has(e.pointerId)) return;
+        this.edPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        const pin = this.edPinch, pts = [...this.edPts.values()];
+        if (pin && pts.length >= 2) {
+          const [a, b] = pts, dist = Math.hypot(b.x - a.x, b.y - a.y), ang = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+          const rot = Math.round((((pin.rot + ang - pin.ang + 540) % 360) - 180) * 2) / 2;
+          this.setEd({ scale: Math.max(0.3, Math.min(4, pin.scale * dist / pin.dist)), rot, tx: pin.tx + (a.x + b.x) / 2 - pin.mx, ty: pin.ty + (a.y + b.y) / 2 - pin.my });
+        } else if (this.edDrag) {
+          const d = this.edDrag; this.setEd({ tx: d.tx + e.clientX - d.x, ty: d.ty + e.clientY - d.y });
+        }
+      },
+      edUp: (e: PointerEvent) => { this.edPts.delete(e.pointerId); this.edGestureStart(); },
+      edMob: this.state.vw < 640, edTool: this.state.edTool || 'scale', setEdTool: (t: string) => this.setState({ edTool: t }),
       edWheel: (e: WheelEvent) => { e.stopPropagation(); this.setEd({ scale: Math.max(0.3, Math.min(4, ed.scale * (e.deltaY > 0 ? 0.95 : 1.05))) }); },
     };
   }

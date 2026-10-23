@@ -163,8 +163,57 @@ function Slider({ name, lbl, min, max, step, value, onChange }: { name: string; 
   );
 }
 
+const ED_TOOLS: [string, string, number, number, number, string][] = [
+  ['scale', 'Zoom', 0.3, 4, 0.01, 'scaleLbl'], ['rot', 'Rotate', -180, 180, 0.5, 'rotLbl'], ['skx', 'Skew ↔', -30, 30, 0.5, 'skxLbl'], ['sky', 'Skew ↕', -30, 30, 0.5, 'skyLbl'],
+];
+const ED_ON: Record<string, string> = { scale: 'onScale', rot: 'onRot', skx: 'onSkx', sky: 'onSky' };
+
+/** Phone layout: top bar, full-width frame (drag, pinch, twist), one slider for the chosen tool, big action button. */
+function MobileEditor({ v }: { v: V }) {
+  const tool = ED_TOOLS.find(t => t[0] === v.edTool) || ED_TOOLS[0];
+  const [key, name, min, max, step, lbl] = tool;
+  const bar: CSSProperties = { background: 'none', border: 'none', padding: '8px 0', color: INK, font: `500 15px ${SANS}`, cursor: 'pointer' };
+  return (
+    <div style={{ position: 'absolute', inset: 0, background: PAPER, zIndex: 20, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', padding: '0 16px', paddingBottom: 'calc(16px + env(safe-area-inset-bottom))', overflow: 'hidden' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8, padding: '12px 0 8px' }}>
+        <button onClick={v.cancelEdit} style={{ ...bar, justifySelf: 'start', color: 'rgba(34,35,32,.75)' }}>Cancel</button>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ font: `400 22px/1.1 ${SERIF}` }}>Fit your page</div>
+          <div style={{ fontSize: 12, color: 'rgba(34,35,32,.65)' }}>{v.edTitle}</div>
+        </div>
+        {v.applyLbl === 'Add to sketchbook' ? <button onClick={v.skipEdit} style={{ ...bar, justifySelf: 'end', color: 'rgba(34,35,32,.75)' }}>Skip</button> : <span />}
+      </div>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+        <div onPointerDown={v.edDown} onPointerMove={v.edMove} onPointerUp={v.edUp} onPointerCancel={v.edUp} style={{ position: 'relative', width: v.fw, height: v.fh, flexShrink: 0, overflow: 'hidden', background: '#f3efe6', borderRadius: '2px 8px 8px 2px', boxShadow: '0 18px 40px rgba(10,10,30,.3)', touchAction: 'none' }}>
+          <div style={{ position: 'absolute', left: '50%', top: '50%', width: v.bw, height: v.bh, transform: `translate(-50%,-50%) ${v.edTransform}`, background: v.edBg, pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundImage: 'linear-gradient(rgba(34,35,32,.35) 1px,transparent 1px),linear-gradient(90deg,rgba(34,35,32,.35) 1px,transparent 1px)', backgroundSize: '33.34% 33.34%', mixBlendMode: 'difference', opacity: .5 }} />
+        </div>
+        <div style={{ fontSize: 12, color: 'rgba(34,35,32,.6)' }}>Drag to move · pinch to zoom · twist to rotate</div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 10 }}>
+        <div role="tablist" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4, padding: 3, border: '1px solid rgba(34,35,32,.2)' }}>
+          {ED_TOOLS.map(([k, n]) => (
+            <button key={k} role="tab" aria-selected={k === key} onClick={() => v.setEdTool(k)} style={{ height: 36, border: 'none', borderRadius: 2, background: k === key ? INK : 'transparent', color: k === key ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>{n}</button>
+          ))}
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13 }}>
+          <span style={{ width: 64, color: 'rgba(34,35,32,.7)' }}>{name}</span>
+          <input type="range" min={min} max={max} step={step} value={v[key]} onChange={v[ED_ON[key]]} style={{ flex: 1, accentColor: INK, height: 28 }} />
+          <span style={{ width: 48, textAlign: 'right', color: 'rgba(34,35,32,.7)' }}>{v[lbl]}</span>
+        </label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={v.rot90} style={{ flex: 1, height: 42, borderRadius: 2, border: '1.5px solid rgba(34,35,32,.5)', background: 'none', color: INK, font: `500 14px ${SANS}`, cursor: 'pointer' }}>Rotate 90°</button>
+          <button onClick={v.resetEd} style={{ flex: 1, height: 42, borderRadius: 2, border: '1.5px solid rgba(34,35,32,.5)', background: 'none', color: INK, font: `500 14px ${SANS}`, cursor: 'pointer' }}>Reset</button>
+        </div>
+        <button onClick={v.applyEdit} style={{ height: 52, borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 16px ${SANS}`, cursor: 'pointer' }}>{v.applyLbl}</button>
+      </div>
+    </div>
+  );
+}
+
 /** "Fit your page": crop, zoom, rotate and skew an image inside a page-shaped frame. */
 export function Editor({ v }: { v: V }) {
+  if (v.edMob) return <MobileEditor v={v} />;
   const outline: CSSProperties = { flex: 1, height: 36, borderRadius: 2, border: '1.5px solid rgba(34,35,32,.5)', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' };
   return (
     <div style={{ position: 'absolute', inset: 0, background: PAPER, zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 48, padding: 24, flexWrap: 'wrap', overflow: 'auto' }}>
@@ -175,7 +224,7 @@ export function Editor({ v }: { v: V }) {
       <div style={{ width: 260, display: 'flex', flexDirection: 'column', gap: 22 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div style={heading}>Fit your page</div>
-          <div style={{ fontSize: 13, color: 'rgba(34,35,32,.7)' }}>{v.edTitle} · drag to move, scroll to zoom</div>
+          <div style={{ fontSize: 13, color: 'rgba(34,35,32,.7)' }}>{v.edTitle} · drag to move, scroll or pinch to zoom</div>
         </div>
         <Slider name="Zoom" lbl={v.scaleLbl} min={0.3} max={4} step={0.01} value={v.scale} onChange={v.onScale} />
         <Slider name="Rotate" lbl={v.rotLbl} min={-180} max={180} step={0.5} value={v.rot} onChange={v.onRot} />
