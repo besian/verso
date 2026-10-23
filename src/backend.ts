@@ -13,7 +13,7 @@ import {
   orderBy, query, runTransaction, setDoc, where, writeBatch,
 } from 'firebase/firestore';
 import type { DocumentData } from 'firebase/firestore';
-import { connectStorageEmulator, deleteObject, getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
+import { connectStorageEmulator, deleteObject, getStorage, ref, uploadBytes } from 'firebase/storage';
 import type { Account, Book, ShapeKey } from './data';
 
 const env = import.meta.env;
@@ -222,8 +222,11 @@ async function upload(path: string, dataUrl: string): Promise<string> {
   const { storage: st } = need();
   const blob = await (await fetch(dataUrl)).blob();
   const r = ref(st, path);
-  await uploadBytes(r, blob, { contentType: blob.type || 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' });
-  return getDownloadURL(r);
+  const res = await uploadBytes(r, blob, { contentType: blob.type || 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' });
+  // storage.rules make users/** publicly readable, so a token-free URL works and saves a
+  // getDownloadURL round trip per image.
+  const host = env.VITE_FIREBASE_EMULATORS === '1' ? 'http://127.0.0.1:9199' : 'https://firebasestorage.googleapis.com';
+  return `${host}/v0/b/${res.metadata.bucket}/o/${encodeURIComponent(res.metadata.fullPath)}?alt=media`;
 }
 
 /** Best-effort removal of files that are no longer referenced. */
