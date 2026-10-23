@@ -98,8 +98,8 @@ function Book3D({ v }: { v: V }) {
     <div style={{ position: 'relative', width: 0, height: v.H, transformStyle: 'preserve-3d', transform: v.bookTransform, opacity: v.bookOp }}>
       <div style={{ position: 'absolute', left: v.shadowLeft, top: 0, width: v.shadowW, height: v.H, transform: 'translateZ(-2px) translateY(26px)', background: 'rgba(34,35,32,.16)', filter: 'blur(22px)', borderRadius: 2, opacity: v.openShadowOp }} />
       <div style={{ position: 'absolute', left: v.bodyLeft, top: 0, width: v.W, height: v.H, transform: 'translateZ(-1px)', opacity: v.bodyOp, pointerEvents: 'none' }}>
-        <div style={{ ...fill, transform: 'translate(7px,6px)', borderRadius: '3px 11px 11px 3px', background: v.boardColor, filter: 'brightness(.6)', boxShadow: '0 24px 40px rgba(34,35,32,.16)' }} />
-        <div style={{ position: 'absolute', top: 3, bottom: -3, left: 4, right: -4, borderRadius: '2px 9px 9px 2px', background: PAGE_EDGES }} />
+        <div style={{ ...fill, transform: v.bodyBack ? 'translate(-7px,6px)' : 'translate(7px,6px)', borderRadius: v.bodyBack ? '11px 3px 3px 11px' : '3px 11px 11px 3px', background: v.boardColor, filter: 'brightness(.6)', boxShadow: '0 24px 40px rgba(34,35,32,.16)' }} />
+        <div style={{ position: 'absolute', top: 3, bottom: -3, left: v.bodyBack ? -4 : 4, right: v.bodyBack ? 4 : -4, borderRadius: v.bodyBack ? '9px 2px 2px 9px' : '2px 9px 9px 2px', background: PAGE_EDGES }} />
       </div>
       {v.leaves.map((leaf: V) => (
         <div key={leaf.key} style={{ position: 'absolute', left: 0, top: 0, width: v.W, height: v.H, transformOrigin: '0 50%', transformStyle: 'preserve-3d', transform: leaf.transform }}>
@@ -119,6 +119,12 @@ function Book3D({ v }: { v: V }) {
           <div onClick={leaf.openBack} style={{ ...fill, backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', borderRadius: '10px 2px 2px 10px', overflow: 'hidden', background: leaf.backBg, boxShadow: 'inset -6px 0 10px -6px rgba(0,0,0,.35)', clipPath: earClip(leaf.wearB?.ear) }}>
             <PageWear overlay={leaf.overlayB} />
             <DogEar ear={leaf.wearB?.ear} />
+            {leaf.isBackCover && (
+              <>
+                <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '7%', background: 'linear-gradient(270deg,rgba(0,0,0,.28),rgba(0,0,0,.08))', pointerEvents: 'none' }} />
+                <div style={{ position: 'absolute', left: '13%', top: 0, bottom: 0, width: 8, background: '#1d1d26', boxShadow: '-2px 0 3px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.25)', pointerEvents: 'none' }} />
+              </>
+            )}
             <div style={{ ...fill, background: '#000', opacity: leaf.shadeB, pointerEvents: 'none' }} />
             <div style={{ ...leafNum, left: 14 }}>{leaf.numB}</div>
           </div>

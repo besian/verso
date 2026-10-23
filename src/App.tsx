@@ -672,7 +672,7 @@ export default class App extends Component<object, State> {
       const F = this.face(i, 0, W), B = this.face(i, 1, W);
       return {
         wearF: F.wear, wearB: B.wear, overlayF: F.wear?.overlay || (F.inside ? COVER_INSIDE : ''), overlayB: B.wear?.overlay || (B.inside ? COVER_INSIDE : ''),
-        key: i, label: book.name, isCover: i === 0 && !book.coverImg, isCoverAny: i === 0,
+        key: i, label: book.name, isCover: i === 0 && !book.coverImg, isCoverAny: i === 0, isBackCover: i === N - 1,
         transform: `rotateY(${a}deg) translateZ(${((N - i) * 0.5).toFixed(2)}px)`, frontBg: F.bg, backBg: B.bg,
         shadeF: (0.35 * Math.sin(rad) * (rad < Math.PI / 2 ? 1 : 0)).toFixed(3), shadeB: (0.3 * Math.max(0, Math.sin(rad)) * (rad > Math.PI / 2 ? 1 : 0)).toFixed(3),
         numF: F.num, numB: B.num,
@@ -730,7 +730,8 @@ export default class App extends Component<object, State> {
       hasCoverImg: !!book.coverImg, removeCover: () => this.updateBook({ coverImg: null }),
       // The real book carries the closed-book back board until opened so the carousel hand-over doesn't pop.
       openShadowOp: clamp01(Math.min(p, N - p) * 3).toFixed(3), bodyOp: (1 - clamp01(Math.min(p, N - p) * 4)).toFixed(3),
-      bodyLeft: p > N / 2 ? -W : 0, boardColor: book.color || '#b8243a',
+      // Closed on its back, the book is turned over: the spine is on the right, so the page block and board stick out on the left.
+      bodyBack: p > N / 2, bodyLeft: p > N / 2 ? -W : 0, boardColor: book.color || '#b8243a',
       bookOp: sw ? 0 : 1, titleName: other ? other.name : (books[Math.round(car)] || book).name,
       titleOp: ((sw ? 1 - Math.sin(Math.PI * (s.swT || 0)) * 0.85 : 1) * (1 - fz)).toFixed(3),
       bookName: book.name,
