@@ -23,7 +23,7 @@ function rng(seed: number) {
 const grain = (alpha: number) => `url("data:image/svg+xml,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 .55  0 0 0 0 .47  0 0 0 0 .36  0 0 0 ${alpha} 0"/></filter><rect width="100%" height="100%" filter="url(#n)"/></svg>`,
 )}")`;
-const GRAIN = grain(0.05);
+const GRAIN = grain(0.11);
 const PAPERS = ['#f3efe6', '#f1ece1', '#f4f0e7', '#efe9dc', '#f2ede3'];
 
 /**
@@ -32,28 +32,33 @@ const PAPERS = ['#f3efe6', '#f1ece1', '#f4f0e7', '#efe9dc', '#f2ede3'];
  */
 export function pageWear(seed: string, outer: 'l' | 'r', w: number): Wear {
   const r = rng(hash(seed)), pct = (a: number, b: number) => (a + r() * (b - a)).toFixed(1) + '%';
-  const a = (v: number) => (v * 0.75).toFixed(3);
   const layers: string[] = [];
+  const edge = outer === 'r' ? 'to left' : 'to right';
   // Thumb smudge near the outer edge, where the page gets turned.
-  if (r() < 0.5) layers.push(`radial-gradient(ellipse 16% 10% at ${outer === 'r' ? pct(88, 96) : pct(4, 12)} ${pct(78, 92)}, rgba(70,58,44,${a(0.05)}), transparent 70%)`);
-  // Occasional coffee ring.
-  if (r() < 0.1) {
+  if (r() < 0.65) layers.push(`radial-gradient(ellipse 18% 11% at ${outer === 'r' ? pct(88, 96) : pct(4, 12)} ${pct(76, 92)}, rgba(70,58,44,.13), transparent 70%)`);
+  // Coffee ring.
+  if (r() < 0.18) {
     const x = pct(25, 75), y = pct(20, 75), rad = 9 + r() * 6;
-    layers.push(`radial-gradient(circle at ${x} ${y}, transparent ${rad}%, rgba(128,84,38,${a(0.11)}) ${rad + 0.6}%, rgba(128,84,38,${a(0.05)}) ${rad + 1.4}%, transparent ${rad + 2.2}%)`);
-    layers.push(`radial-gradient(circle at ${x} ${y}, rgba(128,84,38,${a(0.03)}), transparent ${rad}%)`);
+    layers.push(`radial-gradient(circle at ${x} ${y}, transparent ${rad}%, rgba(128,84,38,.2) ${rad + 0.6}%, rgba(128,84,38,.09) ${rad + 1.5}%, transparent ${rad + 2.4}%)`);
+    layers.push(`radial-gradient(circle at ${x} ${y}, rgba(128,84,38,.05), transparent ${rad}%)`);
   }
-  // Faint foxing spot.
-  if (r() < 0.2) layers.push(`radial-gradient(circle at ${pct(10, 90)} ${pct(10, 90)}, rgba(140,100,50,${a(0.08)}), transparent 1.6%)`);
+  // Foxing spots.
+  const spots = r() < 0.4 ? 1 + Math.floor(r() * 3) : 0;
+  for (let i = 0; i < spots; i++) layers.push(`radial-gradient(circle at ${pct(8, 92)} ${pct(8, 92)}, rgba(140,98,48,.16), transparent ${(1 + r() * 1.4).toFixed(1)}%)`);
+  // A faint crease across the page.
+  if (r() < 0.2) { const ang = Math.round(20 + r() * 140), at = 30 + r() * 40; layers.push(`linear-gradient(${ang}deg, transparent ${at.toFixed(1)}%, rgba(90,70,45,.13) ${(at + 0.25).toFixed(2)}%, transparent ${(at + 0.7).toFixed(2)}%)`); }
+  // Worn, darker outer edge.
+  layers.push(`linear-gradient(${edge}, rgba(120,92,52,${(0.12 + r() * 0.08).toFixed(3)}), transparent 5%)`);
   // Yellowing toward the edges, a little stronger on the outer side.
-  layers.push(`radial-gradient(ellipse 85% 80% at ${outer === 'r' ? '42%' : '58%'} 50%, transparent 64%, rgba(150,118,62,${a(0.07 + r() * 0.05)}) 100%)`);
+  layers.push(`radial-gradient(ellipse 85% 80% at ${outer === 'r' ? '42%' : '58%'} 50%, transparent 55%, rgba(150,116,58,${(0.14 + r() * 0.08).toFixed(3)}) 100%)`);
   layers.push(GRAIN);
   // Dog-ear on the top outer corner (the bottom corners carry the page numbers).
-  const ear = r() < 0.18 ? { corner: ('t' + outer) as Corner, size: Math.round(w * (0.06 + r() * 0.04)) } : null;
+  const ear = r() < 0.32 ? { corner: ('t' + outer) as Corner, size: Math.round(w * (0.11 + r() * 0.05)) } : null;
   return { paper: PAPERS[Math.floor(r() * PAPERS.length)], overlay: layers.join(','), ear };
 }
 
 /** Grain and edge tint only, for the inside of the covers. */
-export const COVER_INSIDE = `radial-gradient(ellipse 85% 80% at 50% 50%, transparent 60%, rgba(120,95,55,.1) 100%),${GRAIN}`;
+export const COVER_INSIDE = `radial-gradient(ellipse 85% 80% at 50% 50%, transparent 60%, rgba(120,95,55,.14) 100%),${GRAIN}`;
 
 /** clip-path that cuts the folded corner off the page. */
 export function earClip(ear: Wear['ear']): string | undefined {

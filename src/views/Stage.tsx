@@ -81,8 +81,8 @@ function DogEar({ ear }: { ear?: Wear['ear'] }) {
   if (!ear) return null;
   const c = ear.corner;
   return (
-    <div style={{ position: 'absolute', width: ear.size, height: ear.size, [c[0] === 't' ? 'top' : 'bottom']: 0, [c[1] === 'l' ? 'left' : 'right']: 0, filter: 'drop-shadow(0 1px 1.5px rgba(40,30,20,.28))', pointerEvents: 'none' }}>
-      <div style={{ position: 'absolute', inset: 0, clipPath: EAR_SHAPE[c], background: `linear-gradient(${EAR_LIGHT[c]}, #f8f4ec 0%, #ebe4d5 55%, #ddd3bf 100%)` }} />
+    <div style={{ position: 'absolute', width: ear.size, height: ear.size, [c[0] === 't' ? 'top' : 'bottom']: 0, [c[1] === 'l' ? 'left' : 'right']: 0, filter: 'drop-shadow(-1px 2px 2.5px rgba(40,30,20,.42))', pointerEvents: 'none' }}>
+      <div style={{ position: 'absolute', inset: 0, clipPath: EAR_SHAPE[c], background: `linear-gradient(${EAR_LIGHT[c]}, #faf7f0 0%, #e8e0cf 55%, #d4c8b0 100%)` }} />
     </div>
   );
 }
