@@ -76,6 +76,12 @@ function Title({ v }: { v: V }) {
             ? <>by <button onClick={v.openArtist} title="View profile" className={hover(`color:${MARK};border-color:${MARK}`)} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: INK, cursor: 'pointer' }}>{v.artist}</button> · {v.otherPages} pages</>
             : v.bookMeta}
         </div>
+        {(v.bkMediums || v.bkTags.length > 0) && (
+          <div style={{ display: 'flex', gap: '2px 12px', flexWrap: 'wrap', justifyContent: 'center', fontSize: 13, color: 'rgba(34,35,32,.7)' }}>
+            {v.bkMediums && <span>{v.bkMediums}</span>}
+            {v.bkTags.map((t: V) => <button key={t.key} onClick={t.open} className={hover(`color:${MARK}`)} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>{t.label}</button>)}
+          </div>
+        )}
         {(v.isOther || (v.isMine && v.bkCanShare)) && (
           <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginTop: 2, ...label(INK, 10) }}>
             {v.isOther && <button onClick={v.bkLike} aria-pressed={v.bkLiked} title={v.bkLiked ? 'Unlike' : 'Like'} className={hover(`color:${MARK}`)} style={{ ...actLink, color: v.bkLiked ? MARK : INK }}>{v.bkLiked ? '♥' : '♡'} {v.bkLikes}</button>}
@@ -129,6 +135,14 @@ function PageWear({ overlay }: { overlay?: string }) {
 }
 
 const leafNum: CSSProperties = { position: 'absolute', bottom: 12, fontSize: 11, color: 'rgba(40,40,60,.45)' };
+
+/** Caption and date written along the bottom margin, on a scrap of paper so it reads over drawings. */
+function PageNote({ text, fs, side }: { text: string; fs: number; side: 'L' | 'R' }) {
+  if (!text) return null;
+  return (
+    <div style={{ position: 'absolute', bottom: Math.round(fs * 0.8), [side === 'R' ? 'left' : 'right']: Math.round(fs * 1.4), maxWidth: '68%', padding: `${Math.round(fs * 0.2)}px ${Math.round(fs * 0.5)}px`, background: 'rgba(246,242,233,.9)', boxShadow: '0 1px 2px rgba(40,30,20,.18)', transform: `rotate(${side === 'R' ? -0.8 : 0.8}deg)`, font: `italic 400 ${fs}px/1.25 ${SERIF}`, color: '#3a3830', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none' }}>{text}</div>
+  );
+}
 const fill: CSSProperties = { position: 'absolute', inset: 0 };
 
 function FrontFace({ leaf, onClick, style }: { leaf: V; onClick?: () => void; style?: CSSProperties }) {
@@ -138,6 +152,7 @@ function FrontFace({ leaf, onClick, style }: { leaf: V; onClick?: () => void; st
       <DogEar ear={leaf.wearF?.ear} />
       {leaf.isCoverAny && <div style={{ position: 'absolute', right: '13%', top: 0, bottom: 0, width: 8, background: '#1d1d26', boxShadow: '-2px 0 3px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.25)', pointerEvents: 'none' }} />}
       {leaf.isCover && <div className="cover-label" style={{ position: 'absolute', left: '16%', right: '26%', top: '14%', padding: '10px 12px', background: '#f6f2e9', borderRadius: 2, boxShadow: '0 1px 2px rgba(0,0,0,.2)', color: INK, fontSize: 15, fontWeight: 600, letterSpacing: '-.01em', pointerEvents: 'none' }}>{leaf.label}</div>}
+      <PageNote text={leaf.noteF} fs={leaf.noteFs} side="R" />
       <div style={{ ...fill, background: '#000', opacity: leaf.shadeF, pointerEvents: 'none' }} />
       <div style={{ ...leafNum, right: 14 }}>{leaf.numF}</div>
     </div>
@@ -150,6 +165,7 @@ function BackFace({ leaf, onClick, style }: { leaf: V; onClick?: () => void; sty
       <PageWear overlay={leaf.overlayB} />
       <DogEar ear={leaf.wearB?.ear} />
       {leaf.isBackCover && <div style={{ position: 'absolute', left: '13%', top: 0, bottom: 0, width: 8, background: '#1d1d26', boxShadow: '-2px 0 3px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.25)', pointerEvents: 'none' }} />}
+      <PageNote text={leaf.noteB} fs={leaf.noteFs} side="L" />
       <div style={{ ...fill, background: '#000', opacity: leaf.shadeB, pointerEvents: 'none' }} />
       <div style={{ ...leafNum, left: 14 }}>{leaf.numB}</div>
     </div>
@@ -206,6 +222,12 @@ function Controls({ v }: { v: V }) {
       <button onClick={v.zoomOut} title="Zoom out" className={hover('transform:scale(1.08)')} style={roundDark(44, 22)}>−</button>
       {v.notOther && <button onClick={v.openManager} title="Pages" className={hover('transform:scale(1.06)')} style={{ width: 88, height: 44, borderRadius: 22, border: 'none', background: MARK, color: PAPER, font: `500 20px ${SANS}`, cursor: 'pointer' }}>✎</button>}
       <button onClick={v.zoomIn} title="Zoom in" className={hover('transform:scale(1.08)')} style={roundDark(44, 22)}>+</button>
+      <button onClick={v.toggleSound} title={v.sndOn ? 'Mute page sounds' : 'Turn on page sounds'} aria-pressed={v.sndOn} className={hover(`color:${MARK}`)} style={{ position: 'absolute', left: '100%', top: '50%', transform: 'translateY(-50%)', width: 36, height: 36, marginLeft: 4, padding: 0, border: 'none', borderRadius: '50%', background: 'none', color: v.sndOn ? INK : STONE, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" />
+          {v.sndOn ? <><path d="M15.5 9a4 4 0 0 1 0 6" /><path d="M18 6.5a7.5 7.5 0 0 1 0 11" /></> : <path d="M16 9.5l5 5M21 9.5l-5 5" />}
+        </svg>
+      </button>
     </div>
   );
 }

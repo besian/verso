@@ -34,13 +34,28 @@ export interface Book {
   isPublic?: boolean;
   /** Full image URL → thumbnail URL. */
   thumbs?: Record<string, string>;
+  /** Page image URL → caption and date written in its margin. */
+  notes?: Record<string, PageNote>;
+  mediums?: string[];
+  tags?: string[];
+  /** Hidden by a moderator: stays private until they restore it. */
+  hidden?: boolean;
 }
+
+export interface PageNote { c?: string; d?: string }
+
+export const MEDIUMS = ['Graphite', 'Ink', 'Watercolour', 'Gouache', 'Charcoal', 'Marker', 'Pastel', 'Coloured pencil', 'Digital', 'Collage', 'Mixed media'];
+export const MAX_MEDIUMS = 4, MAX_TAGS = 8;
+/** Lowercase, letters/numbers/hyphens only, at most 24 characters. */
+export const tagSlug = (v: string) => v.toLowerCase().trim().replace(/^#/, '').replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24);
+export const mediumKey = (m: string) => m.toLowerCase().replace(/[^a-z]+/g, '-');
 
 /** Someone else's sketchbook: read-only. `likes` drives the Featured sort. */
 export interface OtherBook {
   id: string; idx: number; shape: ShapeKey; likes: number; artist: string; name: string;
   color: string; images: string[]; pages: number; initials: string; coverImg?: string | null;
   ownerId?: string; handle?: string; updatedAt?: number; thumbs?: Record<string, string>;
+  notes?: Record<string, PageNote>; mediums?: string[]; tags?: string[];
 }
 
 /** Cover width (% of its grid cell) per shape, so books in a row read as a shelf. */

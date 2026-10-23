@@ -2,6 +2,7 @@
 // Storage (page images, covers, avatars). Configured from VITE_FIREBASE_* env vars; when
 // they're missing the app still runs, signed out and without community books.
 import { initializeApp } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { getAnalytics, isSupported as analyticsSupported } from 'firebase/analytics';
 import {
   EmailAuthProvider, connectAuthEmulator, createUserWithEmailAndPassword, deleteUser, getAuth, onAuthStateChanged,
@@ -11,11 +12,12 @@ import {
 import type { User } from 'firebase/auth';
 import {
   collection, connectFirestoreEmulator, deleteDoc, doc, getDoc, getDocs, getFirestore, increment, limit, onSnapshot,
-  orderBy, query, runTransaction, setDoc, where, writeBatch,
+  orderBy, query, runTransaction, setDoc, startAfter, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
-import type { DocumentData } from 'firebase/firestore';
+import type { DocumentData, QueryConstraint, QueryDocumentSnapshot } from 'firebase/firestore';
 import { connectStorageEmulator, deleteObject, getStorage, listAll, ref, uploadBytes } from 'firebase/storage';
-import type { Account, Book, ShapeKey } from './data';
+import type { Account, Book, PageNote, ShapeKey } from './data';
+import { mediumKey } from './data';
 
 const env = import.meta.env;
 const config = {
@@ -39,8 +41,12 @@ if (app && env.VITE_FIREBASE_EMULATORS === '1') {
   connectAuthEmulator(auth!, 'http://127.0.0.1:9099', { disableWarnings: true });
   connectFirestoreEmulator(db!, '127.0.0.1', 8080);
   connectStorageEmulator(storage!, '127.0.0.1', 9199);
-} else if (app && config.measurementId) {
-  analyticsSupported().then(ok => { if (ok) getAnalytics(app); }).catch(() => {});
+} else if (app) {
+  // App Check proves requests come from this site (set VITE_FIREBASE_APPCHECK_KEY to a reCAPTCHA v3 site key).
+  if (env.VITE_FIREBASE_APPCHECK_KEY) {
+    try { initializeAppCheck(app, { provider: new ReCaptchaV3Provider(env.VITE_FIREBASE_APPCHECK_KEY), isTokenAutoRefreshEnabled: true }); } catch (e) { console.warn('App Check', e); }
+  }
+  if (config.measurementId) analyticsSupported().then(ok => { if (ok) getAnalytics(app); }).catch(() => {});
 }
 
 class NotConfigured extends Error { code = 'not-configured'; }
@@ -175,6 +181,9 @@ export interface BookDoc {
   isPublic: boolean; legacy: boolean;
   /** Small (≈480px) versions: `thumbs[i]` belongs to `pages[i]` ('' when missing). */
   thumbs: string[]; coverThumb: string | null;
+  /** Margin notes per page, aligned with `pages` like thumbs. */
+  captions: string[]; dates: string[];
+  mediums: string[]; tags: string[]; hidden: boolean;
 }
 
 const bookDoc = (id: string, d: DocumentData): BookDoc => ({
@@ -182,6 +191,7 @@ const bookDoc = (id: string, d: DocumentData): BookDoc => ({
   color: d.color || '#b8243a', shape: d.shape || 'portrait', cover: d.cover || null, pages: d.pages || [], pageCount: d.pageCount || 0,
   createdAt: d.createdAt || 0, updatedAt: d.updatedAt || 0, isPublic: d.isPublic !== false, legacy: d.isPublic === undefined,
   thumbs: d.thumbs || [], coverThumb: d.coverThumb || null,
+  captions: d.captions || [], dates: d.dates || [], mediums: d.mediums || [], tags: d.tags || [], hidden: d.hidden === true,
 });
 
 export const thumbMap = (b: BookDoc): Record<string, string> => {
@@ -190,7 +200,15 @@ export const thumbMap = (b: BookDoc): Record<string, string> => {
   if (b.cover && b.coverThumb) m[b.cover] = b.coverThumb;
   return m;
 };
-export const toBook = (b: BookDoc): Book => ({ id: b.id, name: b.name, color: b.color, shape: b.shape, coverImg: b.cover, images: b.pages, createdAt: b.createdAt, isPublic: b.isPublic, thumbs: thumbMap(b) });
+export const noteMap = (b: BookDoc): Record<string, PageNote> => {
+  const m: Record<string, PageNote> = {};
+  b.pages.forEach((u, i) => { const c = b.captions[i] || '', d = b.dates[i] || ''; if (c || d) m[u] = { c, d }; });
+  return m;
+};
+export const toBook = (b: BookDoc): Book => ({
+  id: b.id, name: b.name, color: b.color, shape: b.shape, coverImg: b.cover, images: b.pages, createdAt: b.createdAt, isPublic: b.isPublic,
+  thumbs: thumbMap(b), notes: noteMap(b), mediums: b.mediums, tags: b.tags, hidden: b.hidden,
+});
 
 export function newBookId(): string { return doc(collection(need().db, 'books')).id; }
 
@@ -201,12 +219,37 @@ export async function userBooks(uid: string, publicOnly = false): Promise<BookDo
   return s.docs.map(x => bookDoc(x.id, x.data())).sort((a, b) => a.createdAt - b.createdAt);
 }
 
-/** Recently updated books from everyone that have at least one page. */
-export async function communityBooks(): Promise<BookDoc[]> {
+export type Cursor = QueryDocumentSnapshot | null;
+export const PAGE_SIZE = 24;
+let indexMissing = false;
+
+/** One page of public books: most pages first ('trending') or most recently updated ('new').
+ *  `next` is null once there are no more. Needs the composite indexes in firestore.indexes.json;
+ *  until they exist it falls back to one unpaged batch sorted here. */
+export async function communityPage(sort: 'trending' | 'new', after: Cursor): Promise<{ books: BookDoc[]; next: Cursor }> {
+  if (!db) return { books: [], next: null };
+  const c = collection(db, 'books');
+  if (!indexMissing) {
+    try {
+      const s = await getDocs(query(c, where('isPublic', '==', true), orderBy(sort === 'new' ? 'updatedAt' : 'pageCount', 'desc'), ...(after ? [startAfter(after)] : []), limit(PAGE_SIZE)));
+      return { books: s.docs.map(x => bookDoc(x.id, x.data())).filter(b => b.pageCount > 0), next: s.docs.length === PAGE_SIZE ? s.docs[s.docs.length - 1] : null };
+    } catch (e) {
+      if ((e as { code?: string }).code !== 'failed-precondition') throw e;
+      console.warn('Explore is unpaged until the Firestore indexes in firestore.indexes.json are created.', e);
+      indexMissing = true;
+    }
+  }
+  if (after) return { books: [], next: null };
+  const s = await getDocs(query(c, where('isPublic', '==', true), limit(300)));
+  const all = s.docs.map(x => bookDoc(x.id, x.data())).filter(b => b.pageCount > 0);
+  return { books: all.sort((a, b) => sort === 'new' ? b.updatedAt - a.updatedAt : b.pageCount - a.pageCount), next: null };
+}
+
+/** Public books with a medium ('m:ink') or tag ('t:lisbon'), newest first. */
+export async function labelBooks(lbl: string): Promise<BookDoc[]> {
   if (!db) return [];
-  // Equality-only filter so no composite index is needed; newest first is sorted here.
-  const s = await getDocs(query(collection(db, 'books'), where('isPublic', '==', true), limit(300)));
-  return s.docs.map(x => bookDoc(x.id, x.data())).filter(b => b.pageCount > 0).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 60);
+  const s = await getDocs(query(collection(db, 'books'), where('isPublic', '==', true), where('labels', 'array-contains', lbl), limit(120)));
+  return s.docs.map(x => bookDoc(x.id, x.data())).filter(b => b.pageCount > 0).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 /** Uploads data URLs for a book's pages/cover, each with a small thumbnail; returns data URL → URLs. */
@@ -243,12 +286,16 @@ function makeThumb(dataUrl: string, maxH = 480): Promise<string> {
 
 export async function writeBook(owner: Account, b: Book) {
   const { db: d } = need();
-  const pages = b.images.filter(u => !u.startsWith('data:')), cover = b.coverImg && !b.coverImg.startsWith('data:') ? b.coverImg : null, t = b.thumbs || {};
+  const pages = b.images.filter(u => !u.startsWith('data:')), cover = b.coverImg && !b.coverImg.startsWith('data:') ? b.coverImg : null, t = b.thumbs || {}, n = b.notes || {};
+  const mediums = (b.mediums || []).slice(0, 4), tags = (b.tags || []).slice(0, 8);
   await setDoc(doc(d, 'books', String(b.id)), {
     ownerId: owner.uid, ownerName: owner.name, ownerHandle: owner.handle,
     name: b.name, color: b.color, shape: b.shape || 'portrait', cover,
-    pages, pageCount: pages.length, createdAt: b.createdAt || Date.now(), updatedAt: Date.now(), isPublic: b.isPublic !== false,
+    pages, pageCount: pages.length, createdAt: b.createdAt || Date.now(), updatedAt: Date.now(), isPublic: !b.hidden && b.isPublic !== false,
     thumbs: pages.map(u => t[u] || ''), coverThumb: (cover && t[cover]) || null,
+    captions: pages.map(u => (n[u]?.c || '').slice(0, 140)), dates: pages.map(u => n[u]?.d || ''),
+    // `labels` lets Explore filter by medium or tag with a single array-contains query.
+    mediums, tags, labels: [...mediums.map(m => 'm:' + mediumKey(m)), ...tags.map(x => 't:' + x)], hidden: !!b.hidden,
   });
 }
 
@@ -303,8 +350,8 @@ export async function following(uid: string): Promise<string[]> {
 export async function setFollow(me: Account, target: string, on: boolean) {
   const { db: d } = need(), batch = writeBatch(d), r = doc(d, 'users', me.uid, 'following', target), m = doc(d, 'users', target, 'followers', me.uid);
   if (on) { batch.set(r, { at: Date.now() }); batch.set(m, { at: Date.now() }); } else { batch.delete(r); batch.delete(m); }
-  if (on) batch.set(doc(collection(d, 'users', target, 'notifications')), note(me, 'follow'));
   await batch.commit();
+  if (on) notifyOnce(target, 'follow_' + me.uid, note(me, 'follow'));
 }
 
 /** Adds follower entries for follows made before they existed (idempotent; run on sign-in). */
@@ -329,14 +376,19 @@ const note = (me: Account, type: 'like' | 'follow', book?: { id: string; name: s
   type, from: me.uid, fromName: me.name, fromHandle: me.handle, ...(book ? { bookId: book.id, bookName: book.name } : {}), at: Date.now(), read: false,
 });
 
-/** Likes or unlikes a sketchbook: the like itself, the book's and owner's like counts, and a notification. */
+/** Sends a notification once: its id is fixed per person and action, and the rules refuse overwriting it. */
+function notifyOnce(to: string, id: string, data: object) {
+  setDoc(doc(need().db, 'users', to, 'notifications', id), data).catch(() => { /* already sent */ });
+}
+
+/** Likes or unlikes a sketchbook: the like itself, the book's and owner's like counts, and (the first time) a notification. */
 export async function setLike(me: Account, book: { id: string; ownerId: string; name: string }, on: boolean) {
   const { db: d } = need(), batch = writeBatch(d), r = doc(d, 'books', book.id, 'likes', me.uid), by = on ? 1 : -1;
   if (on) batch.set(r, { at: Date.now() }); else batch.delete(r);
   batch.set(doc(d, 'bookCounts', book.id), { likes: increment(by) }, { merge: true });
   batch.set(doc(d, 'userCounts', book.ownerId), { likes: increment(by), likeBook: book.id }, { merge: true });
-  if (on && book.ownerId !== me.uid) batch.set(doc(collection(d, 'users', book.ownerId, 'notifications')), note(me, 'like', book));
   await batch.commit();
+  if (on && book.ownerId !== me.uid) notifyOnce(book.ownerId, `like_${book.id}_${me.uid}`, note(me, 'like', book));
 }
 
 /** Live document listener; returns an unsubscribe function. */
@@ -391,9 +443,40 @@ export async function setBlocked(uid: string, target: string, on: boolean, wasFo
 }
 
 export const REPORT_REASONS = ['Spam or scam', 'Not their own work', 'Harassment or hate', 'Sexual content', 'Something else'] as const;
-/** Files a report for the site owner to review in the Firebase console (`reports` collection). */
+/** Files a report for moderators (one per person per target; reporting again is quietly ignored). */
 export async function report(by: string, r: { kind: 'book' | 'user'; targetId: string; ownerId: string; reason: string; note: string }) {
-  await setDoc(doc(collection(need().db, 'reports')), { by, ...r, note: r.note.slice(0, 500), at: Date.now() });
+  await setDoc(doc(need().db, 'reports', `${by}_${r.targetId}`), { by, ...r, note: r.note.slice(0, 500), at: Date.now() })
+    .catch(e => { if ((e as { code?: string }).code !== 'permission-denied') throw e; });
+}
+
+// ---------- moderation ----------
+
+export interface Report { id: string; by: string; kind: 'book' | 'user'; targetId: string; ownerId: string; reason: string; note: string; at: number }
+
+export async function isAdmin(uid: string): Promise<boolean> {
+  try { return (await getDoc(doc(need().db, 'admins', uid))).exists(); } catch { return false; }
+}
+export async function reports(): Promise<Report[]> {
+  const s = await getDocs(query(collection(need().db, 'reports'), orderBy('at', 'desc'), limit(200)));
+  return s.docs.map(d => ({ ...(d.data() as Omit<Report, 'id'>), id: d.id }));
+}
+export async function dismissReport(id: string) { await deleteDoc(doc(need().db, 'reports', id)); }
+export async function bannedUsers(): Promise<string[]> {
+  if (!db) return [];
+  try { return (await getDocs(collection(db, 'banned'))).docs.map(d => d.id); } catch { return []; }
+}
+/** Hides a sketchbook from everyone but its owner, or restores it. */
+export async function setHidden(bookId: string, on: boolean) { await updateDoc(doc(need().db, 'books', bookId), { hidden: on, isPublic: !on }); }
+/** Suspends an artist (their public sketchbooks are hidden) or lifts it (books hidden by moderators come back). */
+export async function setBanned(uid: string, on: boolean) {
+  const { db: d } = need(), books = await getDocs(query(collection(d, 'books'), where('ownerId', '==', uid))), batch = writeBatch(d);
+  if (on) batch.set(doc(d, 'banned', uid), { at: Date.now() }); else batch.delete(doc(d, 'banned', uid));
+  books.forEach(b => {
+    const x = b.data();
+    if (on && x.isPublic !== false) batch.update(b.ref, { hidden: true, isPublic: false });
+    if (!on && x.hidden === true) batch.update(b.ref, { hidden: false, isPublic: true });
+  });
+  await batch.commit();
 }
 
 /** Recent public books from the given artists (Firestore allows 30 ids per `in` query). */

@@ -7,6 +7,9 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function isUser(uid) { return signedIn() && request.auth.uid == uid; }
     function str(v, max) { return v is string && v.size() <= max; }
+    // Moderators: an admins/{uid} document added by hand in the Firebase console.
+    function isAdmin() { return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
+    function suspended() { return signedIn() && exists(/databases/$(database)/documents/banned/$(request.auth.uid)); }
 
     match /users/{uid} {
       allow read: if true;
@@ -41,14 +44,18 @@ service cloud.firestore {
         allow write: if isUser(uid) && target != uid;
       }
       // Notifications: written by whoever liked/followed (or by you, for reaching a goal); only you read them.
+      // Ids are fixed per person and action (like_<book>_<uid>, follow_<uid>, goal_<goal>) and can't be
+      // overwritten, so liking and unliking over and over sends one notification, not hundreds.
       match /notifications/{nid} {
         allow read, delete: if isUser(uid);
         allow update: if isUser(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
-        allow create: if signedIn()
+        allow create: if signedIn() && !suspended()
           && request.resource.data.from == request.auth.uid
           && request.resource.data.read == false
           && request.resource.data.keys().hasOnly(['type', 'from', 'fromName', 'fromHandle', 'bookId', 'bookName', 'goal', 'at', 'read'])
-          && (request.resource.data.type in ['like', 'follow'] || (request.resource.data.type == 'goal' && uid == request.auth.uid));
+          && ((request.resource.data.type == 'like' && nid == 'like_' + request.resource.data.bookId + '_' + request.auth.uid)
+            || (request.resource.data.type == 'follow' && nid == 'follow_' + request.auth.uid)
+            || (request.resource.data.type == 'goal' && uid == request.auth.uid && nid == 'goal_' + request.resource.data.goal));
       }
     }
 
@@ -86,14 +93,26 @@ service cloud.firestore {
       }
     }
 
-    // Reports can be filed by anyone signed in, and read only in the Firebase console.
+    // Reports: one per person per sketchbook or artist (id <reporter>_<target>), read and cleared by moderators.
     match /reports/{id} {
       allow create: if signedIn()
+        && id == request.auth.uid + '_' + request.resource.data.targetId
         && request.resource.data.by == request.auth.uid
         && request.resource.data.keys().hasOnly(['by', 'kind', 'targetId', 'ownerId', 'reason', 'note', 'at'])
         && request.resource.data.kind in ['book', 'user']
         && str(request.resource.data.reason, 60) && str(request.resource.data.note, 500);
-      allow read, update, delete: if false;
+      allow read, delete: if isAdmin();
+      allow update: if false;
+    }
+
+    match /admins/{uid} {
+      allow read: if isUser(uid);
+      allow write: if false;
+    }
+    // Suspended artists can't publish sketchbooks or send notifications.
+    match /banned/{uid} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // One document per handle so handles stay unique.
@@ -109,18 +128,33 @@ service cloud.firestore {
 
     match /books/{bookId} {
       function valid(d) {
-        return d.keys().hasOnly(['ownerId', 'ownerName', 'ownerHandle', 'name', 'color', 'shape', 'cover', 'pages', 'pageCount', 'createdAt', 'updatedAt', 'isPublic', 'thumbs', 'coverThumb'])
+        return d.keys().hasOnly(['ownerId', 'ownerName', 'ownerHandle', 'name', 'color', 'shape', 'cover', 'pages', 'pageCount', 'createdAt', 'updatedAt', 'isPublic', 'thumbs', 'coverThumb',
+            'captions', 'dates', 'mediums', 'tags', 'labels', 'hidden'])
           && (!('isPublic' in d) || d.isPublic is bool)
           && (!('thumbs' in d) || (d.thumbs is list && d.thumbs.size() <= 1000))
+          && (!('captions' in d) || (d.captions is list && d.captions.size() <= 1000))
+          && (!('dates' in d) || (d.dates is list && d.dates.size() <= 1000))
+          && (!('mediums' in d) || (d.mediums is list && d.mediums.size() <= 4))
+          && (!('tags' in d) || (d.tags is list && d.tags.size() <= 8))
+          && (!('labels' in d) || (d.labels is list && d.labels.size() <= 12))
           && str(d.name, 120)
           && d.shape in ['pocket', 'portrait', 'square', 'landscape', 'panorama']
-          && d.pages is list && d.pages.size() <= 1000 && d.pageCount == d.pages.size();
+          && d.pages is list && d.pages.size() <= 1000 && d.pageCount == d.pages.size()
+          // Suspended artists can only keep private sketchbooks.
+          && (d.get('isPublic', true) == false || !suspended());
       }
-      // Private books are readable only by their owner; books without the field are public.
-      allow read: if resource.data.get('isPublic', true) == true || (signedIn() && resource.data.ownerId == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid && valid(request.resource.data);
-      allow update: if signedIn() && resource.data.ownerId == request.auth.uid
-        && request.resource.data.ownerId == resource.data.ownerId && valid(request.resource.data);
+      // Only moderators set `hidden`; a hidden book stays private until they restore it.
+      function keepsHidden() {
+        let was = resource.data.get('hidden', false);
+        return request.resource.data.get('hidden', false) == was && (was == false || request.resource.data.isPublic == false);
+      }
+      // Private books are readable only by their owner (and moderators); books without the field are public.
+      allow read: if resource.data.get('isPublic', true) == true || (signedIn() && resource.data.ownerId == request.auth.uid) || isAdmin();
+      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid && valid(request.resource.data)
+        && request.resource.data.get('hidden', false) == false;
+      allow update: if (signedIn() && resource.data.ownerId == request.auth.uid
+          && request.resource.data.ownerId == resource.data.ownerId && valid(request.resource.data) && keepsHidden())
+        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPublic', 'hidden']));
       allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
 
       // One like per person per book; anyone can see who liked it.

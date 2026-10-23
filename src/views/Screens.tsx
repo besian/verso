@@ -41,6 +41,7 @@ export function HomeScreen({ v }: { v: V }) {
             : <button onClick={v.startOwn} className={hoverLine} style={underlineBtn(15)}>Start your own →</button>}
         </div>
         {signedOut && <div style={{ fontSize: 13, color: STONE }}>Already a member? <button onClick={v.openSignin} className={hoverText} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${STONE}`, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Sign in</button></div>}
+        {signedOut && <LegalLinks v={v} />}
       </section>
       <section style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10, paddingTop: mob ? 0 : 28 }}>
         <div style={{ overflow: 'hidden', paddingTop: 16 }}>
@@ -64,6 +65,7 @@ export function HomeScreen({ v }: { v: V }) {
   );
 }
 
+const chipStyle = (on: boolean): CSSProperties => ({ flexShrink: 0, height: 30, padding: '0 12px', borderRadius: 15, border: `1px solid ${on ? INK : 'rgba(34,35,32,.25)'}`, background: on ? INK : 'transparent', color: on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' });
 const segBtn = (bg: string, fg: string): CSSProperties => ({ height: 32, borderRadius: 2, border: 'none', background: bg, color: fg, font: `500 13px ${SANS}`, cursor: 'pointer' });
 const iconSeg = (bg: string, fg: string): CSSProperties => ({ ...segBtn(bg, fg), width: 32, fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' });
 const segGroup: CSSProperties = { display: 'flex', gap: 2, padding: 3, border: '1px solid rgba(34,35,32,.2)' };
@@ -76,7 +78,7 @@ const stackEdge = (side: 'top' | 'bottom' | 'left' | 'right', bg: string, filter
 
 export function Explore({ v }: { v: V }) {
   return (
-    <div style={screen(v.exOvY)}>
+    <div onScroll={v.onExScroll} style={screen(v.exOvY)}>
       <div style={{ maxWidth: 'none', height: v.exInnerH, minHeight: '100%', boxSizing: 'border-box', margin: '0 auto', padding: `${v.exPadT}px ${v.exPadX}px 28px`, display: 'flex', flexDirection: 'column', gap: v.exGap }}>
         {v.exGrid && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', paddingBottom: 18, borderBottom: `1px solid ${INK}` }}>
@@ -99,6 +101,10 @@ export function Explore({ v }: { v: V }) {
             <button onClick={v.viewStack} title="Stack" style={iconSeg(v.vStackBg, v.vStackFg)}>≡</button>
           </div>
         </div>
+        <div role="group" aria-label="Filter by medium" style={{ display: 'flex', gap: 6, overflowX: 'auto', margin: `0 -${v.exPadX}px`, padding: `2px ${v.exPadX}px 4px`, scrollbarWidth: 'none' } as CSSProperties}>
+          {v.exTag && <button onClick={v.clearLabel} title="Clear tag" style={{ ...chipStyle(true), background: MARK, borderColor: MARK }}>{v.exTag} ×</button>}
+          {v.exMediums.map((m: V) => <button key={m.key} onClick={m.pick} aria-pressed={m.on} className={m.on ? undefined : hover('border-color:rgba(34,35,32,.6)')} style={chipStyle(m.on && !v.exTag)}>{m.label}</button>)}
+        </div>
         {v.exPeople?.length > 0 && (
           <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <span style={label()}>Artists</span>
@@ -119,7 +125,7 @@ export function Explore({ v }: { v: V }) {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, textAlign: 'center', fontSize: 14, color: 'rgba(34,35,32,.7)' }}>
             {v.exLoading ? 'Opening the archive…'
               : v.exEmpty ? <><span style={serif(34)}>The archive is <em style={{ color: MARK }}>empty.</em></span><span>No one has shared a sketchbook yet. Yours could be the first.</span></>
-              : <>No sketchbooks match “{v.exQ}”</>}
+              : v.exNoneLbl}
           </div>
         )}
         {v.exGrid && (
@@ -138,6 +144,11 @@ export function Explore({ v }: { v: V }) {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+        {v.exGrid && v.exCanMore && (
+          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 12 }}>
+            <button onClick={v.loadMore} disabled={v.exBusy} className={hoverLine} style={{ ...underlineBtn(14), opacity: v.exBusy ? 0.5 : 1 }}>{v.exBusy ? 'Loading…' : 'Load more'}</button>
           </div>
         )}
         {v.exStack && (
@@ -213,6 +224,7 @@ export function Profile({ v }: { v: V }) {
                 <button onClick={v.editProfile} className={hoverMark} style={actionBtn(true)}>Edit profile</button>
                 <button onClick={v.togglePreview} className={hover('background:rgba(34,35,32,.1)')} style={actionBtn(false)}>View as public</button>
                 <button onClick={v.openSettings} className={hover('background:rgba(34,35,32,.1)')} style={actionBtn(false)}>Settings</button>
+                {v.pfAdmin && <button onClick={v.openAdmin} className={hover('background:rgba(34,35,32,.1)')} style={actionBtn(false)}>Moderation</button>}
                 <button onClick={v.signOut} className={hover(`color:${MARK}`)} style={{ ...actionBtn(false), border: 'none', padding: '0 6px' }}>Sign out</button>
               </>
             )}
@@ -239,6 +251,7 @@ export function Profile({ v }: { v: V }) {
               <span style={{ fontSize: 14, color: 'rgba(34,35,32,.6)' }}>{v.pfCount}</span>
             </div>
           )}
+          {v.pfSuspended && <div style={{ fontSize: 14, color: MUTED }}>This account has been suspended for breaking the terms.</div>}
           {v.pfBlocked && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontSize: 14, color: MUTED }}>
               You’ve blocked this artist, so their sketchbooks are hidden.
@@ -314,6 +327,7 @@ export function AuthPage({ v }: { v: V }) {
             </div>
           )}
           <Notice err={v.suErr} info={v.suInfo} />
+          {v.suJoin && <div style={{ fontSize: 12, lineHeight: 1.5, color: MUTED }}>By creating an account you agree to the <button type="button" onClick={v.openTerms} className={hoverLine} style={{ ...quietLink('rgba(34,35,32,.4)'), font: `500 12px ${SANS}` }}>Terms</button> and <button type="button" onClick={v.openPrivacy} className={hoverLine} style={{ ...quietLink('rgba(34,35,32,.4)'), font: `500 12px ${SANS}` }}>Privacy policy</button>. Your email is only used to sign in and is never shown.</div>}
           <button type="submit" disabled={v.suBusy} className={v.suBusy ? undefined : hover(`background:${MARK}`)} style={{ height: 50, marginTop: 4, border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 15px ${SANS}`, cursor: v.suBusy ? 'progress' : 'pointer', opacity: v.suBusy ? 0.6 : v.suOk ? 1 : 0.55, transition: 'background .25s' }}>{v.suBusy ? 'One moment…' : v.suBtn}</button>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontSize: 13, color: MUTED }}>
             {v.suReset
@@ -388,6 +402,9 @@ export function Settings({ v }: { v: V }) {
             <button type="submit" disabled={v.acBusy === 'password'} style={{ ...formBtn(), opacity: v.acBusy === 'password' ? 0.6 : 1 }}>{v.acBusy === 'password' ? 'Saving…' : 'Change password'}</button>
           </form>
         </SettingsSection>
+        <SettingsSection title="Your data" note="What we store about you and how it’s used.">
+          <LegalLinks v={v} align="flex-start" />
+        </SettingsSection>
         <SettingsSection title="Delete account" note="Permanently deletes your profile, handle, follows and every sketchbook with all its pages. This can’t be undone.">
           <form onSubmit={v.deleteAccount} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <TextField label={`Type your handle (${v.acHandle}) to confirm`} value={f.delHandle} onChange={on.delHandle} placeholder={v.acHandle} />
@@ -396,6 +413,15 @@ export function Settings({ v }: { v: V }) {
           </form>
         </SettingsSection>
       </div>
+    </div>
+  );
+}
+
+function LegalLinks({ v, align = 'center' }: { v: V; align?: CSSProperties['justifyContent'] }) {
+  return (
+    <div style={{ display: 'flex', gap: 16, justifyContent: align, fontSize: 12, color: STONE }}>
+      <button onClick={v.openPrivacy} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>Privacy</button>
+      <button onClick={v.openTerms} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>Terms</button>
     </div>
   );
 }

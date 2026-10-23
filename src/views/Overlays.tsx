@@ -122,12 +122,12 @@ export function Manager({ v }: { v: V }) {
             <input value={v.bookName} onChange={v.onName} style={{ background: 'none', border: 'none', borderBottom: '1.5px solid rgba(34,35,32,.25)', color: INK, font: `500 ${v.notMob ? 34 : 28}px ${SANS}`, letterSpacing: '-.02em', padding: '0 0 4px', outline: 'none', boxSizing: 'border-box', width: '100%', maxWidth: 480 }} />
             <div style={{ fontSize: 13, color: 'rgba(34,35,32,.7)' }}>{v.blankNote} · drag to reorder</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
-              <div role="radiogroup" aria-label="Who can see this sketchbook" style={{ display: 'flex', gap: 2, padding: 3, border: '1px solid rgba(34,35,32,.2)' }}>
+              <div role="radiogroup" aria-label="Who can see this sketchbook" style={{ display: 'flex', gap: 2, padding: 3, border: '1px solid rgba(34,35,32,.2)', opacity: v.bookHidden ? 0.45 : 1 }}>
                 {([[true, 'Public'], [false, 'Private']] as const).map(([on, name]) => (
-                  <button key={name} role="radio" aria-checked={v.bookPublic === on} onClick={() => v.setPublic(on)} style={{ height: 30, padding: '0 14px', border: 'none', borderRadius: 2, background: v.bookPublic === on ? INK : 'transparent', color: v.bookPublic === on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>{name}</button>
+                  <button key={name} role="radio" aria-checked={v.bookPublic === on} disabled={v.bookHidden} onClick={() => v.setPublic(on)} style={{ height: 30, padding: '0 14px', border: 'none', borderRadius: 2, background: v.bookPublic === on ? INK : 'transparent', color: v.bookPublic === on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: v.bookHidden ? 'not-allowed' : 'pointer' }}>{name}</button>
                 ))}
               </div>
-              <span style={{ fontSize: 13, color: 'rgba(34,35,32,.7)' }}>{v.bookPublic ? 'Anyone can find it in Explore and on your profile.' : 'Only you can see it.'}</span>
+              <span style={{ fontSize: 13, color: v.bookHidden ? MARK : 'rgba(34,35,32,.7)' }}>{v.bookHidden ? 'Hidden by moderators for breaking the terms. Only you can see it.' : v.bookPublic ? 'Anyone can find it in Explore and on your profile.' : 'Only you can see it.'}</span>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -138,6 +138,7 @@ export function Manager({ v }: { v: V }) {
             <input ref={v.coverRef} type="file" accept="image/*" onChange={v.onCoverFile} style={{ display: 'none' }} />
           </div>
         </div>
+        <Labels v={v} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 20 }}>
           {v.pagesList.map((pg: V, i: number) => (
             <div key={i} draggable onDragStart={pg.dragStart} onDragOver={pg.dragOver} onDrop={pg.drop} style={{ display: 'flex', flexDirection: 'column', gap: 8, cursor: 'grab' }}>
@@ -151,6 +152,11 @@ export function Manager({ v }: { v: V }) {
                   <button onClick={pg.remove} className={hover('background:rgba(255,120,120,.15)')} style={{ ...smallBtn, padding: '0 8px', color: MARK }}>Remove</button>
                 </div>
               </div>
+              {/* Written in the page's margin in the book. */}
+              <div draggable onDragStart={e => { e.preventDefault(); e.stopPropagation(); }} style={{ display: 'flex', flexDirection: 'column', gap: 4, cursor: 'auto' }}>
+                <input value={pg.caption} onChange={pg.onCaption} maxLength={140} placeholder="Caption" aria-label={`Caption for page ${pg.num}`} className={focusMark} style={noteField} />
+                <input type="date" value={pg.date} onChange={pg.onDate} aria-label={`Date for page ${pg.num}`} className={focusMark} style={{ ...noteField, color: pg.date ? INK : 'rgba(34,35,32,.5)' }} />
+              </div>
             </div>
           ))}
           <div onClick={v.pick} style={{ display: 'flex', flexDirection: 'column', gap: 8, cursor: 'pointer' }}>
@@ -160,6 +166,34 @@ export function Manager({ v }: { v: V }) {
               <span style={{ fontSize: 12, color: 'rgba(34,35,32,.6)' }}>or drop images</span>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const noteField: CSSProperties = { ...field, height: 32, padding: '0 8px', font: `500 13px ${SANS}`, borderWidth: 1 };
+const chip = (on: boolean): CSSProperties => ({ height: 30, padding: '0 12px', borderRadius: 15, border: `1px solid ${on ? INK : 'rgba(34,35,32,.25)'}`, background: on ? INK : 'transparent', color: on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' });
+
+/** Mediums (pick up to four) and free-form tags, which Explore can filter by. */
+function Labels({ v }: { v: V }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,320px),1fr))', gap: '16px 40px', paddingTop: 16, borderTop: '1px solid rgba(34,35,32,.12)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <span style={{ fontSize: 13, color: 'rgba(34,35,32,.7)' }}>Mediums</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {v.mgMediums.map((m: V) => <button key={m.key} onClick={m.pick} aria-pressed={m.on} className={m.on ? undefined : hover('border-color:rgba(34,35,32,.6)')} style={chip(m.on)}>{m.label}</button>)}
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <span style={{ fontSize: 13, color: 'rgba(34,35,32,.7)' }}>Tags <span style={{ color: 'rgba(34,35,32,.5)' }}>· up to 8, e.g. portraits, lisbon, figure-drawing</span></span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, minHeight: 40, padding: '5px 8px', border: '1.5px solid rgba(34,35,32,.14)', background: 'rgba(34,35,32,.06)', boxSizing: 'border-box' }}>
+          {v.mgTags.map((t: V) => (
+            <span key={t.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, height: 26, padding: '0 4px 0 10px', borderRadius: 13, background: PAPER, border: '1px solid rgba(34,35,32,.2)', fontSize: 13 }}>
+              {t.label}<button onClick={t.remove} aria-label={`Remove ${t.label}`} className={hover(`color:${MARK}`)} style={{ width: 20, height: 20, padding: 0, border: 'none', background: 'none', color: 'rgba(34,35,32,.6)', font: `500 14px/1 ${SANS}`, cursor: 'pointer' }}>×</button>
+            </span>
+          ))}
+          {!v.mgTagFull && <input value={v.tagDraft} onChange={v.onTagDraft} onKeyDown={v.onTagKey} onBlur={v.commitTag} placeholder={v.mgTags.length ? 'Add a tag' : 'Add tags, separated by commas'} aria-label="Add a tag" style={{ flex: 1, minWidth: 120, height: 28, border: 'none', outline: 'none', background: 'none', color: INK, font: `500 14px ${SANS}` }} />}
         </div>
       </div>
     </div>
