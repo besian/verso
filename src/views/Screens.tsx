@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { V } from '../App';
 import ClosedBook from '../ClosedBook';
 import { hover } from '../pseudo';
-import { CANVAS, INK, MARK, MUTED, PAGE_EDGES, PAPER, SANS, SERIF, SPINE, SPINE_W, STONE, label, serif } from '../theme';
+import { CANVAS, INK, MARK, MUTED, PAGE_EDGES, PAPER, SANS, SERIF, STONE, label, serif } from '../theme';
 import { HandleField, Notice, TextField } from './Overlays';
 
 const screen = (overflowY: CSSProperties['overflowY'] = 'auto'): CSSProperties => ({ position: 'absolute', inset: 0, zIndex: 4, background: PAPER, overflowX: 'hidden', overflowY });
@@ -261,7 +261,6 @@ export function Explore({ v }: { v: V }) {
                     <div style={stackEdge('right', 'repeating-linear-gradient(90deg,#f3efe6 0 2px,#d8d1c1 2px 3px)')} />
                     <div style={stackEdge('left', sk.color, 'brightness(.7)')} />
                     <div style={{ position: 'absolute', inset: 0, borderRadius: '2px 10px 10px 2px', overflow: 'hidden', background: sk.bg }}>
-                      <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: SPINE_W, background: SPINE }} />
                       <div style={{ position: 'absolute', right: '13%', top: 0, bottom: 0, width: 8, background: '#1d1d26' }} />
                       {sk.showLabel && <div className="cover-label" style={{ position: 'absolute', left: '16%', right: '26%', top: '14%', padding: '10px 12px', background: '#f6f2e9', borderRadius: 2, color: INK, fontSize: 15, fontWeight: 600 }}>{sk.name}</div>}
                       <div style={{ position: 'absolute', inset: 0, background: '#1c1d30', opacity: sk.shade }} />

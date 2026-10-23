@@ -20,9 +20,3 @@ export const serif = (size: number, lh: number | string = 1.05, ls = '-.01em'): 
 });
 
 export const PAGE_EDGES = 'repeating-linear-gradient(180deg,#f3efe6 0 2px,#d8d1c1 2px 3px)';
-/** Shading for the bound edge of a cover: rounded spine falling into shadow, a soft highlight
- *  where it turns, then a shallow hinge groove. `dir` is 90deg for a spine on the left, 270deg on the right. */
-const spineGrad = (dir: number) => `linear-gradient(${dir}deg, rgba(0,0,0,.34) 0%, rgba(0,0,0,.14) 7%, rgba(255,255,255,.10) 22%, rgba(255,255,255,.04) 40%, rgba(0,0,0,.10) 62%, rgba(0,0,0,.20) 72%, rgba(255,255,255,.07) 80%, rgba(0,0,0,0) 100%)`;
-export const SPINE = spineGrad(90), SPINE_R = spineGrad(270);
-/** Width of the spine shading as a share of the cover. */
-export const SPINE_W = '11%';
