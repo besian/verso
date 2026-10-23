@@ -27,7 +27,8 @@ export function HomeScreen({ v }: { v: V }) {
   const mob = v.hmMob, signedOut = v.isLanding;
   return (
     <div style={{ ...screen('hidden'), display: 'flex', flexDirection: 'column', boxSizing: 'border-box', padding: `${v.hmPadT}px ${v.hmPadX}px ${mob ? 16 : 22}px` }}>
-      <section style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: mob ? 18 : 'clamp(14px, 2.6vh, 26px)' }}>
+      {/* Spare height is shared between the headline block and the shelf, each centred in its half. */}
+      <section style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: mob ? 18 : 'clamp(14px, 2.6vh, 26px)' }}>
         <Kicker />
         <h1 style={{ margin: 0, maxWidth: 1100, font: `400 ${mob ? 'clamp(40px, 12vw, 56px)' : 'clamp(48px, min(8.5vw, 12vh), 132px)'}/.92 ${SERIF}`, letterSpacing: '-.03em', textWrap: 'balance' } as CSSProperties}>Every great idea starts <em style={{ color: MARK }}>somewhere.</em></h1>
         {!mob && <p style={{ margin: 0, maxWidth: 480, fontSize: 'clamp(15px, 2vh, 18px)', lineHeight: 1.5, color: MUTED, textWrap: 'pretty' } as CSSProperties}>A home for sketchbooks, unfinished thoughts, and the creative process. Share your pages. Discover someone else’s world.</p>}
@@ -41,7 +42,7 @@ export function HomeScreen({ v }: { v: V }) {
         </div>
         {signedOut && <div style={{ fontSize: 13, color: STONE }}>Already a member? <button onClick={v.openSignin} className={hoverText} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${STONE}`, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Sign in</button></div>}
       </section>
-      <section style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10, paddingTop: mob ? 20 : 28 }}>
+      <section style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10, paddingTop: mob ? 0 : 28 }}>
         <div style={{ overflow: 'hidden', paddingTop: 16 }}>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: v.hmShelfGap, boxSizing: 'border-box', padding: `0 12px ${v.hmMob ? 12 : 16}px`, borderBottom: `1px solid ${INK}` }}>
             {!v.hmShelf.length && (
