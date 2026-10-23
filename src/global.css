@@ -1,3 +1,6 @@
 html, body { margin: 0; height: 100%; background: #F4F1E9; overflow: hidden; }
 a { color: #222320; }
 a:hover { color: #AD493A; }
+
+/* Book-cover name labels don't fit small covers on phones. */
+@media (max-width: 639px) { .cover-label { display: none !important; } }

@@ -196,7 +196,13 @@ export function Explore({ v }: { v: V }) {
             <button onClick={v.viewStack} title="Stack" style={iconSeg(v.vStackBg, v.vStackFg)}>≡</button>
           </div>
         </div>
-        {v.exNone && <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: 'rgba(34,35,32,.7)' }}>No sketchbooks match “{v.exQ}”</div>}
+        {v.exNone && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, textAlign: 'center', fontSize: 14, color: 'rgba(34,35,32,.7)' }}>
+            {v.exLoading ? 'Opening the archive…'
+              : v.exEmpty ? <><span style={serif(34)}>The archive is <em style={{ color: MARK }}>empty.</em></span><span>No one has shared a sketchbook yet. Yours could be the first.</span></>
+              : <>No sketchbooks match “{v.exQ}”</>}
+          </div>
+        )}
         {v.exGrid && (
           <div style={{ display: 'flex', justifyContent: 'center' }}>
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(${v.exCols},minmax(0,1fr))`, gap: '28px 18px', width: '100%', alignItems: 'end' }}>
@@ -230,7 +236,7 @@ export function Explore({ v }: { v: V }) {
                     <div style={{ position: 'absolute', inset: 0, borderRadius: '2px 10px 10px 2px', overflow: 'hidden', background: sk.bg }}>
                       <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '7%', background: SPINE }} />
                       <div style={{ position: 'absolute', right: '13%', top: 0, bottom: 0, width: 8, background: '#1d1d26' }} />
-                      {sk.showLabel && <div style={{ position: 'absolute', left: '16%', right: '26%', top: '14%', padding: '10px 12px', background: '#f6f2e9', borderRadius: 2, color: INK, fontSize: 15, fontWeight: 600 }}>{sk.name}</div>}
+                      {sk.showLabel && <div className="cover-label" style={{ position: 'absolute', left: '16%', right: '26%', top: '14%', padding: '10px 12px', background: '#f6f2e9', borderRadius: 2, color: INK, fontSize: 15, fontWeight: 600 }}>{sk.name}</div>}
                       <div style={{ position: 'absolute', inset: 0, background: '#1c1d30', opacity: sk.shade }} />
                     </div>
                   </div>

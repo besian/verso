@@ -362,7 +362,8 @@ export default class App extends Component<object, State> {
 
   // ---------- explore ----------
   exSorted() {
-    const q = (this.state.exQ || '').trim().toLowerCase(), l = this.community().filter(b => !q || (b.name + ' ' + b.artist).toLowerCase().includes(q));
+    // Explore lists real sketchbooks only; the samples remain on the home pages until the community grows.
+    const q = (this.state.exQ || '').trim().toLowerCase(), l = (this.state.community || []).filter(b => !q || (b.name + ' ' + b.artist).toLowerCase().includes(q));
     if ((this.state.exSort || 'trending') === 'trending') return l.sort((a, b) => b.likes - a.likes);
     return l[0]?.updatedAt ? l.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)) : l.reverse();
   }
@@ -574,6 +575,7 @@ export default class App extends Component<object, State> {
       stHint: mob ? 'swipe the pile up to lift books off' : 'scroll over the pile to lift books off',
       stDown0: (e: PointerEvent) => { this.stY = e.clientY; },
       stUp0: (e: PointerEvent) => { if (this.stY == null) return; const dy = e.clientY - this.stY; this.stY = null; if (Math.abs(dy) > 40) this.stackStep(dy < 0 ? 1 : -1); },
+      exLoading: !s.community, exEmpty: !!s.community && !s.community.length,
       exQ: s.exQ || '', onExQ: (e: ChangeEvent<HTMLInputElement>) => { cancelAnimationFrame(this.exRaf); this.stT = 0; this.setState({ exQ: e.target.value, stS: 0 }); }, exNone: n === 0,
       exCols: Math.max(2, Math.min(6, Math.floor((s.vw - (mob ? 32 : 80) + 18) / (mob ? 150 : 200)))),
       exPadT: mob ? 84 : 108, exPadX: mob ? 16 : 40, exGap: mob ? 14 : 24, exSearchBasis: mob ? '100%' : 'auto', exSearchMax: mob ? 'none' : '380px',
