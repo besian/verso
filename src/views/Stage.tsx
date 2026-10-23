@@ -93,6 +93,55 @@ function PageWear({ overlay }: { overlay?: string }) {
 const leafNum: CSSProperties = { position: 'absolute', bottom: 12, fontSize: 11, color: 'rgba(40,40,60,.45)' };
 const fill: CSSProperties = { position: 'absolute', inset: 0 };
 
+function FrontFace({ leaf, onClick, style }: { leaf: V; onClick?: () => void; style?: CSSProperties }) {
+  return (
+    <div onClick={onClick} style={{ ...fill, backfaceVisibility: 'hidden', borderRadius: '2px 10px 10px 2px', overflow: 'hidden', background: leaf.frontBg, boxShadow: 'inset 6px 0 10px -6px rgba(0,0,0,.35)', clipPath: earClip(leaf.wearF?.ear), ...style }}>
+      <PageWear overlay={leaf.overlayF} />
+      <DogEar ear={leaf.wearF?.ear} />
+      {leaf.isCoverAny && <div style={{ position: 'absolute', right: '13%', top: 0, bottom: 0, width: 8, background: '#1d1d26', boxShadow: '-2px 0 3px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.25)', pointerEvents: 'none' }} />}
+      {leaf.isCover && <div className="cover-label" style={{ position: 'absolute', left: '16%', right: '26%', top: '14%', padding: '10px 12px', background: '#f6f2e9', borderRadius: 2, boxShadow: '0 1px 2px rgba(0,0,0,.2)', color: INK, fontSize: 15, fontWeight: 600, letterSpacing: '-.01em', pointerEvents: 'none' }}>{leaf.label}</div>}
+      <div style={{ ...fill, background: '#000', opacity: leaf.shadeF, pointerEvents: 'none' }} />
+      <div style={{ ...leafNum, right: 14 }}>{leaf.numF}</div>
+    </div>
+  );
+}
+
+function BackFace({ leaf, onClick, style }: { leaf: V; onClick?: () => void; style?: CSSProperties }) {
+  return (
+    <div onClick={onClick} style={{ ...fill, backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', borderRadius: '10px 2px 2px 10px', overflow: 'hidden', background: leaf.backBg, boxShadow: 'inset -6px 0 10px -6px rgba(0,0,0,.35)', clipPath: earClip(leaf.wearB?.ear), ...style }}>
+      <PageWear overlay={leaf.overlayB} />
+      <DogEar ear={leaf.wearB?.ear} />
+      {leaf.isBackCover && <div style={{ position: 'absolute', left: '13%', top: 0, bottom: 0, width: 8, background: '#1d1d26', boxShadow: '-2px 0 3px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.25)', pointerEvents: 'none' }} />}
+      <div style={{ ...fill, background: '#000', opacity: leaf.shadeB, pointerEvents: 'none' }} />
+      <div style={{ ...leafNum, left: 14 }}>{leaf.numB}</div>
+    </div>
+  );
+}
+
+const CURL_SEGS = 10;
+/**
+ * A leaf mid-turn, bent like paper: split into vertical strips, each rotated a little more than
+ * the one before it (nested, so the bends add up toward the outer edge). Each strip shows its
+ * slice of the full front and back faces, with a soft shadow that deepens along the curl.
+ */
+function CurledLeaf({ leaf, W, H }: { leaf: V; W: number; H: number }) {
+  const n = CURL_SEGS, s = W / n;
+  const seg = (k: number): ReactNode => (
+    <div style={{ position: 'absolute', left: k ? s : 0, top: 0, width: s + 0.75, height: H, transformOrigin: '0 50%', transformStyle: 'preserve-3d', transform: k ? `rotateY(${leaf.curl}deg)` : undefined }}>
+      <div style={{ ...fill, overflow: 'hidden', backfaceVisibility: 'hidden' }}>
+        <div style={{ position: 'absolute', top: 0, left: -k * s, width: W, height: H }}><FrontFace leaf={leaf} style={{ backfaceVisibility: 'visible' }} /></div>
+        <div style={{ ...fill, background: `rgba(30,24,16,${(leaf.curlAmt * 0.16 * k / n).toFixed(3)})`, pointerEvents: 'none' }} />
+      </div>
+      <div style={{ ...fill, overflow: 'hidden', backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+        <div style={{ position: 'absolute', top: 0, left: -(W - (k + 1) * s), width: W, height: H }}><BackFace leaf={leaf} style={{ transform: 'none', backfaceVisibility: 'visible' }} /></div>
+        <div style={{ ...fill, background: `rgba(30,24,16,${(leaf.curlAmt * 0.12 * k / n).toFixed(3)})`, pointerEvents: 'none' }} />
+      </div>
+      {k < n - 1 && seg(k + 1)}
+    </div>
+  );
+  return <>{seg(0)}</>;
+}
+
 function Book3D({ v }: { v: V }) {
   return (
     <div style={{ position: 'relative', width: 0, height: v.H, transformStyle: 'preserve-3d', transform: v.bookTransform, opacity: v.bookOp }}>
@@ -103,29 +152,9 @@ function Book3D({ v }: { v: V }) {
       </div>
       {v.leaves.map((leaf: V) => (
         <div key={leaf.key} style={{ position: 'absolute', left: 0, top: 0, width: v.W, height: v.H, transformOrigin: '0 50%', transformStyle: 'preserve-3d', transform: leaf.transform }}>
-          <div onClick={leaf.openFront} style={{ ...fill, backfaceVisibility: 'hidden', borderRadius: '2px 10px 10px 2px', overflow: 'hidden', background: leaf.frontBg, boxShadow: 'inset 6px 0 10px -6px rgba(0,0,0,.35)', clipPath: earClip(leaf.wearF?.ear) }}>
-            <PageWear overlay={leaf.overlayF} />
-            <DogEar ear={leaf.wearF?.ear} />
-            {leaf.isCoverAny && (
-              <>
-                <div style={{ position: 'absolute', right: '13%', top: 0, bottom: 0, width: 8, background: '#1d1d26', boxShadow: '-2px 0 3px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.25)', pointerEvents: 'none' }} />
-              </>
-            )}
-            {leaf.isCover && <div className="cover-label" style={{ position: 'absolute', left: '16%', right: '26%', top: '14%', padding: '10px 12px', background: '#f6f2e9', borderRadius: 2, boxShadow: '0 1px 2px rgba(0,0,0,.2)', color: INK, fontSize: 15, fontWeight: 600, letterSpacing: '-.01em', pointerEvents: 'none' }}>{leaf.label}</div>}
-            <div style={{ ...fill, background: '#000', opacity: leaf.shadeF, pointerEvents: 'none' }} />
-            <div style={{ ...leafNum, right: 14 }}>{leaf.numF}</div>
-          </div>
-          <div onClick={leaf.openBack} style={{ ...fill, backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', borderRadius: '10px 2px 2px 10px', overflow: 'hidden', background: leaf.backBg, boxShadow: 'inset -6px 0 10px -6px rgba(0,0,0,.35)', clipPath: earClip(leaf.wearB?.ear) }}>
-            <PageWear overlay={leaf.overlayB} />
-            <DogEar ear={leaf.wearB?.ear} />
-            {leaf.isBackCover && (
-              <>
-                <div style={{ position: 'absolute', left: '13%', top: 0, bottom: 0, width: 8, background: '#1d1d26', boxShadow: '-2px 0 3px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.25)', pointerEvents: 'none' }} />
-              </>
-            )}
-            <div style={{ ...fill, background: '#000', opacity: leaf.shadeB, pointerEvents: 'none' }} />
-            <div style={{ ...leafNum, left: 14 }}>{leaf.numB}</div>
-          </div>
+          {leaf.curl
+            ? <CurledLeaf leaf={leaf} W={v.W} H={v.H} />
+            : <><FrontFace leaf={leaf} onClick={leaf.openFront} /><BackFace leaf={leaf} onClick={leaf.openBack} /></>}
         </div>
       ))}
     </div>

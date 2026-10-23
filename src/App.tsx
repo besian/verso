@@ -51,6 +51,8 @@ const ini = (n?: string) => (n || '').trim().split(/\s+/).filter(Boolean).map(w 
 const slug = (v?: string) => (v || '').toLowerCase().replace(/[^a-z0-9._]+/g, '').slice(0, 24);
 const fmtK = (v: number) => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v);
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+/** Extra bend per strip of a turning page at the middle of its turn (degrees). */
+const CURL_DEG = 5;
 const avatarBg = (av?: string | null) => av ? `url("${av}") center/cover no-repeat ${INK}` : INK;
 const isData = (u?: string | null): u is string => !!u && u.startsWith('data:');
 const bookUrls = (b: Book) => [...b.images, ...(b.coverImg ? [b.coverImg] : [])];
@@ -712,7 +714,11 @@ export default class App extends Component<object, State> {
       const a = -(A * clamp01((x + 2.5) / 2.5) + (180 - 2 * A) * ease + A * clamp01((x - 1) / 2.5));
       const rad = -a * Math.PI / 180;
       const F = this.face(i, 0, W), B = this.face(i, 1, W);
+      // Mid-turn the page bends: the outer edge trails behind the turn, most at halfway.
+      const curlAmt = t > 0.01 && t < 0.99 ? Math.sin(Math.PI * t) : 0;
+      const forward = this.drag ? p >= this.drag.p0 : this.target >= p;
       return {
+        curl: curlAmt ? (forward ? 1 : -1) * CURL_DEG * curlAmt : 0, curlAmt,
         wearF: F.wear, wearB: B.wear, overlayF: F.wear?.overlay || (F.inside ? COVER_INSIDE : ''), overlayB: B.wear?.overlay || (B.inside ? COVER_INSIDE : ''),
         key: i, label: book.name, isCover: i === 0 && !book.coverImg, isCoverAny: i === 0, isBackCover: i === N - 1,
         transform: `rotateY(${a}deg) translateZ(${((N - i) * 0.5).toFixed(2)}px)`, frontBg: F.bg, backBg: B.bg,
