@@ -40,7 +40,12 @@ export interface Book {
   tags?: string[];
   /** Hidden by a moderator: stays private until they restore it. */
   hidden?: boolean;
+  /** Shared sketchbooks: the owner plus at most one other person who can add pages. */
+  role?: 'owner' | 'collab';
+  owner?: Member; collab?: Member | null; invite?: Member | null;
 }
+
+export interface Member { uid: string; name: string; handle: string }
 
 export interface PageNote { c?: string; d?: string }
 

@@ -6,13 +6,15 @@ import * as api from './backend';
 import type { AuthUser, BookDoc, Notif, Person, Report, Saved } from './backend';
 import * as store from './storage';
 import * as sound from './sound';
+import * as themeMode from './themeMode';
+import * as installer from './install';
 import { COVER_INSIDE, pageWear } from './wear';
 import type { Wear } from './wear';
-import { INK, MARK, PAPER } from './theme';
+import { INK, MARK, PAPER, STONE } from './theme';
 import Stage from './views/Stage';
 import { AuthPage, Explore, HomeScreen, Profile, Settings } from './views/Screens';
 import { Admin, Legal, NotFound } from './views/Pages';
-import { Editor, EditProfile, Manager, NewBookPicker, ReportModal, Toast } from './views/Overlays';
+import { Editor, EditProfile, Manager, NewBookPicker, ReportModal, Toast, Welcome } from './views/Overlays';
 
 export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound';
 /** A report with what it points at, for the moderation page. */
@@ -59,7 +61,9 @@ interface State {
   exMore?: boolean; exBusy?: boolean; exLabel?: string; exLabelBooks?: OtherBook[] | null;
   legal?: 'privacy' | 'terms'; nf?: string;
   banned?: string[]; admin?: boolean; adReports?: AdminItem[] | null; adBusy?: string; adErr?: string;
-  tagDraft?: string; soundOn?: boolean;
+  tagDraft?: string; soundOn?: boolean; dark?: boolean; welcome?: boolean;
+  /** Shared sketchbooks: invitations waiting for an answer, and the invite form on the Pages screen. */
+  invites?: BookDoc[]; shDraft?: string; shBusy?: boolean; shErr?: string;
 }
 
 const ini = (n?: string) => (n || '').trim().split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
@@ -79,7 +83,7 @@ const pruneThumbs = (b: Book) => Object.fromEntries([...b.images, b.coverImg].fi
 const localBook = (): Book => ({ id: 'local', name: 'sketchbook', color: '#b8243a', images: [] });
 /** A Firestore book shown read-only (Explore, profiles). */
 const toOther = (b: BookDoc, idx: number): OtherBook => ({
-  id: b.id, idx, shape: b.shape, likes: b.pageCount, artist: b.ownerName || '@' + b.ownerHandle, name: b.name, color: b.color,
+  id: b.id, idx, shape: b.shape, likes: b.pageCount, artist: (b.ownerName || '@' + b.ownerHandle) + (b.collab ? ' & ' + (b.collab.name || '@' + b.collab.handle) : ''), name: b.name, color: b.color,
   images: b.pages, pages: Math.max(CONFIG.minPages, b.pageCount + (b.pageCount % 2)), initials: ini(b.ownerName), coverImg: b.cover,
   ownerId: b.ownerId, handle: b.ownerHandle, updatedAt: b.updatedAt, thumbs: api.thumbMap(b),
   notes: api.noteMap(b), mediums: b.mediums, tags: b.tags,
@@ -92,7 +96,7 @@ export default class App extends Component<object, State> {
   state: State = {
     acct: null, follows: [],
     books: [localBook()], active: 0, managing: false, images: [], p: 0, zoom: 1,
-    vw: window.innerWidth || 1200, vh: window.innerHeight || 800, soundOn: sound.soundOn(),
+    vw: window.innerWidth || 1200, vh: window.innerHeight || 800, soundOn: sound.soundOn(), dark: themeMode.isDark(),
   };
 
   // Animation and gesture bookkeeping (not rendered directly).
@@ -120,6 +124,7 @@ export default class App extends Component<object, State> {
   onKey = (e: KeyboardEvent) => {
     const s = this.state;
     if (e.key === 'Escape' && s.draft) return this.setState({ draft: null });
+    if (e.key === 'Escape' && s.welcome) return this.setState({ welcome: false });
     if (e.key === 'Escape' && s.mode === 'auth') return this.closeAuth();
     if (e.key !== 'Escape' && (!['mine', 'other'].includes(s.mode || 'home') || s.draft)) return;
     if (e.key === 'Escape') {
@@ -138,6 +143,8 @@ export default class App extends Component<object, State> {
     requestAnimationFrame(this.onResize);
     addEventListener('resize', this.onResize); addEventListener('keydown', this.onKey); addEventListener('popstate', this.onPop);
     document.addEventListener('visibilitychange', this.onFocus); addEventListener('focus', this.onFocus);
+    installer.onChange(() => this.forceUpdate());
+    themeMode.onSystemChange(() => this.setState({ dark: themeMode.isDark() }));
     this.unAuth = api.watchAuth(u => { if (!this.signingUp) this.loadUser(u); });
     this.loadCommunity();
     api.bannedUsers().then(banned => this.setState({ banned }));
@@ -151,9 +158,9 @@ export default class App extends Component<object, State> {
     try {
       const a = acct || await api.ensureProfile(u);
       const [docs, follows, saved, blocked] = await Promise.all([api.userBooks(u.uid), api.following(u.uid), api.savedBooks(u.uid).catch(() => []), api.blockedUsers(u.uid).catch(() => [])]);
-      let books = docs.map(api.toBook);
+      let books = docs.map(d => api.toBook(d, u.uid));
       // Books saved before visibility existed are re-saved once so they get the field (and stay in Explore).
-      const legacy = docs.some(d => d.legacy);
+      const legacy = docs.some(d => d.legacy && d.ownerId === u.uid);
       books.forEach((b, k) => { if (!docs[k].legacy) this.synced.set(b.id, bookUrls(b)); });
       const fresh = !books.length;
       if (fresh) books = [{ id: api.newBookId(), name: 'sketchbook', color: '#b8243a', images: [], createdAt: Date.now() }];
@@ -287,6 +294,9 @@ export default class App extends Component<object, State> {
       want.set('fo:' + u, () => api.watchSize(['users', u, 'followers'], n => this.setState(st => ({ counts: { ...st.counts, ['f:' + u]: n } }))));
     }
     if (me) want.set('nt:' + me, () => api.watchNotifications(me, notifs => this.setState({ notifs })));
+    if (me) want.set('iv:' + me, () => api.watchInvites(me, invites => this.setState({ invites })));
+    // Books two people can change are kept in sync live.
+    if (me) for (const b of s.books) if (b.role === 'collab' || b.collab || b.invite) want.set('sb:' + b.id, () => api.watchBook(b.id, (d, local) => this.onSharedBook(b.id, d, local)));
     for (const [k, stop] of this.watches) if (!want.has(k)) { stop(); this.watches.delete(k); }
     for (const [k, start] of want) if (!this.watches.has(k)) this.watches.set(k, start());
     // Goals: a one-off notification the first time a count reaches 100.
@@ -424,18 +434,67 @@ export default class App extends Component<object, State> {
   persist(books: Book[]) {
     if (!this.state.acct) return;
     const prev = new Map(this.state.books.map(b => [b.id, b]));
-    for (const b of books) if (prev.get(b.id) !== b || !this.synced.has(b.id)) this.dirty.add(b.id);
+    for (const b of books) if (prev.get(b.id) !== b || !this.synced.has(b.id)) { this.dirty.add(b.id); this.editedAt.set(b.id, Date.now()); }
     clearTimeout(this.syncT);
     this.syncT = setTimeout(() => { for (const id of this.dirty) this.enqueue(id, () => this.syncBook(id)); this.dirty.clear(); }, 400);
   }
   enqueue(id: string, job: () => Promise<void>) {
-    const next = (this.syncQ.get(id) || Promise.resolve()).then(job).catch(e => console.error('sync failed', e));
+    this.busy.set(id, (this.busy.get(id) || 0) + 1);
+    const next = (this.syncQ.get(id) || Promise.resolve()).then(job).catch(e => console.error('sync failed', e))
+      .finally(() => this.busy.set(id, (this.busy.get(id) || 1) - 1));
     this.syncQ.set(id, next);
+  }
+  // ---------- shared sketchbooks ----------
+  editedAt = new Map<string, number>(); busy = new Map<string, number>();
+  /** A shared book changed elsewhere: take the other person's pages unless this browser has edits of its own on the way. */
+  onSharedBook(id: string, d: BookDoc | null, local: boolean) {
+    const me = this.state.acct?.uid, cur = this.findBook(id); if (!me || !cur || local) return;
+    if (!d || (cur.role === 'collab' && d.collab?.uid !== me)) {
+      // Removed from it, or it was deleted.
+      if (cur.role !== 'collab') return;
+      this.setState(s => { const books = s.books.filter(b => b.id !== id), k = Math.min(s.active, books.length - 1);
+        return books.length ? { books, active: k, images: s.books[s.active]?.id === id ? books[k].images : s.images } : null; });
+      return this.toast(`You’re no longer drawing in “${cur.name}”`);
+    }
+    const share = { collab: d.collab, invite: d.invite, owner: { uid: d.ownerId, name: d.ownerName, handle: d.ownerHandle } };
+    const busy = this.dirty.has(id) || (this.busy.get(id) || 0) > 0 || bookUrls(cur).some(isData) || (this.editedAt.get(id) || 0) > d.updatedAt;
+    const fresh = api.toBook(d, me);
+    const next: Book = busy ? { ...cur, ...share } : { ...cur, ...share, images: fresh.images, thumbs: fresh.thumbs, notes: fresh.notes,
+      ...(cur.role === 'collab' ? { name: fresh.name, color: fresh.color, coverImg: fresh.coverImg, mediums: fresh.mediums, tags: fresh.tags, isPublic: fresh.isPublic, hidden: fresh.hidden, shape: fresh.shape } : {}) };
+    if (!busy) this.synced.set(id, bookUrls(next));
+    this.setState(s => ({ books: s.books.map(b => b.id === id ? next : b), images: s.books[s.active]?.id === id && !busy ? next.images : s.images }));
+  }
+  /** Sharing actions for the open sketchbook (owner: invite / cancel / remove; the other person: leave). */
+  async share$(fn: () => Promise<Partial<Book> | void>, done?: string) {
+    this.setState({ shBusy: true, shErr: '' });
+    try {
+      const id = this.state.books[this.state.active]?.id, patch = await fn();
+      if (patch) this.setState(s => ({ books: s.books.map(b => b.id === id ? { ...b, ...patch } : b), shDraft: '' }));
+      if (done) this.toast(done);
+    } catch (e) {
+      const c = (e as { code?: string }).code;
+      this.setState({ shErr: c === 'no-handle' ? 'No one has that handle.' : c === 'self-invite' ? 'That’s you.' : api.errMsg(e) });
+    } finally { this.setState({ shBusy: false }); }
+  }
+  async answerInvite(d: BookDoc, yes: boolean) {
+    const a = this.state.acct; if (!a) return;
+    this.setState(s => ({ invites: (s.invites || []).filter(x => x.id !== d.id) }));
+    try {
+      if (!yes) return void await api.declineInvite(d.id);
+      await api.acceptInvite(a, d.id);
+      const fresh = await api.getBook(d.id); if (!fresh) return;
+      const b = api.toBook(fresh, a.uid); this.synced.set(b.id, bookUrls(b));
+      this.setState(s => ({ books: [...s.books.filter(x => x.id !== b.id), b], notifOpen: false }), () => {
+        const j = this.state.books.findIndex(x => x.id === b.id); this.goMode('mine'); this.setState({ active: j, images: this.state.books[j].images });
+      });
+      this.toast(`You can now add pages to “${d.name}”`);
+    } catch (e) { console.error(e); this.toast('Couldn’t answer that invitation. Try again.'); }
   }
   /** Makes thumbnails for the signed-in user's older pages and covers, one book at a time, in the background. */
   backfillThumbs() {
     const acct = this.state.acct; if (!acct) return;
     for (const b of this.state.books) {
+      if (b.role === 'collab') continue;
       const missing = [...b.images, ...(b.coverImg ? [b.coverImg] : [])].filter(u => !isData(u) && !b.thumbs?.[u]);
       if (!missing.length) continue;
       this.enqueue(b.id, async () => {
@@ -743,7 +802,7 @@ export default class App extends Component<object, State> {
     const s = this.state, vw = s.vw, mob = vw < 640, mine = !s.profileOf, pv = mine && !!s.pfPreview, a = (s.acct || {}) as Partial<Account>, follows = s.follows || [];
     const card = (b: AnyBook, bg: string, showLabel: boolean, pages: number, open: () => void) => ({
       key: b.id, name: b.name, color: b.color, bg, showLabel, ar: String(this.shapeOf(b).a), wp: String((b.shape && GRID_WIDTH[b.shape]) || 78),
-      count: `${pages} pages · ${this.shapeOf(b).label || 'Portrait'}${(b as Book).isPublic === false ? ' · Private' : ''}`, open,
+      count: `${pages} pages · ${(b as Book).role === 'collab' ? 'With ' + (b as Book).owner?.name : (b as Book).collab ? 'With ' + (b as Book).collab!.name : this.shapeOf(b).label || 'Portrait'}${(b as Book).isPublic === false ? ' · Private' : ''}`, open,
     });
     let p: { name?: string; handle?: string; bio?: string; loc?: string; web?: string; accent?: string; av?: string | null; joined: string; stats: [number, string][] };
     let list: ReturnType<typeof card>[], folOn = false;
@@ -806,7 +865,7 @@ export default class App extends Component<object, State> {
       editProfile: () => this.setState({ draft: { name: a.name || '', handle: a.handle || '', bio: a.bio || '', loc: a.loc || '', web: a.web || '', accent: a.accent || '#C9C3B4', av: a.av || null } }),
       togglePreview: () => this.setState(st => ({ pfPreview: !st.pfPreview })),
       pfNew: this.openNewPick,
-      folLbl: folOn ? 'Following' : 'Follow', folBg: folOn ? 'transparent' : MARK, folFg: folOn ? INK : PAPER, folBd: folOn ? 'rgba(34,35,32,.5)' : MARK,
+      folLbl: folOn ? 'Following' : 'Follow', folBg: folOn ? 'transparent' : MARK, folFg: folOn ? INK : PAPER, folBd: folOn ? 'rgba(var(--ink-rgb),.5)' : MARK,
       toggleFollow: () => {
         if (!s.acct) return this.openJoin();
         const key = s.profileOf?.uid; if (!key) return;
@@ -866,7 +925,7 @@ export default class App extends Component<object, State> {
             this.signingUp = true;
             const acct = await api.signUp(email, su.pw, su.name.trim(), su.handle || slug(su.name) || 'artist');
             await this.loadUser({ uid: acct.uid, email }, acct);
-            this.setState({ su: null }); this.openProfile(null, true);
+            this.setState({ su: null, welcome: true }); this.openProfile(null, true);
           }
         } catch (e) {
           this.setState({ suErr: api.errMsg(e) });
@@ -875,6 +934,13 @@ export default class App extends Component<object, State> {
         }
       },
       closeAuth: this.closeAuth,
+      // First visit after joining: a short guide to how verso works.
+      welcomeOpen: !!s.welcome && !!a, welcomeName: (a?.name || '').split(' ')[0],
+      welcomeStart: () => { this.setState({ welcome: false }); this.goMode('mine'); this.setState({ managing: true }); },
+      welcomeLater: () => { this.setState({ welcome: false }); this.goMode('explore'); },
+      inInstalled: installer.installed(), inCanPrompt: installer.canPrompt(), inIOS: installer.isIOS(),
+      inInstall: () => installer.install().then(ok => ok && this.toast('verso is on your home screen')),
+      isDark: !!s.dark, toggleTheme: () => { themeMode.toggleTheme(); this.setState({ dark: themeMode.isDark() }); },
       openPrivacy: () => this.openLegal('privacy'), openTerms: () => this.openLegal('terms'),
       isLegal: s.mode === 'legal', legalDoc: s.legal || 'privacy', isNotFound: s.mode === 'notfound', nfWhat: s.nf || 'page',
       ...this.settingsVals(),
@@ -912,10 +978,12 @@ export default class App extends Component<object, State> {
   }
 
   notifVals(): V {
-    const s = this.state, list = s.notifs || [], unread = list.filter(n => !n.read);
+    // An invitation still waiting for an answer shows as its own Accept / Decline card instead.
+    const s = this.state, pending = new Set((s.invites || []).map(d => d.id)), list = (s.notifs || []).filter(n => !(n.type === 'invite' && n.bookId && pending.has(n.bookId))), unread = list.filter(n => !n.read);
     const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd'; };
     return {
-      ntShow: !!s.acct, ntUnread: unread.length, ntOpen: !!s.notifOpen,
+      ntShow: !!s.acct, ntUnread: unread.length + (s.invites || []).length, ntOpen: !!s.notifOpen,
+      ntInvites: (s.invites || []).map(d => ({ key: d.id, who: d.ownerName || '@' + d.ownerHandle, book: d.name, accept: () => this.answerInvite(d, true), decline: () => this.answerInvite(d, false) })),
       ntToggle: () => {
         const open = !s.notifOpen; this.setState({ notifOpen: open, more: null });
         if (open && s.acct && unread.length) api.markRead(s.acct.uid, unread.map(n => n.id)).catch(() => {});
@@ -924,10 +992,11 @@ export default class App extends Component<object, State> {
       ntItems: list.map(n => ({
         key: n.id, unread: !n.read, when: ago(n.at), goal: n.type === 'goal',
         who: n.type === 'goal' ? '' : n.fromName || '@' + n.fromHandle,
-        text: n.type === 'like' ? <>liked <i>{n.bookName}</i></> : n.type === 'follow' ? 'started following you' : n.goal === 'likes100' ? `You reached ${GOAL} likes. Thank you for sharing your pages.` : `You reached ${GOAL} followers. People are following along.`,
+        text: n.type === 'like' ? <>liked <i>{n.bookName}</i></> : n.type === 'invite' ? <>invited you to draw in <i>{n.bookName}</i></> : n.type === 'follow' ? 'started following you' : n.goal === 'likes100' ? `You reached ${GOAL} likes. Thank you for sharing your pages.` : `You reached ${GOAL} followers. People are following along.`,
         open: () => {
           this.setState({ notifOpen: false });
-          if (n.type === 'like' && n.bookId) { const j = s.books.findIndex(b => b.id === n.bookId); if (j >= 0) { this.goMode('mine'); this.setState({ active: j, images: s.books[j].images }); } }
+          if (n.type === 'invite' && n.bookId) { const j = s.books.findIndex(b => b.id === n.bookId); if (j >= 0) { this.goMode('mine'); this.setState({ active: j, images: s.books[j].images }); } else this.setState({ notifOpen: true }); }
+          else if (n.type === 'like' && n.bookId) { const j = s.books.findIndex(b => b.id === n.bookId); if (j >= 0) { this.goMode('mine'); this.setState({ active: j, images: s.books[j].images }); } }
           else if (n.type === 'follow') this.openProfile({ uid: n.from, name: n.fromName, handle: n.fromHandle });
           else this.openProfile(null);
         },
@@ -1207,8 +1276,8 @@ export default class App extends Component<object, State> {
         return f.idx >= 0 ? `url("${this.blobUrl(this.thumbOf(book, images[f.idx]))}") center/cover no-repeat ${PAPER}` : `radial-gradient(circle at 30% 35%, ${book.color} 0, transparent 55%), radial-gradient(circle at 72% 68%, #C9C3B4 0, transparent 55%), ${PAPER}`;
       })(),
       isMine: mode === 'mine', isOther: mode === 'other', isExplore: mode === 'explore', notOther: !other, showGhost: !other,
-      navMineLine: mode === 'mine' ? INK : 'transparent', navMineFg: mode === 'mine' ? INK : '#85867C',
-      navExLine: mode === 'explore' || mode === 'other' ? INK : 'transparent', navExFg: mode === 'explore' || mode === 'other' ? INK : '#85867C',
+      navMineLine: mode === 'mine' ? INK : 'transparent', navMineFg: mode === 'mine' ? INK : STONE,
+      navExLine: mode === 'explore' || mode === 'other' ? INK : 'transparent', navExFg: mode === 'explore' || mode === 'other' ? INK : STONE,
       isProfile: mode === 'profile', isHome: mode === 'home' && !!s.acct, isLanding: mode === 'home' && !s.acct,
       goHome: () => this.goMode('home'), goMine: () => this.goMode('mine'), goExplore: () => this.goMode('explore'),
       openArtist: () => other && 'artist' in other && this.openProfile(this.whoOf(other)),
@@ -1224,7 +1293,8 @@ export default class App extends Component<object, State> {
       bookOp: sw ? 0 : 1, titleName: other ? other.name : (books[Math.round(car)] || book).name,
       titleOp: ((sw ? 1 - Math.sin(Math.PI * (s.swT || 0)) * 0.85 : 1) * (1 - fz)).toFixed(3),
       bookName: book.name,
-      bookMeta: (other ? `by ${(other as OtherBook).artist} · ${(other as OtherBook).pages} pages` : books.length > 1 ? `${images.length} ${images.length === 1 ? 'page' : 'pages'} · ${active + 1} of ${books.length}` : `${images.length} ${images.length === 1 ? 'page' : 'pages'}`) + (!other && (book as Book).isPublic === false ? ' · Private' : ''),
+      bookMeta: (other ? `by ${(other as OtherBook).artist} · ${(other as OtherBook).pages} pages` : books.length > 1 ? `${images.length} ${images.length === 1 ? 'page' : 'pages'} · ${active + 1} of ${books.length}` : `${images.length} ${images.length === 1 ? 'page' : 'pages'}`) + (!other && (book as Book).isPublic === false ? ' · Private' : '')
+        + (!other && (book as Book).role === 'collab' ? ` · ${(book as Book).owner?.name}’s, shared with you` : !other && (book as Book).collab ? ` · with ${(book as Book).collab!.name}` : ''),
       multi: !other && books.length > 1, prevBook: () => this.switchBook(active - 1), nextBook: () => this.switchBook(active + 1),
       prevOp: active > 0 ? 1 : 0.3, nextOp: active < books.length - 1 ? 1 : 0.3,
       sideBooks, sbBase: `rotateX(${tilt}deg)`, ghostT: sideT(books.length), ghostW: ghostD.W, ghostH: ghostD.H, ghostTop: -ghostD.H / 2,
@@ -1237,7 +1307,7 @@ export default class App extends Component<object, State> {
       shapeOpts: (Object.entries(SHAPES) as [ShapeKey, Shape][]).map(([k, v]) => {
         const on = (s.pickShape || 'portrait') === k, ph = Math.round(120 * v.s);
         return { key: k, label: v.label, w: Math.round(ph * v.a), h: ph, c: PALETTE[books.length % PALETTE.length],
-          ring: on ? `0 0 0 2px ${MARK}` : '0 0 0 1px rgba(34,35,32,.18)', bg: on ? 'rgba(34,35,32,.08)' : 'transparent', pick: () => this.setState({ pickShape: k }) };
+          ring: on ? `0 0 0 2px ${MARK}` : '0 0 0 1px rgba(var(--ink-rgb),.18)', bg: on ? 'rgba(var(--ink-rgb),.08)' : 'transparent', pick: () => this.setState({ pickShape: k }) };
       }),
       managing: s.managing, openManager: () => this.setState({ managing: true }), closeManager: () => this.setState({ managing: false }),
       ...(() => {
@@ -1246,7 +1316,7 @@ export default class App extends Component<object, State> {
           bkSaved: this.isSaved(o?.id), bkSave: () => o && this.toggleSave(o),
           bkLiked: !!(o && s.liked?.[o.id]), bkLike: () => o && this.toggleLike(o),
           bkLikes: (() => { const id = o?.id || (mineB && !mineB.id.startsWith('local') ? mineB.id : ''); return id ? s.counts?.['b:' + id] || 0 : 0; })(),
-          bkShare: () => o ? this.share(`/@${o.handle}/${o.id}`, `${o.name} by ${o.artist}`) : s.acct && mineB && this.share(`/@${s.acct.handle}/${mineB.id}`, `${mineB.name} by ${s.acct.name}`),
+          bkShare: () => o ? this.share(`/@${o.handle}/${o.id}`, `${o.name} by ${o.artist}`) : s.acct && mineB && this.share(`/@${mineB.owner?.handle || s.acct.handle}/${mineB.id}`, `${mineB.name} by ${mineB.owner?.name || s.acct.name}`),
           bkCanShare: !!o || (!!s.acct && mineB?.isPublic !== false && !mineB?.id.startsWith('local')),
           bkMoreOpen: s.more === 'book', bkMore: () => this.setState(st => ({ more: st.more === 'book' ? null : 'book' })),
           bkReport: () => o && this.openReport({ kind: 'book', targetId: o.id, ownerId: o.ownerId || '', label: `“${o.name}”` }),
@@ -1298,8 +1368,27 @@ export default class App extends Component<object, State> {
       sndOn: !!s.soundOn, toggleSound: () => { const on = !s.soundOn; sound.setSound(on); this.setState({ soundOn: on }); },
       pagesList, blankNote: blanks > 0 ? `${blanks} blank pages follow your drawings` : 'Book grows as you add pages',
       onName: (e: ChangeEvent<HTMLInputElement>) => this.updateBook({ name: e.target.value }),
-      swatches: PALETTE.map(c => ({ key: c, c, ring: c === book.color ? `0 0 0 2px ${PAPER}, 0 0 0 4px ${INK}` : 'none', pick: () => this.updateBook({ color: c }) })),
+      swatches: PALETTE.map(c => ({ key: c, c, ring: c === book.color ? `0 0 0 2px ${PAPER}, 0 0 0 4px ${INK}` : 'inset 0 0 0 1px rgba(var(--ink-rgb),.22)', pick: () => this.updateBook({ color: c }) })),
       deleteBook: () => this.deleteBook(),
+      ...(() => {
+        // Sharing panel on the Pages screen.
+        const b = book as Book, isCollab = !other && b.role === 'collab';
+        return {
+          isCollab, canShare: !other && !isCollab && !!s.acct && !b.id?.startsWith('local'),
+          shOwner: b.owner?.name || '', shOwnerHandle: b.owner?.handle ? '@' + b.owner.handle : '',
+          shCollab: b.collab ? { name: b.collab.name, handle: '@' + b.collab.handle } : null,
+          shInvite: b.invite ? { name: b.invite.name, handle: '@' + b.invite.handle } : null,
+          shDraft: s.shDraft || '', shBusy: !!s.shBusy, shErr: s.shErr || '',
+          onShDraft: (e: ChangeEvent<HTMLInputElement>) => this.setState({ shDraft: slug(e.target.value), shErr: '' }),
+          shInviteSend: (e?: { preventDefault(): void }) => { e?.preventDefault(); const a = s.acct, h = s.shDraft; if (!a || !h) return;
+            this.share$(async () => ({ invite: await api.invite(a, { id: b.id, name: b.name }, h) }), `Invitation sent to @${h}`); },
+          shCancel: () => this.share$(async () => { await api.cancelInvite(b.id); return { invite: null }; }, 'Invitation cancelled'),
+          shRemove: () => { if (!window.confirm(`Stop sharing “${b.name}” with ${b.collab?.name}? The pages they added stay in the sketchbook.`)) return;
+            this.share$(async () => { await api.endShare(b.id); return { collab: null }; }, 'Sharing stopped'); },
+          shLeave: () => { if (!window.confirm(`Leave “${b.name}”? It goes back to being only ${b.owner?.name}’s. The pages you added stay in it.`)) return;
+            this.share$(async () => { await api.endShare(b.id); this.setState(st => { const books = st.books.filter(x => x.id !== b.id), k = Math.max(0, Math.min(st.active, books.length - 1)); return { books, active: k, images: books[k]?.images || [], managing: false }; }); }, `You left “${b.name}”`); },
+        };
+      })(),
       W, H, leaves, stageRef: this.stageRef, fileRef: this.fileRef,
       bookTransform: `rotateX(${(tilt * (1 - fz) + 3 * fz).toFixed(2)}deg) translateX(${shift}px)`,
       shadowLeft: -W * clamp01(p), shadowW: W * (clamp01(p) + clamp01(N - p)),
@@ -1369,6 +1458,7 @@ export default class App extends Component<object, State> {
         {v.toastMsg && <Toast msg={v.toastMsg} />}
         {v.isAuth && <AuthPage v={v} />}
         {v.pfEditing && <EditProfile v={v} />}
+        {v.welcomeOpen && <Welcome v={v} />}
         <input ref={this.avRef} type="file" accept="image/*" onChange={v.onAvFile} style={{ display: 'none' }} />
         {v.newPick && <NewBookPicker v={v} />}
         {v.managing && <Manager v={v} />}

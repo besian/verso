@@ -12,7 +12,7 @@ const navLink: CSSProperties = { border: 'none', background: 'none', padding: '4
 const textBtn: CSSProperties = { height: 34, padding: 0, border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap', ...label(INK) };
 const roundDark = (size: number, fs: number): CSSProperties => ({ width: size, height: size, borderRadius: '50%', border: 'none', background: INK, color: PAPER, font: `500 ${fs}px ${SANS}`, cursor: 'pointer' });
 const actLink: CSSProperties = { padding: 0, border: 'none', background: 'none', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: INK, cursor: 'pointer' };
-const arrowBtn: CSSProperties = { width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'rgba(34,35,32,.12)', color: INK, font: `500 16px ${SANS}`, cursor: 'pointer' };
+const arrowBtn: CSSProperties = { width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'rgba(var(--ink-rgb),.12)', color: INK, font: `500 16px ${SANS}`, cursor: 'pointer' };
 
 function TopBar({ v }: { v: V }) {
   return (
@@ -27,6 +27,13 @@ function TopBar({ v }: { v: V }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         {v.isOther && <button onClick={v.goExplore} className={hover(`color:${MARK}`)} style={textBtn}>← Explore</button>}
         {v.isMine && <button onClick={v.newBook} className={hover(`color:${MARK}`)} style={textBtn}>{v.newLbl}</button>}
+        <button onClick={v.toggleTheme} title={v.isDark ? 'Light theme' : 'Dark theme'} aria-label={v.isDark ? 'Switch to light theme' : 'Switch to dark theme'} className={hover(`color:${MARK}`)} style={{ width: 34, height: 34, padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            {v.isDark
+              ? <><circle cx="12" cy="12" r="4" /><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4" /></>
+              : <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />}
+          </svg>
+        </button>
         {v.ntShow && <Bell v={v} />}
         {v.hasAcct && <button onClick={v.openMe} title="Your profile" className={hover('transform:scale(1.06)')} style={{ width: 34, height: 34, flexShrink: 0, borderRadius: '50%', border: 'none', padding: 0, background: v.meAvBg, color: PAPER, font: `500 11px ${SANS}`, cursor: 'pointer', boxShadow: v.meRing }}>{v.meInit}</button>}
         {v.noAcct && (
@@ -50,13 +57,22 @@ function Bell({ v }: { v: V }) {
       </button>
       {v.ntOpen && (
         <div role="dialog" aria-label="Notifications" style={{ position: 'absolute', top: 'calc(100% + 8px)', right: v.notMob ? 0 : -60, width: 'min(340px, calc(100vw - 24px))', maxHeight: '60vh', overflowY: 'auto', zIndex: 30, background: PAPER, border: `1px solid ${INK}`, boxShadow: '0 16px 40px rgba(34,35,32,.16)' }}>
-          <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(34,35,32,.15)', ...label(INK) }}>Notifications</div>
-          {!v.ntItems.length && <div style={{ padding: '18px 14px', fontSize: 14, color: 'rgba(34,35,32,.65)' }}>Nothing yet. Likes and new followers show up here.</div>}
+          <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(var(--ink-rgb),.15)', ...label(INK) }}>Notifications</div>
+          {v.ntInvites.map((iv: V) => (
+            <div key={iv.key} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '12px 14px', borderBottom: '1px solid rgba(var(--ink-rgb),.08)', background: 'rgba(173,73,58,.06)', font: `400 14px/1.4 ${SANS}` }}>
+              <span><b style={{ fontWeight: 600 }}>{iv.who}</b> invited you to draw in <i>{iv.book}</i></span>
+              <span style={{ display: 'flex', gap: 8 }}>
+                <button onClick={iv.accept} className={hover(`background:${MARK}`)} style={{ height: 30, padding: '0 14px', border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Accept</button>
+                <button onClick={iv.decline} className={hover('background:rgba(var(--ink-rgb),.08)')} style={{ height: 30, padding: '0 12px', border: '1px solid rgba(var(--ink-rgb),.3)', borderRadius: 2, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Decline</button>
+              </span>
+            </div>
+          ))}
+          {!v.ntItems.length && !v.ntInvites.length && <div style={{ padding: '18px 14px', fontSize: 14, color: 'rgba(var(--ink-rgb),.65)' }}>Nothing yet. Likes and new followers show up here.</div>}
           {v.ntItems.map((n: V) => (
-            <button key={n.key} onClick={n.open} className={hover('background:rgba(34,35,32,.06)')} style={{ display: 'flex', gap: 10, width: '100%', textAlign: 'left', padding: '12px 14px', border: 'none', borderBottom: '1px solid rgba(34,35,32,.08)', background: n.unread ? 'rgba(173,73,58,.06)' : 'none', color: INK, font: `400 14px/1.4 ${SANS}`, cursor: 'pointer' }}>
+            <button key={n.key} onClick={n.open} className={hover('background:rgba(var(--ink-rgb),.06)')} style={{ display: 'flex', gap: 10, width: '100%', textAlign: 'left', padding: '12px 14px', border: 'none', borderBottom: '1px solid rgba(var(--ink-rgb),.08)', background: n.unread ? 'rgba(173,73,58,.06)' : 'none', color: INK, font: `400 14px/1.4 ${SANS}`, cursor: 'pointer' }}>
               <span style={{ flexShrink: 0, width: 8, height: 8, marginTop: 6, borderRadius: '50%', background: n.unread ? MARK : 'transparent' }} />
               <span style={{ flex: 1, minWidth: 0 }}>{n.goal ? <b style={{ fontWeight: 600 }}>🎉 {n.text}</b> : <><b style={{ fontWeight: 600 }}>{n.who}</b> {n.text}</>}</span>
-              <span style={{ flexShrink: 0, fontSize: 12, color: 'rgba(34,35,32,.55)' }}>{n.when}</span>
+              <span style={{ flexShrink: 0, fontSize: 12, color: 'rgba(var(--ink-rgb),.55)' }}>{n.when}</span>
             </button>
           ))}
         </div>
@@ -77,7 +93,7 @@ function Title({ v }: { v: V }) {
             : v.bookMeta}
         </div>
         {(v.bkMediums || v.bkTags.length > 0) && (
-          <div style={{ display: 'flex', gap: '2px 12px', flexWrap: 'wrap', justifyContent: 'center', fontSize: 13, color: 'rgba(34,35,32,.7)' }}>
+          <div style={{ display: 'flex', gap: '2px 12px', flexWrap: 'wrap', justifyContent: 'center', fontSize: 13, color: 'rgba(var(--ink-rgb),.7)' }}>
             {v.bkMediums && <span>{v.bkMediums}</span>}
             {v.bkTags.map((t: V) => <button key={t.key} onClick={t.open} className={hover(`color:${MARK}`)} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>{t.label}</button>)}
           </div>
@@ -102,16 +118,16 @@ function Carousel({ v }: { v: V }) {
     <div style={{ position: 'absolute', left: '50%', top: '50%', width: 0, height: 0, transformStyle: 'preserve-3d', transform: v.sbBase, opacity: v.uiOp, pointerEvents: v.uiPE }}>
       {v.sideBooks.map((sb: V) => (
         <div key={sb.key} onPointerDown={sb.stop} onClick={sb.open} style={{ position: 'absolute', left: 0, top: sb.top, width: sb.w, height: sb.h, transform: sb.transform, opacity: sb.opacity, cursor: 'pointer' }}>
-          <ClosedBook bg={sb.bg} board={sb.board} boardShadow="0 24px 40px rgba(34,35,32,.16)" band={8} shade={sb.shade}
+          <ClosedBook bg={sb.bg} board={sb.board} boardShadow="0 24px 40px rgba(var(--ink-rgb),.16)" band={8} shade={sb.shade}
             label={sb.showLabel ? sb.name : null} labelStyle={{ padding: '10px 12px', fontSize: 15 }} />
           <div style={{ position: 'absolute', top: 'calc(100% + 18px)', left: 0, right: 0, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 2, opacity: sb.labelOp }}>
             <div style={{ fontSize: 18, fontWeight: 600 }}>{sb.name}</div>
-            <div style={{ fontSize: 14, color: 'rgba(34,35,32,.7)' }}>{sb.count}</div>
+            <div style={{ fontSize: 14, color: 'rgba(var(--ink-rgb),.7)' }}>{sb.count}</div>
           </div>
         </div>
       ))}
       {v.showGhost && (
-        <div onPointerDown={v.stopPD} onClick={v.newBook} className={hover('border-color:rgba(34,35,32,.7)')} style={{ position: 'absolute', left: 0, top: v.ghostTop, width: v.ghostW, height: v.ghostH, transform: v.ghostT, border: '2px dashed rgba(34,35,32,.35)', borderRadius: '4px 12px 12px 4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 500, color: 'rgba(34,35,32,.75)', cursor: 'pointer', boxSizing: 'border-box' }}>+ New sketchbook</div>
+        <div onPointerDown={v.stopPD} onClick={v.newBook} className={hover('border-color:rgba(var(--ink-rgb),.7)')} style={{ position: 'absolute', left: 0, top: v.ghostTop, width: v.ghostW, height: v.ghostH, transform: v.ghostT, border: '2px dashed rgba(var(--ink-rgb),.35)', borderRadius: '4px 12px 12px 4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 500, color: 'rgba(var(--ink-rgb),.75)', cursor: 'pointer', boxSizing: 'border-box' }}>+ New sketchbook</div>
       )}
     </div>
   );
@@ -151,7 +167,7 @@ function FrontFace({ leaf, onClick, style }: { leaf: V; onClick?: () => void; st
       <PageWear overlay={leaf.overlayF} />
       <DogEar ear={leaf.wearF?.ear} />
       {leaf.isCoverAny && <div style={{ position: 'absolute', right: '13%', top: 0, bottom: 0, width: 8, background: '#1d1d26', boxShadow: '-2px 0 3px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.25)', pointerEvents: 'none' }} />}
-      {leaf.isCover && <div className="cover-label" style={{ position: 'absolute', left: '16%', right: '26%', top: '14%', padding: '10px 12px', background: '#f6f2e9', borderRadius: 2, boxShadow: '0 1px 2px rgba(0,0,0,.2)', color: INK, fontSize: 15, fontWeight: 600, letterSpacing: '-.01em', pointerEvents: 'none' }}>{leaf.label}</div>}
+      {leaf.isCover && <div className="cover-label" style={{ position: 'absolute', left: '16%', right: '26%', top: '14%', padding: '10px 12px', background: '#f6f2e9', borderRadius: 2, boxShadow: '0 1px 2px rgba(0,0,0,.2)', color: '#222320', fontSize: 15, fontWeight: 600, letterSpacing: '-.01em', pointerEvents: 'none' }}>{leaf.label}</div>}
       <PageNote text={leaf.noteF} fs={leaf.noteFs} side="R" />
       <div style={{ ...fill, background: '#000', opacity: leaf.shadeF, pointerEvents: 'none' }} />
       <div style={{ ...leafNum, right: 14 }}>{leaf.numF}</div>
@@ -200,7 +216,7 @@ function CurledLeaf({ leaf, W, H }: { leaf: V; W: number; H: number }) {
 function Book3D({ v }: { v: V }) {
   return (
     <div style={{ position: 'relative', width: 0, height: v.H, transformStyle: 'preserve-3d', transform: v.bookTransform, opacity: v.bookOp }}>
-      <div style={{ position: 'absolute', left: v.shadowLeft, top: 0, width: v.shadowW, height: v.H, transform: 'translateZ(-2px) translateY(26px)', background: 'rgba(34,35,32,.16)', filter: 'blur(22px)', borderRadius: 2, opacity: v.openShadowOp }} />
+      <div style={{ position: 'absolute', left: v.shadowLeft, top: 0, width: v.shadowW, height: v.H, transform: 'translateZ(-2px) translateY(26px)', background: 'rgba(var(--ink-rgb),.16)', filter: 'blur(22px)', borderRadius: 2, opacity: v.openShadowOp }} />
       <div style={{ position: 'absolute', left: v.bodyLeft, top: 0, width: v.W, height: v.H, transform: 'translateZ(-1px)', opacity: v.bodyOp, pointerEvents: 'none' }}>
         <div style={{ ...fill, transform: v.bodyBack ? 'translate(-7px,6px)' : 'translate(7px,6px)', borderRadius: v.bodyBack ? '11px 3px 3px 11px' : '3px 11px 11px 3px', background: v.boardColor, filter: 'brightness(.6)', boxShadow: '0 24px 40px rgba(34,35,32,.16)' }} />
         <div style={{ position: 'absolute', top: 3, bottom: -3, left: v.bodyBack ? -4 : 4, right: v.bodyBack ? 4 : -4, borderRadius: v.bodyBack ? '9px 2px 2px 9px' : '2px 9px 9px 2px', background: PAGE_EDGES }} />
@@ -232,7 +248,7 @@ function Controls({ v }: { v: V }) {
   );
 }
 
-const kbd: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 22, height: 22, padding: '0 5px', boxSizing: 'border-box', border: '1px solid rgba(34,35,32,.28)', borderBottomWidth: 2, borderRadius: 4, background: 'rgba(244,241,233,.85)', color: INK, font: `500 13px/1 ${SANS}`, letterSpacing: 0 };
+const kbd: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 22, height: 22, padding: '0 5px', boxSizing: 'border-box', border: '1px solid rgba(var(--ink-rgb),.28)', borderBottomWidth: 2, borderRadius: 4, background: 'rgba(var(--paper-rgb),.85)', color: INK, font: `500 13px/1 ${SANS}`, letterSpacing: 0 };
 
 /** Quiet key reference in the corner of the book view; compact labels on mid-size windows so it clears the controls. */
 function KeyGuide({ v }: { v: V }) {
@@ -258,7 +274,7 @@ export default function Stage({ v, children }: { v: V; children: ReactNode }) {
       <div style={{ ...fill, overflow: 'hidden', pointerEvents: 'none', opacity: v.fz }}>
         <div ref={v.bgRefA} style={{ position: 'absolute', inset: '-25%', background: v.focusBg, filter: 'blur(80px) saturate(1.5)', transition: 'background .9s' }} />
         <div ref={v.bgRefB} style={{ position: 'absolute', inset: '-25%', background: v.focusBg, filter: 'blur(110px) saturate(1.3)', opacity: .55, mixBlendMode: 'screen', transition: 'background .9s' }} />
-        <div style={{ ...fill, background: 'rgba(244,241,233,.74)' }} />
+        <div style={{ ...fill, background: 'rgba(var(--paper-rgb),.74)' }} />
       </div>
       <TopBar v={v} />
       <Title v={v} />
@@ -266,12 +282,12 @@ export default function Stage({ v, children }: { v: V; children: ReactNode }) {
         <Carousel v={v} />
         <Book3D v={v} />
       </div>
-      <div style={{ marginBottom: 14, fontSize: 13, color: 'rgba(34,35,32,.75)', opacity: v.emptyOp, transition: 'opacity .3s', pointerEvents: 'none' }}>Open pages to add your drawings, or drop images here</div>
+      <div style={{ marginBottom: 14, fontSize: 13, color: 'rgba(var(--ink-rgb),.75)', opacity: v.emptyOp, transition: 'opacity .3s', pointerEvents: 'none' }}>Open pages to add your drawings, or drop images here</div>
       <Controls v={v} />
       {v.notMob && (v.isMine || v.isOther) && <KeyGuide v={v} />}
-      {v.showHandle && <button onClick={v.toggleMenu} className={hover('background:rgba(244,241,233,.95)')} style={{ position: 'absolute', right: 24, bottom: 24, zIndex: 3, height: 34, padding: '0 14px', borderRadius: 2, border: 'none', background: 'rgba(244,241,233,.75)', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>{v.handleLbl}</button>}
+      {v.showHandle && <button onClick={v.toggleMenu} className={hover('background:rgba(var(--paper-rgb),.95)')} style={{ position: 'absolute', right: 24, bottom: 24, zIndex: 3, height: 34, padding: '0 14px', borderRadius: 2, border: 'none', background: 'rgba(var(--paper-rgb),.75)', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>{v.handleLbl}</button>}
       {v.showRail && (
-        <div style={{ position: 'absolute', right: 20, top: '50%', transform: 'translateY(-50%)', zIndex: 3, display: 'flex', flexDirection: 'column', gap: 10, padding: 6, borderRadius: 2, background: 'rgba(244,241,233,.7)', opacity: v.railOp }}>
+        <div style={{ position: 'absolute', right: 20, top: '50%', transform: 'translateY(-50%)', zIndex: 3, display: 'flex', flexDirection: 'column', gap: 10, padding: 6, borderRadius: 2, background: 'rgba(var(--paper-rgb),.7)', opacity: v.railOp }}>
           <button onClick={v.zoomOut} title="Exit focus" style={roundDark(40, 20)}>−</button>
           <button onClick={v.openManager} title="Pages" style={roundDark(40, 15)}>▦</button>
         </div>

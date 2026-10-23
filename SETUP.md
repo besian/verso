@@ -73,6 +73,7 @@ redeploy is needed after changing them.
 | `users/{uid}/following/{uid}` | one doc per artist followed | that user |
 | `handles/{handle}` | `{ uid }`, keeps handles unique | the user claiming it |
 | `books/{id}` | owner, name, colour, shape, cover URL, page URLs in order, captions + dates per page, mediums, tags (`labels` for filtering), `hidden` | the owner (`hidden`: moderators) |
+| `books/{id}` `collab*`, `invite*` | the one other person who can add pages, and a pending invitation | owner invites/removes; invitee accepts/declines; the other person edits pages only |
 | `users/{uid}/followers/{uid}` | one doc per follower (its size is the follower count) | the follower |
 | `users/{uid}/notifications/{id}` | likes, follows, goals; ids fixed per person and action | the sender |
 | `reports/{reporter}_{target}` | reason and note | the reporter; read by moderators |

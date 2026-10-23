@@ -53,7 +53,7 @@ service cloud.firestore {
           && request.resource.data.from == request.auth.uid
           && request.resource.data.read == false
           && request.resource.data.keys().hasOnly(['type', 'from', 'fromName', 'fromHandle', 'bookId', 'bookName', 'goal', 'at', 'read'])
-          && ((request.resource.data.type == 'like' && nid == 'like_' + request.resource.data.bookId + '_' + request.auth.uid)
+          && ((request.resource.data.type in ['like', 'invite'] && nid == request.resource.data.type + '_' + request.resource.data.bookId + '_' + request.auth.uid)
             || (request.resource.data.type == 'follow' && nid == 'follow_' + request.auth.uid)
             || (request.resource.data.type == 'goal' && uid == request.auth.uid && nid == 'goal_' + request.resource.data.goal));
       }
@@ -129,7 +129,7 @@ service cloud.firestore {
     match /books/{bookId} {
       function valid(d) {
         return d.keys().hasOnly(['ownerId', 'ownerName', 'ownerHandle', 'name', 'color', 'shape', 'cover', 'pages', 'pageCount', 'createdAt', 'updatedAt', 'isPublic', 'thumbs', 'coverThumb',
-            'captions', 'dates', 'mediums', 'tags', 'labels', 'hidden'])
+            'captions', 'dates', 'mediums', 'tags', 'labels', 'hidden', 'collab', 'collabName', 'collabHandle', 'invite', 'inviteName', 'inviteHandle'])
           && (!('isPublic' in d) || d.isPublic is bool)
           && (!('thumbs' in d) || (d.thumbs is list && d.thumbs.size() <= 1000))
           && (!('captions' in d) || (d.captions is list && d.captions.size() <= 1000))
@@ -148,12 +148,36 @@ service cloud.firestore {
         let was = resource.data.get('hidden', false);
         return request.resource.data.get('hidden', false) == was && (was == false || request.resource.data.isPublic == false);
       }
-      // Private books are readable only by their owner (and moderators); books without the field are public.
-      allow read: if resource.data.get('isPublic', true) == true || (signedIn() && resource.data.ownerId == request.auth.uid) || isAdmin();
+      // Sharing: one other person (`collab`) can add pages; the owner invites them (`invite`) and they accept.
+      function was(k) { return resource.data.get(k, null); }
+      function now(k) { return request.resource.data.get(k, null); }
+      function same(k) { return now(k) == was(k); }
+      function changes() { return request.resource.data.diff(resource.data).affectedKeys(); }
+      function me() { return signedIn() ? request.auth.uid : ''; }
+      // The owner may invite one person while no one else draws in it, cancel the invite, or remove the other person.
+      function ownerShares() {
+        return ((same('collab') && same('collabName') && same('collabHandle')) || now('collab') == null)
+          && ((same('invite') && same('inviteName') && same('inviteHandle')) || now('invite') == null
+            || (now('invite') is string && now('invite') != resource.data.ownerId && now('collab') == null));
+      }
+      function collabEdits() {
+        return was('collab') == me() && changes().hasOnly(['pages', 'pageCount', 'thumbs', 'captions', 'dates', 'updatedAt']) && valid(request.resource.data);
+      }
+      function shareFields() { return ['collab', 'collabName', 'collabHandle', 'invite', 'inviteName', 'inviteHandle']; }
+      function inviteeAnswers() {
+        return was('invite') == me() && changes().hasOnly(shareFields()) && now('invite') == null
+          && ((was('collab') == null && now('collab') == me()) || same('collab'));
+      }
+      function collabLeaves() { return was('collab') == me() && changes().hasOnly(['collab', 'collabName', 'collabHandle']) && now('collab') == null; }
+
+      // Private books are readable only by their owner, the person they're shared with or invited to (and moderators).
+      allow read: if resource.data.get('isPublic', true) == true || (signedIn() && resource.data.ownerId == request.auth.uid)
+        || (signedIn() && resource.data.collab == request.auth.uid) || (signedIn() && resource.data.invite == request.auth.uid) || isAdmin();
       allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid && valid(request.resource.data)
-        && request.resource.data.get('hidden', false) == false;
+        && request.resource.data.get('hidden', false) == false && now('collab') == null && now('invite') == null;
       allow update: if (signedIn() && resource.data.ownerId == request.auth.uid
-          && request.resource.data.ownerId == resource.data.ownerId && valid(request.resource.data) && keepsHidden())
+          && request.resource.data.ownerId == resource.data.ownerId && valid(request.resource.data) && keepsHidden() && ownerShares())
+        || (signedIn() && (collabEdits() || inviteeAnswers() || collabLeaves()))
         || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPublic', 'hidden']));
       allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
 

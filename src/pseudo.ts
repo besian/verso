@@ -22,3 +22,11 @@ function rule(pseudo: string, css: string): string {
 
 export const hover = (css: string) => rule('hover', css);
 export const focus = (css: string) => rule('focus', css);
+
+/** Lets a plain mouse wheel scroll a one-row strip sideways (trackpads already can). */
+export function wheelSideways(e: { deltaX: number; deltaY: number; currentTarget: HTMLElement }) {
+  const el = e.currentTarget, max = el.scrollWidth - el.clientWidth;
+  if (!max || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+  const next = Math.max(0, Math.min(max, el.scrollLeft + e.deltaY));
+  if (next !== el.scrollLeft) el.scrollLeft = next;
+}

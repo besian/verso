@@ -1,11 +1,14 @@
 import type { CSSProperties } from 'react';
 
-export const PAPER = '#F4F1E9';
-export const CANVAS = '#E2DED4';
-export const INK = '#222320';
-export const STONE = '#85867C';
-export const MARK = '#AD493A';
-export const MUTED = '#5E5F57';
+// UI colours are CSS variables (see global.css) so the dark theme can swap them; book pages and
+// covers keep their own fixed colours, since they're paper either way.
+
+export const PAPER = 'var(--paper)';
+export const CANVAS = 'var(--canvas)';
+export const INK = 'var(--ink)';
+export const STONE = 'var(--stone)';
+export const MARK = 'var(--mark)';
+export const MUTED = 'var(--muted)';
 export const PAGE = '#f3efe6';
 export const SANS = "'Geist',sans-serif";
 export const SERIF = "'Instrument Serif',serif";

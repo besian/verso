@@ -29,7 +29,7 @@ function Page({ v, kicker, title, children }: { v: V; kicker: string; title: Rea
 const prose: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 14, fontSize: 15, lineHeight: 1.6, color: INK, textWrap: 'pretty' } as CSSProperties;
 function Sec({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section style={{ ...prose, paddingTop: 18, borderTop: '1px solid rgba(34,35,32,.25)' }}>
+    <section style={{ ...prose, paddingTop: 18, borderTop: '1px solid rgba(var(--ink-rgb),.25)' }}>
       <h2 style={{ margin: 0, ...serif(26, 1.15) }}>{title}</h2>
       {children}
     </section>
@@ -137,7 +137,7 @@ export function NotFound({ v }: { v: V }) {
   );
 }
 
-const smallBtn = (danger = false, on = false): CSSProperties => ({ height: 34, padding: '0 14px', borderRadius: 2, border: `1.5px solid ${danger ? MARK : 'rgba(34,35,32,.45)'}`, background: on ? (danger ? MARK : INK) : 'none', color: on ? PAPER : danger ? MARK : INK, font: `500 13px ${SANS}`, cursor: 'pointer' });
+const smallBtn = (danger = false, on = false): CSSProperties => ({ height: 34, padding: '0 14px', borderRadius: 2, border: `1.5px solid ${danger ? MARK : 'rgba(var(--ink-rgb),.45)'}`, background: on ? (danger ? MARK : INK) : 'none', color: on ? PAPER : danger ? MARK : INK, font: `500 13px ${SANS}`, cursor: 'pointer' });
 
 /** Moderation: open reports, with hide/restore, suspend/lift and dismiss. Only for accounts listed in `admins`. */
 export function Admin({ v }: { v: V }) {
@@ -172,7 +172,7 @@ export function Admin({ v }: { v: V }) {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', opacity: r.busy ? 0.6 : 1 }}>
             {r.isBook && !r.gone && <button onClick={r.hide} disabled={!!r.busy} style={smallBtn(false, false)}>{r.hidden ? 'Restore sketchbook' : 'Hide sketchbook'}</button>}
             {r.owner && <button onClick={r.ban} disabled={!!r.busy} style={smallBtn(true, false)}>{r.banned ? 'Lift suspension' : 'Suspend artist'}</button>}
-            <button onClick={r.dismiss} disabled={!!r.busy} className={hover('background:rgba(34,35,32,.08)')} style={{ ...smallBtn(), border: 'none' }}>Dismiss report</button>
+            <button onClick={r.dismiss} disabled={!!r.busy} className={hover('background:rgba(var(--ink-rgb),.08)')} style={{ ...smallBtn(), border: 'none' }}>Dismiss report</button>
           </div>
         </article>
       ))}

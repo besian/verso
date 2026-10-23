@@ -1,6 +1,31 @@
-html, body { margin: 0; height: 100%; background: #F4F1E9; overflow: hidden; }
-a { color: #222320; }
-a:hover { color: #AD493A; }
+:root {
+  --paper: #F4F1E9; --paper-rgb: 244,241,233;
+  --canvas: #E2DED4; --canvas-rgb: 226,222,212;
+  --ink: #222320; --ink-rgb: 34,35,32;
+  --stone: #85867C; --muted: #5E5F57; --mark: #AD493A;
+  color-scheme: light;
+}
+/* Desk at night: dark surroundings, the sketchbooks themselves stay paper. */
+:root[data-theme="dark"] {
+  --paper: #1A1B18; --paper-rgb: 26,27,24;
+  --canvas: #10110F; --canvas-rgb: 16,17,15;
+  --ink: #ECE7DB; --ink-rgb: 236,231,219;
+  --stone: #8E8F85; --muted: #AEADA2; --mark: #D7705B;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #1A1B18; --paper-rgb: 26,27,24;
+    --canvas: #10110F; --canvas-rgb: 16,17,15;
+    --ink: #ECE7DB; --ink-rgb: 236,231,219;
+    --stone: #8E8F85; --muted: #AEADA2; --mark: #D7705B;
+    color-scheme: dark;
+  }
+}
+html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); overflow: hidden; }
+a { color: var(--ink); }
+a:hover { color: var(--mark); }
+input[type="date"] { color-scheme: inherit; }
 
 /* Book-cover name labels don't fit small covers on phones. */
 @media (max-width: 639px) { .cover-label { display: none !important; } }

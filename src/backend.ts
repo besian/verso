@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import type { DocumentData, QueryConstraint, QueryDocumentSnapshot } from 'firebase/firestore';
 import { connectStorageEmulator, deleteObject, getStorage, listAll, ref, uploadBytes } from 'firebase/storage';
-import type { Account, Book, PageNote, ShapeKey } from './data';
+import type { Account, Book, Member, PageNote, ShapeKey } from './data';
 import { mediumKey } from './data';
 
 const env = import.meta.env;
@@ -184,7 +184,10 @@ export interface BookDoc {
   /** Margin notes per page, aligned with `pages` like thumbs. */
   captions: string[]; dates: string[];
   mediums: string[]; tags: string[]; hidden: boolean;
+  /** The one other person who can add pages, and a pending invitation. */
+  collab: Member | null; invite: Member | null;
 }
+const member = (d: DocumentData, k: 'collab' | 'invite'): Member | null => d[k] ? { uid: d[k], name: d[k + 'Name'] || '', handle: d[k + 'Handle'] || '' } : null;
 
 const bookDoc = (id: string, d: DocumentData): BookDoc => ({
   id, ownerId: d.ownerId, ownerName: d.ownerName || '', ownerHandle: d.ownerHandle || '', name: d.name || 'sketchbook',
@@ -192,6 +195,7 @@ const bookDoc = (id: string, d: DocumentData): BookDoc => ({
   createdAt: d.createdAt || 0, updatedAt: d.updatedAt || 0, isPublic: d.isPublic !== false, legacy: d.isPublic === undefined,
   thumbs: d.thumbs || [], coverThumb: d.coverThumb || null,
   captions: d.captions || [], dates: d.dates || [], mediums: d.mediums || [], tags: d.tags || [], hidden: d.hidden === true,
+  collab: member(d, 'collab'), invite: member(d, 'invite'),
 });
 
 export const thumbMap = (b: BookDoc): Record<string, string> => {
@@ -205,18 +209,21 @@ export const noteMap = (b: BookDoc): Record<string, PageNote> => {
   b.pages.forEach((u, i) => { const c = b.captions[i] || '', d = b.dates[i] || ''; if (c || d) m[u] = { c, d }; });
   return m;
 };
-export const toBook = (b: BookDoc): Book => ({
+/** A book as the signed-in user's own: they own it, or draw in it with its owner. */
+export const toBook = (b: BookDoc, me?: string): Book => ({
   id: b.id, name: b.name, color: b.color, shape: b.shape, coverImg: b.cover, images: b.pages, createdAt: b.createdAt, isPublic: b.isPublic,
   thumbs: thumbMap(b), notes: noteMap(b), mediums: b.mediums, tags: b.tags, hidden: b.hidden,
+  role: me && b.ownerId !== me ? 'collab' : 'owner', owner: { uid: b.ownerId, name: b.ownerName, handle: b.ownerHandle }, collab: b.collab, invite: b.invite,
 });
 
 export function newBookId(): string { return doc(collection(need().db, 'books')).id; }
 
-/** Books owned by a user, oldest first: all of them for the owner, otherwise only public ones. */
+/** A user's books, oldest first, including ones shared with them: all of them for the user
+ *  themselves, otherwise only public ones. */
 export async function userBooks(uid: string, publicOnly = false): Promise<BookDoc[]> {
-  const c = collection(need().db, 'books');
-  const s = await getDocs(publicOnly ? query(c, where('ownerId', '==', uid), where('isPublic', '==', true)) : query(c, where('ownerId', '==', uid)));
-  return s.docs.map(x => bookDoc(x.id, x.data())).sort((a, b) => a.createdAt - b.createdAt);
+  const c = collection(need().db, 'books'), pub = publicOnly ? [where('isPublic', '==', true)] : [];
+  const [own, shared] = await Promise.all([getDocs(query(c, where('ownerId', '==', uid), ...pub)), getDocs(query(c, where('collab', '==', uid), ...pub)).catch(() => null)]);
+  return [...own.docs, ...(shared?.docs || [])].map(x => bookDoc(x.id, x.data())).sort((a, b) => a.createdAt - b.createdAt);
 }
 
 export type Cursor = QueryDocumentSnapshot | null;
@@ -286,8 +293,10 @@ function makeThumb(dataUrl: string, maxH = 480): Promise<string> {
 
 export async function writeBook(owner: Account, b: Book) {
   const { db: d } = need();
+  if (b.role === 'collab') return writePages(b);
   const pages = b.images.filter(u => !u.startsWith('data:')), cover = b.coverImg && !b.coverImg.startsWith('data:') ? b.coverImg : null, t = b.thumbs || {}, n = b.notes || {};
   const mediums = (b.mediums || []).slice(0, 4), tags = (b.tags || []).slice(0, 8);
+  // Merged so sharing fields (collab, invite), which change on their own, are left alone.
   await setDoc(doc(d, 'books', String(b.id)), {
     ownerId: owner.uid, ownerName: owner.name, ownerHandle: owner.handle,
     name: b.name, color: b.color, shape: b.shape || 'portrait', cover,
@@ -296,7 +305,48 @@ export async function writeBook(owner: Account, b: Book) {
     captions: pages.map(u => (n[u]?.c || '').slice(0, 140)), dates: pages.map(u => n[u]?.d || ''),
     // `labels` lets Explore filter by medium or tag with a single array-contains query.
     mediums, tags, labels: [...mediums.map(m => 'm:' + mediumKey(m)), ...tags.map(x => 't:' + x)], hidden: !!b.hidden,
+  }, { merge: true });
+}
+
+/** What someone drawing in another person's sketchbook can change: its pages and their notes. */
+async function writePages(b: Book) {
+  const pages = b.images.filter(u => !u.startsWith('data:')), t = b.thumbs || {}, n = b.notes || {};
+  await updateDoc(doc(need().db, 'books', b.id), {
+    pages, pageCount: pages.length, thumbs: pages.map(u => t[u] || ''),
+    captions: pages.map(u => (n[u]?.c || '').slice(0, 140)), dates: pages.map(u => n[u]?.d || ''), updatedAt: Date.now(),
   });
+}
+
+// ---------- shared sketchbooks ----------
+
+const NO_INVITE = { invite: null, inviteName: null, inviteHandle: null };
+/** Invites someone (by handle) to add pages; they accept from their notifications. Returns who. */
+export async function invite(me: Account, book: { id: string; name: string }, handle: string): Promise<Member> {
+  const uid = await uidForHandle(handle.replace(/^@/, ''));
+  if (!uid) throw Object.assign(new Error('no such handle'), { code: 'no-handle' });
+  if (uid === me.uid) throw Object.assign(new Error('self'), { code: 'self-invite' });
+  const p = await getProfile(uid), m = { uid, name: p?.name || handle, handle: p?.handle || handle };
+  await updateDoc(doc(need().db, 'books', book.id), { invite: m.uid, inviteName: m.name, inviteHandle: m.handle });
+  notifyOnce(uid, `invite_${book.id}_${me.uid}`, { ...note(me, 'like', book), type: 'invite' });
+  return m;
+}
+export async function cancelInvite(bookId: string) { await updateDoc(doc(need().db, 'books', bookId), NO_INVITE); }
+export async function acceptInvite(me: Account, bookId: string) {
+  await updateDoc(doc(need().db, 'books', bookId), { collab: me.uid, collabName: me.name, collabHandle: me.handle, ...NO_INVITE });
+}
+export async function declineInvite(bookId: string) { await updateDoc(doc(need().db, 'books', bookId), NO_INVITE); }
+/** The owner removing the other person, or that person leaving. */
+export async function endShare(bookId: string) { await updateDoc(doc(need().db, 'books', bookId), { collab: null, collabName: null, collabHandle: null }); }
+
+/** Live list of sketchbooks the user has been invited to draw in. */
+export function watchInvites(uid: string, cb: (b: BookDoc[]) => void): () => void {
+  if (!db) return () => {};
+  return onSnapshot(query(collection(db, 'books'), where('invite', '==', uid)), s => cb(s.docs.map(x => bookDoc(x.id, x.data()))), () => cb([]));
+}
+/** Live copy of one book; `local` is true while the change is this browser's own unsent write. */
+export function watchBook(id: string, cb: (b: BookDoc | null, local: boolean) => void): () => void {
+  if (!db) return () => {};
+  return onSnapshot(doc(db, 'books', id), s => cb(s.exists() ? bookDoc(s.id, s.data()) : null, s.metadata.hasPendingWrites), () => cb(null, false));
 }
 
 export async function deleteBook(id: string, files: string[]) {
@@ -371,7 +421,7 @@ export function watchSize(path: string[], cb: (n: number) => void): () => void {
 
 // ---------- likes, counts, notifications ----------
 
-export interface Notif { id: string; type: 'like' | 'follow' | 'goal'; from: string; fromName: string; fromHandle: string; bookId?: string; bookName?: string; goal?: string; at: number; read: boolean }
+export interface Notif { id: string; type: 'like' | 'follow' | 'goal' | 'invite'; from: string; fromName: string; fromHandle: string; bookId?: string; bookName?: string; goal?: string; at: number; read: boolean }
 const note = (me: Account, type: 'like' | 'follow', book?: { id: string; name: string }) => ({
   type, from: me.uid, fromName: me.name, fromHandle: me.handle, ...(book ? { bookId: book.id, bookName: book.name } : {}), at: Date.now(), read: false,
 });
@@ -542,6 +592,9 @@ async function removeFolder(path: string) {
 export async function deleteAccount(pw: string, acct: Account) {
   const u = await reauth(pw), { db: d } = need();
   const books = await getDocs(query(collection(d, 'books'), where('ownerId', '==', acct.uid)));
+  // Leave sketchbooks shared with this account, and turn down open invitations.
+  const [shared, invited] = await Promise.all([getDocs(query(collection(d, 'books'), where('collab', '==', acct.uid))), getDocs(query(collection(d, 'books'), where('invite', '==', acct.uid)))]);
+  await Promise.all([...shared.docs.map(b => endShare(b.id)), ...invited.docs.map(b => declineInvite(b.id))]).catch(e => console.warn('leaving shared books', e));
   const subs = await Promise.all(['following', 'followers', 'saved', 'blocked', 'notifications'].map(c => getDocs(collection(d, 'users', acct.uid, c))));
   const batch = writeBatch(d);
   books.forEach(b => batch.delete(b.ref)); subs.forEach(c => c.forEach(f => batch.delete(f.ref)));
