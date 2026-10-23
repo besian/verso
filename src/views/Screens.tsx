@@ -221,68 +221,55 @@ const quietBtn: CSSProperties = { padding: '0 4px', border: 'none', background: 
 
 export function Profile({ v }: { v: V }) {
   const mob = !v.notMob, wide = v.pfWide, zone = mob ? 150 : 200;
-  // Wide screens: details in a left column (about a quarter), sketchbooks beside them. Narrower: a centred title page.
-  const side = !mob && v.vw >= 900, align = side ? 'flex-start' : 'center';
-  const stats = side ? (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 12px', width: '100%', padding: '16px 0', borderTop: '1px solid rgba(var(--ink-rgb),.15)', borderBottom: '1px solid rgba(var(--ink-rgb),.15)' }}>
-      {v.pfStats.map((st: V) => (
-        <div key={st.l} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span style={serif(30, 1)}>{st.n}</span><span style={{ fontSize: 13, color: MUTED }}>{st.l}</span>
-        </div>
-      ))}
-    </div>
-  ) : (
-    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: mob ? '4px 16px' : '4px 26px', fontSize: 14, color: MUTED }}>
-      {v.pfStats.map((st: V) => <span key={st.l} style={{ whiteSpace: 'nowrap' }}><b style={{ color: INK, fontWeight: 600 }}>{st.n}</b> {st.l}</span>)}
+  // A slim bar: photo, name and details on the left, actions at the end; the sketchbooks start right below.
+  const meta = [<span key="h">{v.pfHandle}</span>, v.pfHasLoc && <span key="l">{v.pfLoc}</span>, v.pfHasWeb && <a key="w" href={v.pfWebHref} target="_blank" rel="noopener noreferrer" style={{ color: MARK, textDecoration: 'none' }}>{v.pfWeb}</a>, v.pfJoined && <span key="j">{v.pfJoined}</span>]
+    .filter(Boolean).flatMap((x, i) => i ? [<span key={'d' + i} aria-hidden="true" style={{ color: 'rgba(var(--ink-rgb),.3)' }}>·</span>, x] : [x]);
+  const small = (primary: boolean): CSSProperties => ({ ...actionBtn(primary), height: 38, padding: '0 16px', ...(mob ? { flex: '1 1 0' } : {}) });
+  const iconBtn: CSSProperties = { width: 38, height: 38, flexShrink: 0, padding: 0, borderRadius: 2, border: '1.5px solid rgba(var(--ink-rgb),.35)', background: 'none', color: INK, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+  const actions = (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, ...(mob ? { width: '100%' } : {}) }}>
+      {v.pfMine && (
+        <>
+          <button onClick={v.editProfile} className={hoverMark} style={small(true)}>Edit profile</button>
+          <button onClick={v.openSettings} title="Settings" aria-label="Settings" className={hover('background:rgba(var(--ink-rgb),.08)')} style={iconBtn}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>
+          </button>
+          <MoreMenu open={v.pfMoreOpen} onToggle={v.pfMore} align="right" items={[
+            { label: 'View as public', onClick: v.togglePreview },
+            ...(v.pfAdmin ? [{ label: 'Moderation', onClick: v.openAdmin }] : []),
+            { label: 'Sign out', onClick: v.signOut, danger: true },
+          ]} />
+        </>
+      )}
+      {v.pfPreviewing && <button onClick={v.togglePreview} className={hoverMark} style={small(true)}>Exit preview</button>}
+      {v.pfOther && <button onClick={v.toggleFollow} style={{ height: 38, minWidth: 112, padding: '0 20px', borderRadius: 2, border: `1.5px solid ${v.folBd}`, background: v.folBg, color: v.folFg, font: `500 14px ${SANS}`, cursor: 'pointer', ...(mob ? { flex: '1 1 0' } : {}) }}>{v.folLbl}</button>}
+      {v.pfOther && <button onClick={v.pfShare} className={hover('background:rgba(var(--ink-rgb),.08)')} style={small(false)}>Share</button>}
+      {v.pfOther && <MoreMenu open={v.pfMoreOpen} onToggle={v.pfMore} align="right" items={[{ label: 'Report artist', onClick: v.pfReport }, { label: v.pfBlockLbl, onClick: v.pfBlock, danger: true }]} />}
     </div>
   );
-  const btn = (primary: boolean): CSSProperties => ({ ...actionBtn(primary), height: 40, padding: mob ? '0 10px' : '0 18px', ...(mob ? { flex: '1 1 0' } : side ? { width: '100%' } : {}) });
-  const meta = [<span key="h">{v.pfHandle}</span>, v.pfHasLoc && <span key="l">{v.pfLoc}</span>, v.pfHasWeb && <a key="w" href={v.pfWebHref} target="_blank" rel="noopener noreferrer" style={{ color: MARK, textDecoration: 'none' }}>{v.pfWeb}</a>]
-    .filter(Boolean).flatMap((x, i) => i ? [<span key={'d' + i} aria-hidden="true" style={{ color: 'rgba(var(--ink-rgb),.3)' }}>·</span>, x] : [x]);
   const header = (
-    <header style={side
-      ? { position: 'sticky', top: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', gap: 14 }
-      : { display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: mob ? 12 : 14, maxWidth: 620, width: '100%', margin: '0 auto' }}>
-      {v.pfPreviewing && <div style={{ marginBottom: 8, padding: '6px 12px', border: `1px solid ${MARK}`, whiteSpace: 'nowrap', ...label(MARK) }}>Previewing as a visitor</div>}
-      <div style={{ width: mob ? 88 : 104, height: mob ? 88 : 104, borderRadius: '50%', background: v.pfAvBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 ${mob ? 34 : 40}px ${SERIF}`, marginBottom: 4 }}>{v.pfInit}</div>
-      <h1 style={{ margin: 0, ...serif(mob ? 44 : side ? 48 : 68, 1, '-.015em'), textWrap: 'balance', overflowWrap: 'anywhere' } as CSSProperties}>{v.pfName}</h1>
-      <div style={{ display: 'flex', gap: '2px 8px', flexWrap: 'wrap', justifyContent: align, fontSize: 14, color: MUTED }}>{meta}</div>
-      {v.pfHasBio && <p style={{ margin: '4px 0 0', fontSize: mob ? 15 : side ? 15 : 17, lineHeight: 1.55, maxWidth: 480, textWrap: 'pretty', opacity: v.pfBioOp } as CSSProperties}>{v.pfBio}</p>}
-      <div style={{ marginTop: mob ? 4 : 6, width: side ? '100%' : undefined }}>{stats}</div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', flexDirection: side ? 'column' : 'row', justifyContent: align, alignItems: side ? 'stretch' : 'center', marginTop: mob ? 8 : side ? 4 : 12, width: mob || side ? '100%' : undefined }}>
-        {v.pfMine && (
-          <>
-            <button onClick={v.editProfile} className={hoverMark} style={btn(true)}>Edit profile</button>
-            <div style={{ display: 'flex', gap: 8, ...(mob ? { display: 'contents' } : {}) }}>
-              <button onClick={v.togglePreview} className={hover('background:rgba(var(--ink-rgb),.08)')} style={{ ...btn(false), ...(side ? { flex: '1 1 0', padding: '0 8px' } : {}) }}>{mob || side ? 'Preview' : 'View as public'}</button>
-              <button onClick={v.openSettings} className={hover('background:rgba(var(--ink-rgb),.08)')} style={{ ...btn(false), ...(side ? { flex: '1 1 0', padding: '0 8px' } : {}) }}>Settings</button>
-            </div>
-          </>
-        )}
-        {v.pfPreviewing && <button onClick={v.togglePreview} className={hoverMark} style={btn(true)}>Exit preview</button>}
-        {v.pfOther && <button onClick={v.toggleFollow} style={{ height: 40, minWidth: 128, padding: '0 22px', borderRadius: 2, border: `1.5px solid ${v.folBd}`, background: v.folBg, color: v.folFg, font: `500 14px ${SANS}`, cursor: 'pointer', ...(mob ? { flex: '1 1 0' } : {}) }}>{v.folLbl}</button>}
-        {v.pfOther && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', ...(mob ? { display: 'contents' } : {}) }}>
-            <button onClick={v.pfShare} className={hover('background:rgba(var(--ink-rgb),.08)')} style={{ ...btn(false), ...(side ? { flex: '1 1 0' } : {}) }}>Share</button>
-            <MoreMenu open={v.pfMoreOpen} onToggle={v.pfMore} align={side ? 'center' : 'right'} items={[{ label: 'Report artist', onClick: v.pfReport }, { label: v.pfBlockLbl, onClick: v.pfBlock, danger: true }]} />
+    <header style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {v.pfPreviewing && <div style={{ alignSelf: 'flex-start', padding: '5px 10px', border: `1px solid ${MARK}`, ...label(MARK, 10) }}>Previewing as a visitor</div>}
+      {v.pfMine && !v.acVerified && <VerifyBanner v={v} />}
+      <div style={{ display: 'flex', alignItems: mob ? 'flex-start' : 'center', gap: mob ? 14 : 20, flexWrap: mob ? 'wrap' : 'nowrap' }}>
+        <div style={{ width: mob ? 56 : 72, height: mob ? 56 : 72, flexShrink: 0, borderRadius: '50%', background: v.pfAvBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 ${mob ? 22 : 28}px ${SERIF}` }}>{v.pfInit}</div>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '2px 12px', flexWrap: 'wrap' }}>
+            <h1 style={{ margin: 0, ...serif(mob ? 30 : 36, 1.05, '-.01em') }}>{v.pfName}</h1>
+            <div style={{ display: 'flex', gap: '2px 7px', flexWrap: 'wrap', fontSize: 13, color: MUTED }}>{meta}</div>
           </div>
-        )}
-      </div>
-      {v.pfMine && (
-        <div style={{ display: 'flex', gap: 22, justifyContent: align, fontSize: 13 }}>
-          <span style={{ color: MUTED }}>{v.pfJoined}</span>
-          {v.pfAdmin && <button onClick={v.openAdmin} className={'tap ' + hover(`color:${MARK}`)} style={{ ...quietBtn, fontSize: 13, padding: 0 }}>Moderation</button>}
-          <button onClick={v.signOut} className={'tap ' + hover(`color:${MARK}`)} style={{ ...quietBtn, fontSize: 13, padding: 0 }}>Sign out</button>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: mob ? '2px 12px' : '2px 16px', fontSize: 14, color: MUTED }}>
+            {v.pfStats.map((st: V) => <span key={st.l} style={{ whiteSpace: 'nowrap' }}><b style={{ color: INK, fontWeight: 600 }}>{st.n}</b> {st.l}</span>)}
+          </div>
+          {v.pfHasBio && <p style={{ margin: '2px 0 0', maxWidth: 640, fontSize: 14, lineHeight: 1.5, color: INK, opacity: v.pfBioOp, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as CSSProperties}>{v.pfBio}</p>}
         </div>
-      )}
-      {v.pfOther && v.pfJoined && <span style={{ fontSize: 13, color: MUTED }}>{v.pfJoined}</span>}
-      {v.pfMine && !v.acVerified && <div style={{ marginTop: 10, width: '100%' }}><VerifyBanner v={v} /></div>}
+        {actions}
+      </div>
     </header>
   );
   return (
     <div style={screen()}>
-      <div style={{ maxWidth: side ? 1440 : 1120, margin: '0 auto', padding: `${mob ? 72 : 104}px ${v.pfPadX}px 56px`, boxSizing: 'border-box',
-        ...(side ? { display: 'grid', gridTemplateColumns: 'minmax(260px, 1fr) minmax(0, 3fr)', columnGap: 'clamp(40px, 5vw, 80px)', alignItems: 'start' } : { display: 'flex', flexDirection: 'column', gap: mob ? 32 : 48 }) }}>
+      <div style={{ maxWidth: 1120, margin: '0 auto', padding: `${mob ? 72 : 100}px ${v.pfPadX}px 56px`, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: mob ? 24 : 32 }}>
         {header}
 
         <section style={{ display: 'flex', flexDirection: 'column', gap: mob ? 20 : 28 }}>
@@ -387,17 +374,15 @@ export function AuthPage({ v }: { v: V }) {
   );
 }
 
-/** A quiet reminder to confirm the email address, with what happened when you press Resend. */
+/** A quiet one-line reminder to confirm the email address, with what happened when you press Resend. */
 function VerifyBanner({ v }: { v: V }) {
-  const side = v.notMob && v.vw >= 900;
   return (
-    <div role="status" style={{ display: 'flex', flexDirection: 'column', alignItems: side ? 'flex-start' : 'center', gap: 6, padding: '12px 16px', background: 'rgba(173,73,58,.07)', ...(side ? { borderLeft: `2px solid ${MARK}` } : {}), fontSize: 13, lineHeight: 1.45, color: INK, textAlign: side ? 'left' : 'center' }}>
-      <span><b style={{ fontWeight: 600 }}>Confirm your email</b> <span style={{ color: MUTED }}>· we sent a link to {v.acEmail}. Check your spam folder too.</span></span>
-      <span style={{ display: 'flex', gap: 18 }}>
+    <div role="status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px 18px', flexWrap: 'wrap', padding: '9px 14px', background: 'rgba(173,73,58,.07)', borderLeft: `2px solid ${MARK}`, fontSize: 13, lineHeight: 1.45, color: INK }}>
+      <span><b style={{ fontWeight: 600 }}>Confirm your email</b> <span style={{ color: MUTED }}>· {v.vfErr || v.vfMsg || `we sent a link to ${v.acEmail}. Check spam too.`}</span></span>
+      <span style={{ display: 'flex', gap: 16 }}>
         <button onClick={v.resendVerify} disabled={v.acBusy === 'verify' || v.vfCooldown} className={'tap ' + hoverLine} style={{ ...underlineBtn(13), opacity: v.vfCooldown ? 0.45 : 1 }}>{v.vfCooldown ? 'Sent' : 'Resend'}</button>
         <button onClick={v.checkVerified} disabled={v.acBusy === 'verify'} className={'tap ' + hoverLine} style={underlineBtn(13)}>I’ve confirmed</button>
       </span>
-      {(v.vfMsg || v.vfErr) && <span style={{ color: v.vfErr ? MARK : MUTED }}>{v.vfErr || v.vfMsg}</span>}
     </div>
   );
 }
