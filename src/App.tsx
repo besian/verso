@@ -286,14 +286,14 @@ export default class App extends Component<object, State> {
     const N = this.nLeaves(), book = this.curBook(), cover = book?.color ?? '#b8243a', inner = '#e9e2d3';
     if (leaf === 0) return side ? { bg: inner, num: '', idx: -1, wear: null, inside: true } : { bg: this.coverBg(book), num: '', idx: -1, wear: null };
     if (leaf === N - 1) return side ? { bg: cover, num: '', idx: -1, wear: null } : { bg: inner, num: '', idx: -1, wear: null, inside: true };
-    const pi = 2 * (leaf - 1) + side, img = this.state.images[pi], wear = this.wear(`${book?.id}:${pi}`, side ? 'l' : 'r', w), paper = wear.paper;
+    const pi = 2 * (leaf - 1) + side, img = this.state.images[pi], wear = this.wear(`${book?.id}:${pi}`, side ? 'l' : 'r', w, !!img), paper = wear.paper;
     return { bg: img ? `url("${this.blobUrl(img)}") center/cover no-repeat ${paper}` : paper, num: String(pi + 1), idx: img ? pi : -1, wear };
   }
   wearCache = new Map<string, Wear>();
   /** Per-page wear, cached because the book re-renders every animation frame. */
-  wear(seed: string, outer: 'l' | 'r', w: number) {
-    const k = seed + '|' + w; let v = this.wearCache.get(k);
-    if (!v) { if (this.wearCache.size > 2000) this.wearCache.clear(); v = pageWear(seed, outer, w); this.wearCache.set(k, v); }
+  wear(seed: string, outer: 'l' | 'r', w: number, drawn: boolean) {
+    const k = `${seed}|${w}|${drawn}`; let v = this.wearCache.get(k);
+    if (!v) { if (this.wearCache.size > 2000) this.wearCache.clear(); v = pageWear(seed, outer, w, drawn); this.wearCache.set(k, v); }
     return v;
   }
   animate(onDone?: () => void) {
