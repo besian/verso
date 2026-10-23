@@ -19,11 +19,11 @@ function Modal({ onClose, pad, maxWidth, gap = 18, shadow, children }: { onClose
   );
 }
 
-function TextField({ label, value, onChange, ...rest }: { label: string; value: string; onChange: ChangeEventHandler<HTMLInputElement>; type?: string; placeholder?: string }) {
+export function TextField({ label, value, onChange, ...rest }: { label: string; value: string; onChange: ChangeEventHandler<HTMLInputElement>; type?: string; placeholder?: string; autoComplete?: string; autoFocus?: boolean }) {
   return <label style={fieldLabel}>{label}<input value={value} onChange={onChange} {...rest} className={focusMark} style={field} /></label>;
 }
 
-function HandleField({ value, onChange, placeholder }: { value: string; onChange: ChangeEventHandler<HTMLInputElement>; placeholder?: string }) {
+export function HandleField({ value, onChange, placeholder }: { value: string; onChange: ChangeEventHandler<HTMLInputElement>; placeholder?: string }) {
   return (
     <label style={fieldLabel}>Handle
       <div style={{ display: 'flex', alignItems: 'center', height: 44, padding: '0 14px', borderRadius: 2, border: '1.5px solid rgba(34,35,32,.14)', background: 'rgba(34,35,32,.06)', boxSizing: 'border-box' }}>
@@ -35,38 +35,9 @@ function HandleField({ value, onChange, placeholder }: { value: string; onChange
 }
 
 /** Inline error (accent red) or confirmation line inside a form. */
-function Notice({ err, info }: { err?: string; info?: string }) {
+export function Notice({ err, info }: { err?: string; info?: string }) {
   if (!err && !info) return null;
   return <div role={err ? 'alert' : 'status'} style={{ fontSize: 13, lineHeight: 1.45, color: err ? MARK : MUTED }}>{err || info}</div>;
-}
-
-export function SignUp({ v }: { v: V }) {
-  return (
-    <Modal onClose={v.closeSignup} pad={v.mModalPad} maxWidth={420}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={heading}>{v.suTitle}</div>
-        <div style={{ fontSize: 14, lineHeight: 1.45, color: 'rgba(34,35,32,.7)', textWrap: 'pretty' } as CSSProperties}>{v.suSub}</div>
-      </div>
-      {v.suJoin && (
-        <>
-          <TextField label="Name" value={v.suName} onChange={v.onSuName} placeholder="Your name" />
-          <HandleField value={v.suHandle} onChange={v.onSuHandle} placeholder="handle" />
-        </>
-      )}
-      <TextField label="Email" value={v.suEmail} onChange={v.onSuEmail} type="email" placeholder="you@example.com" />
-      <TextField label="Password" value={v.suPw} onChange={v.onSuPw} type="password" placeholder="At least 6 characters" />
-      {!v.suJoin && <button onClick={v.suForgot} className={hover(`color:${MARK}`)} style={{ ...linkBtn('rgba(34,35,32,.75)'), alignSelf: 'flex-start', marginTop: -8 }}>Forgot password?</button>}
-      <Notice err={v.suErr} info={v.suInfo} />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
-        <button onClick={v.createAcct} disabled={v.suBusy} style={{ height: 46, borderRadius: 2, border: 'none', background: MARK, color: PAPER, font: `500 15px ${SANS}`, cursor: v.suBusy ? 'progress' : 'pointer', opacity: v.suBusy ? 0.6 : v.suOp }}>{v.suBusy ? 'One moment…' : v.suBtn}</button>
-        <button onClick={v.cancelSignup} className={hover(`color:${INK}`)} style={{ height: 40, border: 'none', background: 'none', color: 'rgba(34,35,32,.75)', font: `500 14px ${SANS}`, cursor: 'pointer' }}>Not now</button>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 6, fontSize: 13, color: MUTED }}>
-          {v.suSwitchQ}
-          <button onClick={v.suSwitch} className={hover(`color:${MARK};border-color:${MARK}`)} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>{v.suSwitchLbl}</button>
-        </div>
-      </div>
-    </Modal>
-  );
 }
 
 export function EditProfile({ v }: { v: V }) {

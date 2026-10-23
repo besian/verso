@@ -7,10 +7,10 @@ import type { AuthUser, BookDoc } from './backend';
 import * as store from './storage';
 import { INK, MARK, PAPER } from './theme';
 import Stage from './views/Stage';
-import { Explore, Home, Landing, Profile } from './views/Screens';
-import { Editor, EditProfile, Manager, NewBookPicker, SignUp } from './views/Overlays';
+import { AuthPage, Explore, Home, Landing, Profile } from './views/Screens';
+import { Editor, EditProfile, Manager, NewBookPicker } from './views/Overlays';
 
-export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile';
+export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth';
 type AnyBook = Book | OtherBook;
 /** Whose profile is open: a real user (uid) or one of the sample artists (name only). */
 type Who = { name: string; uid?: string };
@@ -36,7 +36,8 @@ interface State {
   focus?: boolean; fz?: number; fside?: 'L' | 'R'; fsx?: number; ctrlShow?: boolean; menuOpen?: boolean;
   edit?: EditState | null;
   newPick?: boolean; pickShape?: ShapeKey;
-  signup?: boolean; suMode?: 'join' | 'signin'; su?: { name: string; handle: string; email: string; pw: string } | null; suHT?: boolean;
+  /** Sign-in page: which form, and the screen to return to. */
+  authFrom?: Mode; suMode?: 'join' | 'signin' | 'reset'; su?: { name: string; handle: string; email: string; pw: string } | null; suHT?: boolean;
   suBusy?: boolean; suErr?: string; suInfo?: string;
   draft?: (Omit<Account, 'uid' | 'email' | 'joined'>) | null; dBusy?: boolean; dErr?: string;
   exView?: string; exSort?: 'trending' | 'new'; exQ?: string; stS?: number;
@@ -86,8 +87,8 @@ export default class App extends Component<object, State> {
   onKey = (e: KeyboardEvent) => {
     const s = this.state;
     if (e.key === 'Escape' && s.draft) return this.setState({ draft: null });
-    if (e.key === 'Escape' && s.signup) return this.setState({ signup: false });
-    if (e.key !== 'Escape' && (!['mine', 'other'].includes(s.mode || 'home') || s.draft || s.signup)) return;
+    if (e.key === 'Escape' && s.mode === 'auth') return this.closeAuth();
+    if (e.key !== 'Escape' && (!['mine', 'other'].includes(s.mode || 'home') || s.draft)) return;
     if (e.key === 'Escape') {
       if (s.newPick) return this.setState({ newPick: false });
       if (!s.edit && !s.managing && s.focus) return this.setFocus(false);
@@ -150,7 +151,13 @@ export default class App extends Component<object, State> {
     if (mode === 'explore' || mode === 'home') this.loadCommunity();
     this.setState(s => ({ mode, other: null, images: s.books[s.active].images, p: 0, focus: false, fz: 0, managing: false }));
   }
-  openJoin = () => this.setState({ signup: true, suMode: 'join', su: { name: '', handle: '', email: '', pw: '' }, suHT: false, suErr: '', suInfo: '' });
+  /** Opens the sign-in page; other, profileOf etc. are left alone so closing it returns to the same screen. */
+  openAuth(suMode: 'join' | 'signin') {
+    cancelAnimationFrame(this.raf); cancelAnimationFrame(this.exRaf);
+    this.setState(s => ({ mode: 'auth', authFrom: s.mode === 'auth' ? s.authFrom : s.mode || 'home', suMode, su: s.mode === 'auth' ? s.su : { name: '', handle: '', email: '', pw: '' }, suHT: false, suErr: '', suInfo: '', focus: false, fz: 0, managing: false, newPick: false }));
+  }
+  openJoin = () => this.openAuth('join');
+  closeAuth = () => this.setState(s => ({ mode: s.authFrom && s.authFrom !== 'auth' ? s.authFrom : 'home', suErr: '', suInfo: '', su: null }));
   openProfile(who: Who | null, force?: boolean) {
     if (!who && !this.state.acct && !force) return this.openJoin();
     if (who?.uid && who.uid === this.state.acct?.uid) who = null;
@@ -452,7 +459,8 @@ export default class App extends Component<object, State> {
 
   accountVals(): V {
     const s = this.state, a = s.acct, su = s.su || { name: '', handle: '', email: '', pw: '' }, d = s.draft || ({} as NonNullable<State['draft']>);
-    const join = s.suMode !== 'signin', suOk = (!join || !!(su.name || '').trim()) && /\S+@\S+\.\S+/.test(su.email || '') && (su.pw || '').length >= 6;
+    const suMode = s.suMode || 'join', join = suMode === 'join', reset = suMode === 'reset', emailOk = /\S+@\S+\.\S+/.test(su.email || '');
+    const suOk = emailOk && (reset || ((!join || !!(su.name || '').trim()) && (su.pw || '').length >= 6));
     const setSu = (k: keyof typeof su) => (e: ChangeEvent<HTMLInputElement>) => {
       const v = e.target.value;
       this.setState(st => {
@@ -464,32 +472,41 @@ export default class App extends Component<object, State> {
     const setD = (k: 'name' | 'handle' | 'bio' | 'loc' | 'web') => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       const v = k === 'handle' ? slug(e.target.value) : e.target.value; this.setState(st => ({ draft: { ...st.draft!, [k]: v } }));
     };
-    const blank = { name: '', handle: '', email: '', pw: '' };
     return {
       hasAcct: !!a, noAcct: !a, meAvBg: avatarBg(a?.av), meInit: a?.av ? '' : ini(a?.name),
       meRing: s.mode === 'profile' && !s.profileOf ? `0 0 0 2px ${PAPER}, 0 0 0 4px ${MARK}` : 'none', openMe: () => this.openProfile(null),
-      signup: !!s.signup, suName: su.name || '', suHandle: su.handle || '', suEmail: su.email || '', suPw: su.pw || '', suOp: suOk ? 1 : 0.4,
+      suName: su.name || '', suHandle: su.handle || '', suEmail: su.email || '', suPw: su.pw || '', suOp: suOk ? 1 : 0.4,
       onSuName: setSu('name'), onSuHandle: setSu('handle'), onSuEmail: setSu('email'), onSuPw: setSu('pw'),
-      suJoin: join, suTitle: join ? 'Create your account' : 'Welcome back',
-      suSub: join ? 'Get a profile page where others can browse your sketchbooks.' : 'Sign in to pick up where you left off.', suBtn: join ? 'Create account' : 'Sign in',
+      isAuth: s.mode === 'auth', suMode, suJoin: join, suReset: reset, suOk,
+      suKicker: join ? 'Join verso' : reset ? 'Reset password' : 'Sign in',
+      suSub: join ? 'Get a profile page where others can browse your sketchbooks, unfinished pages and all.'
+        : reset ? 'Enter the email you joined with and we’ll send you a link to choose a new password.' : 'Pick up where you left off.',
+      suBtn: join ? 'Create account' : reset ? 'Send reset link' : 'Sign in',
       suSwitchQ: join ? 'Already a member?' : 'New to verso?', suSwitchLbl: join ? 'Sign in' : 'Create an account',
-      suSwitch: () => this.setState(st => ({ suMode: st.suMode === 'signin' ? 'join' : 'signin' })),
-      openSignin: () => this.setState({ signup: true, suMode: 'signin', su: blank, suHT: false, suErr: '', suInfo: '' }),
+      suSwitch: () => this.openAuth(join ? 'signin' : 'join'),
+      suToReset: () => this.setState({ suMode: 'reset', suErr: '', suInfo: '' }),
+      suToSignin: () => this.setState({ suMode: 'signin', suErr: '', suInfo: '' }),
+      openSignin: () => this.openAuth('signin'),
       suBusy: !!s.suBusy, suErr: s.suErr || '', suInfo: s.suInfo || '',
-      createAcct: async () => {
-        if (!suOk || s.suBusy) return;
+      suSubmit: async (e?: { preventDefault(): void }) => {
+        e?.preventDefault();
+        if (s.suBusy) return;
+        if (!suOk) return this.setState({ suErr: !emailOk ? 'Enter a valid email address.' : join && !(su.name || '').trim() ? 'Add your name.' : 'Passwords need at least 6 characters.', suInfo: '' });
         const email = su.email.trim();
         this.setState({ suBusy: true, suErr: '', suInfo: '' });
         try {
-          if (!join) {
+          if (reset) {
+            await api.resetPassword(email);
+            this.setState({ suInfo: `If there’s an account for ${email}, a reset link is on its way. Check your inbox, then sign in with your new password.` });
+          } else if (!join) {
             await api.signIn(email, su.pw);
-            this.setState({ signup: false, su: null });
+            this.closeAuth();
           } else {
             // The auth listener would race us to create a default profile, so this flow loads the user itself.
             this.signingUp = true;
             const acct = await api.signUp(email, su.pw, su.name.trim(), su.handle || slug(su.name) || 'artist');
             await this.loadUser({ uid: acct.uid, email }, acct);
-            this.setState({ signup: false, su: null }); this.openProfile(null, true);
+            this.setState({ su: null }); this.openProfile(null, true);
           }
         } catch (e) {
           this.setState({ suErr: api.errMsg(e) });
@@ -497,13 +514,7 @@ export default class App extends Component<object, State> {
           this.signingUp = false; this.setState({ suBusy: false });
         }
       },
-      suForgot: async () => {
-        const email = su.email.trim();
-        if (!/\S+@\S+\.\S+/.test(email)) return this.setState({ suErr: 'Enter your email above, then choose “Forgot password?”.', suInfo: '' });
-        try { await api.resetPassword(email); this.setState({ suErr: '', suInfo: `If there’s an account for ${email}, a reset link is on its way.` }); }
-        catch (e) { this.setState({ suErr: api.errMsg(e), suInfo: '' }); }
-      },
-      cancelSignup: () => this.setState({ signup: false, suErr: '', suInfo: '' }), closeSignup: (e: MouseEvent) => { if (e.target === e.currentTarget) this.setState({ signup: false }); },
+      closeAuth: this.closeAuth,
       pfEditing: !!s.draft, dName: d.name || '', dHandle: d.handle || '', dBio: d.bio || '', dLoc: d.loc || '', dWeb: d.web || '', dEmail: a?.email || '', dBioCount: `${(d.bio || '').length}/160`,
       onDName: setD('name'), onDHandle: setD('handle'), onDBio: setD('bio'), onDLoc: setD('loc'), onDWeb: setD('web'),
       dAvBg: avatarBg(d.av), dInit: d.av ? '' : ini(d.name), dHasAv: !!d.av,
@@ -759,7 +770,7 @@ export default class App extends Component<object, State> {
         {v.isHome && <Home v={v} />}
         {v.isExplore && <Explore v={v} />}
         {v.isProfile && <Profile v={v} />}
-        {v.signup && <SignUp v={v} />}
+        {v.isAuth && <AuthPage v={v} />}
         {v.pfEditing && <EditProfile v={v} />}
         <input ref={this.avRef} type="file" accept="image/*" onChange={v.onAvFile} style={{ display: 'none' }} />
         {v.newPick && <NewBookPicker v={v} />}

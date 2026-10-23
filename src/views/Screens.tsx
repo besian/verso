@@ -3,6 +3,7 @@ import type { V } from '../App';
 import ClosedBook from '../ClosedBook';
 import { hover } from '../pseudo';
 import { CANVAS, INK, MARK, MUTED, PAGE_EDGES, PAPER, SANS, SERIF, SPINE, STONE, label, serif } from '../theme';
+import { HandleField, Notice, TextField } from './Overlays';
 
 const screen = (overflowY: CSSProperties['overflowY'] = 'auto'): CSSProperties => ({ position: 'absolute', inset: 0, zIndex: 4, background: PAPER, overflowX: 'hidden', overflowY });
 const primaryBtn = (h: number, fs: number, px: number): CSSProperties => ({ height: h, padding: `0 ${px}px`, border: 'none', background: INK, color: PAPER, font: `500 ${fs}px ${SANS}`, cursor: 'pointer', transition: 'background .25s' });
@@ -317,6 +318,52 @@ export function Profile({ v }: { v: V }) {
             )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+const AUTH_HEAD: Record<string, ReactNode> = {
+  join: <>Start with a <em style={{ color: MARK }}>blank page.</em></>,
+  signin: <>Welcome <em style={{ color: MARK }}>back.</em></>,
+  reset: <>Forgot your <em style={{ color: MARK }}>password?</em></>,
+};
+const quietLink = (color = INK): CSSProperties => ({ padding: 0, border: 'none', borderBottom: `1px solid ${color}`, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' });
+
+/** Sign in, create an account, or request a password reset, as a full page. */
+export function AuthPage({ v }: { v: V }) {
+  const mob = !v.notMob;
+  return (
+    <div style={screen()}>
+      <div style={{ maxWidth: 1080, margin: '0 auto', boxSizing: 'border-box', padding: `${mob ? 96 : 140}px ${mob ? 16 : 40}px 48px`, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,360px),1fr))', gap: mob ? '40px' : '48px 96px', alignItems: 'start' }}>
+        <section style={{ display: 'flex', flexDirection: 'column', gap: 24, minWidth: 0 }}>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center', ...label() }}><span style={{ color: MARK }}>{v.suKicker}</span><span style={{ width: 40, height: 1, background: STONE }} /><span>verso.</span></div>
+          <h1 style={{ margin: 0, ...serif(mob ? 56 : 96, .94, '-.025em'), textWrap: 'balance' } as CSSProperties}>{AUTH_HEAD[v.suMode]}</h1>
+          <p style={{ margin: 0, maxWidth: 400, fontSize: 17, lineHeight: 1.55, color: MUTED, textWrap: 'pretty' } as CSSProperties}>{v.suSub}</p>
+        </section>
+        <form onSubmit={v.suSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 420, width: '100%', paddingTop: 20, borderTop: `1px solid ${INK}`, justifySelf: mob ? 'stretch' : 'end' }}>
+          {v.suJoin && (
+            <>
+              <TextField label="Name" value={v.suName} onChange={v.onSuName} placeholder="Your name" autoComplete="name" />
+              <HandleField value={v.suHandle} onChange={v.onSuHandle} placeholder="handle" />
+            </>
+          )}
+          <TextField label="Email" value={v.suEmail} onChange={v.onSuEmail} type="email" placeholder="you@example.com" autoComplete="email" />
+          {!v.suReset && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <TextField label="Password" value={v.suPw} onChange={v.onSuPw} type="password" placeholder="At least 6 characters" autoComplete={v.suJoin ? 'new-password' : 'current-password'} />
+              {!v.suJoin && <button type="button" onClick={v.suToReset} className={hover(`color:${MARK}`)} style={{ alignSelf: 'flex-end', padding: 0, border: 'none', background: 'none', color: 'rgba(34,35,32,.75)', font: `500 13px ${SANS}`, cursor: 'pointer' }}>Forgot password?</button>}
+            </div>
+          )}
+          <Notice err={v.suErr} info={v.suInfo} />
+          <button type="submit" disabled={v.suBusy} className={v.suBusy ? undefined : hover(`background:${MARK}`)} style={{ height: 50, marginTop: 4, border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 15px ${SANS}`, cursor: v.suBusy ? 'progress' : 'pointer', opacity: v.suBusy ? 0.6 : v.suOk ? 1 : 0.55, transition: 'background .25s' }}>{v.suBusy ? 'One moment…' : v.suBtn}</button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontSize: 13, color: MUTED }}>
+            {v.suReset
+              ? <button type="button" onClick={v.suToSignin} className={hoverLine} style={quietLink()}>← Back to sign in</button>
+              : <span>{v.suSwitchQ} <button type="button" onClick={v.suSwitch} className={hoverLine} style={quietLink()}>{v.suSwitchLbl}</button></span>}
+            <button type="button" onClick={v.closeAuth} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'rgba(34,35,32,.75)', font: `500 13px ${SANS}`, cursor: 'pointer' }}>Not now</button>
+          </div>
+        </form>
       </div>
     </div>
   );
