@@ -41,7 +41,6 @@ export function HomeScreen({ v }: { v: V }) {
           {signedOut
             ? <button onClick={v.goExplore} className={hoverLine} style={underlineBtn(15)}>Explore sketchbooks ↗</button>
             : <button onClick={v.startOwn} className={hoverLine} style={underlineBtn(15)}>Start your own →</button>}
-          <button onClick={v.surprise} className={hoverLine} style={underlineBtn(15)}>Surprise me ✦</button>
         </div>
         {signedOut && <div style={{ fontSize: 13, color: STONE }}>Already a member? <button onClick={v.openSignin} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${STONE}`, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Sign in</button></div>}
         {v.hmPick && (
