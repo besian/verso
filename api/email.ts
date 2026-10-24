@@ -49,6 +49,9 @@ function render(kind: Kind, email: string, link: string) {
   return { subject: c.subject, html, text };
 }
 
+/** Opening the address in a browser just says it's there. */
+export function GET() { return json(405, { error: 'use POST' }); }
+
 export async function POST(req: Request) {
   if (!process.env.RESEND_API_KEY || !process.env.FIREBASE_SERVICE_ACCOUNT) return json(503, { error: 'not-configured' });
   const body = await req.json().catch(() => ({})) as { kind?: Kind; email?: string; newEmail?: string };
