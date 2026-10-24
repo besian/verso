@@ -2,6 +2,7 @@ import type { CSSProperties, ChangeEventHandler, MouseEventHandler, ReactNode } 
 import type { V } from '../App';
 import { focus, hover, wheelSideways } from '../pseudo';
 import { INK, MARK, MUTED, PAPER, SANS, SERIF, pagePad } from '../theme';
+import { TEXT_FONT, TEXT_INK } from '../handwriting';
 
 const field: CSSProperties = { height: 44, padding: '0 14px', borderRadius: 2, border: '1.5px solid rgba(var(--ink-rgb),.14)', background: 'rgba(var(--ink-rgb),.06)', color: INK, font: `500 14px ${SANS}`, outline: 'none', width: '100%', boxSizing: 'border-box' };
 const fieldLabel: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'rgba(var(--ink-rgb),.75)' };
@@ -262,6 +263,7 @@ function PageSheet({ v, pg }: { v: V; pg: V }) {
           <span style={hint}>Written in the page’s margin in the book.</span>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={() => { v.closePage(); pg.adjust(); }} className={hoverTint} style={act}>Adjust photo</button>
+            <button onClick={() => { v.closePage(); pg.write(); }} className={hoverTint} style={act}>Write on page</button>
             <button onClick={() => { v.closePage(); pg.edit(); }} className={hoverTint} style={act}>Crop & fit</button>
             <button onClick={pg.left} disabled={v.mgPage === 0} className={hoverTint} style={{ ...act, opacity: v.mgPage === 0 ? 0.4 : 1 }}>← Earlier</button>
             <button onClick={pg.right} disabled={v.mgPage === v.pagesList.length - 1} className={hoverTint} style={{ ...act, opacity: v.mgPage === v.pagesList.length - 1 ? 0.4 : 1 }}>Later →</button>
@@ -320,7 +322,7 @@ const ADJ_SHORT: Record<string, string> = { bri: 'Light', con: 'Contrast', sat: 
 /** The page-shaped frame: the image (dragged, pinched, twisted) with the colour adjustments applied, under a thirds grid. */
 function EditFrame({ v, radius, shadow, wheel }: { v: V; radius: string; shadow: string; wheel?: boolean }) {
   return (
-    <div onPointerDown={v.edDown} onPointerMove={v.edMove} onPointerUp={v.edUp} onPointerCancel={v.edUp} onWheel={wheel ? v.edWheel : undefined} style={{ position: 'relative', width: v.fw, height: v.fh, flexShrink: 0, overflow: 'hidden', borderRadius: radius, boxShadow: shadow, cursor: 'move', touchAction: 'none' }}>
+    <div onPointerDown={v.edDown} onPointerMove={v.edMove} onPointerUp={v.edUp} onPointerCancel={v.edUp} onWheel={wheel && !v.edWrite ? v.edWheel : undefined} style={{ position: 'relative', width: v.fw, height: v.fh, flexShrink: 0, overflow: 'hidden', borderRadius: radius, boxShadow: shadow, cursor: v.edWrite ? 'crosshair' : 'move', touchAction: 'none' }}>
       <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
         <filter id="ed-adjust" colorInterpolationFilters="sRGB"><feColorMatrix type="matrix" values={v.edFx} /></filter>
       </svg>
@@ -329,6 +331,18 @@ function EditFrame({ v, radius, shadow, wheel }: { v: V; radius: string; shadow:
         <div style={{ position: 'absolute', left: '50%', top: '50%', width: v.bw, height: v.bh, transform: `translate(-50%,-50%) ${v.edTransform}`, background: v.edBg }} />
       </div>
       {v.edMode === 'fit' && <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundImage: 'linear-gradient(rgba(var(--ink-rgb),.35) 1px,transparent 1px),linear-gradient(90deg,rgba(var(--ink-rgb),.35) 1px,transparent 1px)', backgroundSize: '33.34% 33.34%', mixBlendMode: 'difference', opacity: .5 }} />}
+      {/* Typed text (always shown, so Fit and Adjust preview the finished page), then the handwriting still to convert. */}
+      {v.edTexts.map((t: V) => (
+        <div key={t.id} data-tid={t.id} style={{ position: 'absolute', left: t.left, top: t.top, width: t.width, font: `${t.fontPx}px/${t.lineH}px ${TEXT_FONT}`, color: TEXT_INK, whiteSpace: 'pre', pointerEvents: v.edWrite ? 'auto' : 'none', cursor: 'grab', outline: t.sel ? `1.5px dashed ${MARK}` : v.edWrite ? '1px dashed rgba(34,35,32,.25)' : 'none', outlineOffset: 4 }}>
+          {t.lines.map((l: string, i: number) => <div key={i} style={{ height: t.lineH }}>{l}</div>)}
+        </div>
+      ))}
+      {v.edWrite && (
+        <svg width={v.fw} height={v.fh} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} aria-hidden="true">
+          {v.edInkPaths.map((d: string, i: number) => <path key={i} d={d} fill="none" stroke={TEXT_INK} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" opacity={v.inkBusy ? 0.35 : 1} />)}
+        </svg>
+      )}
+      {v.inkBusy && <span style={{ position: 'absolute', left: '50%', top: 12, transform: 'translateX(-50%)', padding: '5px 12px', borderRadius: 12, background: 'rgba(34,35,32,.8)', color: '#F6F2E8', font: `500 12px ${SANS}` }}>Reading your writing…</span>}
       {v.edPeek && <span style={{ position: 'absolute', left: 8, top: 8, padding: '3px 8px', borderRadius: 10, background: 'rgba(34,35,32,.75)', color: '#F6F2E8', font: `500 11px ${SANS}` }}>Original</span>}
     </div>
   );
@@ -336,8 +350,8 @@ function EditFrame({ v, radius, shadow, wheel }: { v: V; radius: string; shadow:
 
 function ModeSwitch({ v, height = 36 }: { v: V; height?: number }) {
   return (
-    <div role="tablist" aria-label="Editor" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, padding: 3, border: '1px solid rgba(var(--ink-rgb),.2)' }}>
-      {([['fit', 'Fit'], ['adjust', 'Adjust']] as const).map(([k, l]) => (
+    <div role="tablist" aria-label="Editor" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 2, padding: 3, border: '1px solid rgba(var(--ink-rgb),.2)' }}>
+      {([['fit', 'Fit'], ['adjust', 'Adjust'], ['write', 'Write']] as const).map(([k, l]) => (
         <button key={k} role="tab" aria-selected={v.edMode === k} onClick={() => v.setEdMode(k)} style={{ height, border: 'none', borderRadius: 2, background: v.edMode === k ? INK : 'transparent', color: v.edMode === k ? PAPER : INK, font: `500 14px ${SANS}`, cursor: 'pointer' }}>{l}{k === 'adjust' && v.edAdjusted ? ' •' : ''}</button>
       ))}
     </div>
@@ -349,9 +363,36 @@ const PeekBtn = ({ v, style }: { v: V; style: CSSProperties }) => (
   <button onPointerDown={v.peekOn} onPointerUp={v.peekOff} onPointerLeave={v.peekOff} onPointerCancel={v.peekOff} onContextMenu={e => e.preventDefault()} disabled={!v.edAdjusted} style={{ ...style, opacity: v.edAdjusted ? 1 : 0.4, touchAction: 'none', userSelect: 'none' }}>Hold to compare</button>
 );
 
+/** Write mode controls: convert the handwriting, or edit the selected piece of text. */
+function WriteTools({ v, outline, mob }: { v: V; outline: CSSProperties; mob?: boolean }) {
+  const t = v.selText;
+  if (t) return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: mob ? 10 : 14 }}>
+      <textarea value={t.text} onChange={t.onText} rows={mob ? 2 : 4} aria-label="Text" className={focusMark} style={{ ...field, height: 'auto', padding: '10px 12px', resize: 'vertical', font: `400 15px/1.4 ${SANS}` }} />
+      <Slider name="Size" lbl={t.sizeLbl} min={20} max={120} step={1} value={t.size} onChange={t.onSize} />
+      {!mob && <Slider name="Width" lbl={`${t.width}%`} min={15} max={100} step={1} value={t.width} onChange={t.onWidth} />}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={t.remove} style={{ ...outline, color: MARK }}>Remove text</button>
+        <button onClick={t.done} style={outline}>Done</button>
+      </div>
+    </div>
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: mob ? 10 : 14 }}>
+      {!mob && <span style={{ fontSize: 12, lineHeight: 1.45, color: 'rgba(var(--ink-rgb),.6)' }}>Write on the page with your finger, a pen or the mouse, then convert it to typed text. Tap text to edit it; drag it to move it.</span>}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={v.undoInk} disabled={!v.hasInk || v.inkBusy} style={{ ...outline, opacity: v.hasInk ? 1 : 0.4 }}>Undo</button>
+        <button onClick={v.clearInk} disabled={!v.hasInk || v.inkBusy} style={{ ...outline, opacity: v.hasInk ? 1 : 0.4 }}>Clear</button>
+      </div>
+      <button onClick={v.convertInk} disabled={!v.hasInk || v.inkBusy} style={{ ...outline, flex: 'none', height: mob ? 42 : 40, border: 'none', background: v.hasInk ? MARK : 'rgba(var(--ink-rgb),.12)', color: v.hasInk ? PAPER : 'rgba(var(--ink-rgb),.5)' }}>{v.inkBusy ? 'Reading…' : 'Convert to text'}</button>
+      {v.inkErr && <span role="alert" style={{ fontSize: 13, color: MARK }}>{v.inkErr}</span>}
+    </div>
+  );
+}
+
 /** Phone layout: top bar, full-width frame (drag, pinch, twist), Fit / Adjust, one slider for the chosen tool, big action button. */
 function MobileEditor({ v }: { v: V }) {
-  const adjust = v.edMode === 'adjust';
+  const adjust = v.edMode === 'adjust', write = v.edMode === 'write';
   const tools: { key: string; name: string; min: number; max: number; step: number; value: number; lbl: string; onChange: ChangeEventHandler<HTMLInputElement> }[] = adjust
     ? v.edAdj.map((a: V) => ({ key: a.key, name: ADJ_SHORT[a.key], min: a.min, max: a.max, step: 1, value: a.value, lbl: a.lbl, onChange: a.onChange }))
     : ED_TOOLS.map(([k, n, min, max, step, lbl]) => ({ key: k, name: n, min, max, step, value: v[k], lbl: v[lbl], onChange: v[ED_ON[k]] }));
@@ -364,17 +405,18 @@ function MobileEditor({ v }: { v: V }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8, padding: '12px 0 8px' }}>
         <button onClick={v.cancelEdit} style={{ ...bar, justifySelf: 'start', color: 'rgba(var(--ink-rgb),.75)' }}>Cancel</button>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ font: `400 22px/1.1 ${SERIF}` }}>{adjust ? 'Adjust' : 'Fit your page'}</div>
+          <div style={{ font: `400 22px/1.1 ${SERIF}` }}>{write ? 'Write' : adjust ? 'Adjust' : 'Fit your page'}</div>
           <div style={{ fontSize: 12, color: 'rgba(var(--ink-rgb),.65)' }}>{v.edTitle}</div>
         </div>
         {v.applyLbl === 'Add to sketchbook' ? <button onClick={v.skipEdit} style={{ ...bar, justifySelf: 'end', color: 'rgba(var(--ink-rgb),.75)' }}>Skip</button> : <span />}
       </div>
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
         <EditFrame v={v} radius="2px 8px 8px 2px" shadow="0 18px 40px rgba(10,10,30,.3)" />
-        <div style={{ fontSize: 12, color: 'rgba(var(--ink-rgb),.6)' }}>{adjust ? 'Whites cleans up the grey of a photographed page' : 'Drag to move · pinch to zoom · twist to rotate'}</div>
+        <div style={{ fontSize: 12, color: 'rgba(var(--ink-rgb),.6)' }}>{write ? 'Write with your finger, then convert · drag text to move it' : adjust ? 'Whites cleans up the grey of a photographed page' : 'Drag to move · pinch to zoom · twist to rotate'}</div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 10 }}>
         <ModeSwitch v={v} height={34} />
+        {write ? <WriteTools v={v} outline={outline} mob /> : <>
         <div role="tablist" aria-label={adjust ? 'Adjustment' : 'Tool'} style={{ display: 'flex', gap: 4, overflowX: 'auto', scrollbarWidth: 'none' } as CSSProperties}>
           {tools.map(t => (
             <button key={t.key} role="tab" aria-selected={t.key === tool.key} onClick={() => pick(t.key)} style={{ flex: '1 0 auto', height: 34, padding: '0 10px', border: `1px solid ${t.key === tool.key ? INK : 'rgba(var(--ink-rgb),.2)'}`, borderRadius: 17, background: t.key === tool.key ? INK : 'transparent', color: t.key === tool.key ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' }}>{t.name}{adjust && t.value !== 0 ? ' •' : ''}</button>
@@ -389,6 +431,7 @@ function MobileEditor({ v }: { v: V }) {
           {adjust ? <PeekBtn v={v} style={outline} /> : <button onClick={v.rot90} style={outline}>Rotate 90°</button>}
           <button onClick={v.resetEd} style={outline}>{adjust ? 'Reset colour' : 'Reset'}</button>
         </div>
+        </>}
         <button onClick={v.applyEdit} style={{ height: 52, borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 16px ${SANS}`, cursor: 'pointer' }}>{v.applyLbl}</button>
       </div>
     </div>
@@ -399,17 +442,17 @@ function MobileEditor({ v }: { v: V }) {
 export function Editor({ v }: { v: V }) {
   if (v.edMob) return <MobileEditor v={v} />;
   const outline: CSSProperties = { flex: 1, height: 36, borderRadius: 2, border: '1.5px solid rgba(var(--ink-rgb),.5)', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' };
-  const adjust = v.edMode === 'adjust';
+  const adjust = v.edMode === 'adjust', write = v.edMode === 'write';
   return (
     <div style={{ position: 'absolute', inset: 0, background: PAPER, zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 48, padding: 24, flexWrap: 'wrap', overflow: 'auto' }}>
       <EditFrame v={v} radius="2px 10px 10px 2px" shadow="0 30px 70px rgba(10,10,30,.5)" wheel />
       <div style={{ width: 260, display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={heading}>{adjust ? 'Adjust' : 'Fit your page'}</div>
-          <div style={{ fontSize: 13, color: 'rgba(var(--ink-rgb),.7)' }}>{v.edTitle} · {adjust ? 'light and colour' : 'drag to move, scroll or pinch to zoom'}</div>
+          <div style={heading}>{write ? 'Write' : adjust ? 'Adjust' : 'Fit your page'}</div>
+          <div style={{ fontSize: 13, color: 'rgba(var(--ink-rgb),.7)' }}>{v.edTitle} · {write ? 'handwriting to text' : adjust ? 'light and colour' : 'drag to move, scroll or pinch to zoom'}</div>
         </div>
         <ModeSwitch v={v} />
-        {adjust ? (
+        {write ? <WriteTools v={v} outline={outline} /> : adjust ? (
           <>
             {v.edAdj.map((a: V) => <Slider key={a.key} name={a.label} lbl={a.lbl} min={a.min} max={a.max} step={1} value={a.value} onChange={a.onChange} />)}
             <span style={{ fontSize: 12, lineHeight: 1.45, color: 'rgba(var(--ink-rgb),.6)', marginTop: -8 }}>Whites cleans up the grey of a photographed page. Settings carry over to the next image.</span>

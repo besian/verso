@@ -13,6 +13,7 @@
     "deploy:rules": "npx -y firebase-tools@15 deploy --only firestore:rules,storage --project verso-57469"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
     "firebase": "^12.19.0",
     "firebase-admin": "^13.10.0",
     "react": "18.3.1",

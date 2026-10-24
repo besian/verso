@@ -12,6 +12,8 @@ import { currentPrompt } from './prompts';
 import { COVER_INSIDE, pageWear } from './wear';
 import { ADJUSTERS, NO_ADJUST, applyToCanvas, feValues, isAdjusted } from './adjust';
 import type { Adjust } from './adjust';
+import { LINE_H, drawTexts, inkPng, readInk, textFromInk, wrapLines } from './handwriting';
+import type { PageText, Stroke } from './handwriting';
 import type { Wear } from './wear';
 import { INK, MARK, PAPER, STONE } from './theme';
 import Stage from './views/Stage';
@@ -33,8 +35,11 @@ interface EditState {
   queue: string[]; i: number; replaceIdx: number | null; target?: 'cover';
   scale: number; rot: number; skx: number; sky: number; tx: number; ty: number; nw: number; nh: number;
   /** Brightness, contrast and the rest (see adjust.ts), and which set of controls is showing. */
-  adj: Adjust; mode: 'fit' | 'adjust';
+  adj: Adjust; mode: EdMode;
+  /** Write mode: handwriting not yet converted, the typed text placed on the page, and the one being edited. */
+  ink: Stroke[]; texts: PageText[]; sel: string | null; inkBusy?: boolean; inkErr?: string;
 }
+type EdMode = 'fit' | 'adjust' | 'write';
 
 interface State {
   mode?: Mode;
@@ -830,8 +835,8 @@ export default class App extends Component<object, State> {
   bgRefA = (el: HTMLDivElement | null) => this.drift(el, [{ transform: 'translate(-6%,-4%) rotate(0deg) scale(1.1)' }, { transform: 'translate(5%,4%) rotate(10deg) scale(1.3)' }], 16000);
 
   // ---------- fit-your-page editor ----------
-  startEdit(queue: string[], replaceIdx: number | null, target?: 'cover', mode: 'fit' | 'adjust' = 'fit') {
-    this.setState({ edit: { queue, i: 0, replaceIdx, target, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, adj: NO_ADJUST, mode } });
+  startEdit(queue: string[], replaceIdx: number | null, target?: 'cover', mode: EdMode = 'fit') {
+    this.setState({ edit: { queue, i: 0, replaceIdx, target, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, adj: NO_ADJUST, mode, ink: [], texts: [], sel: null } });
     this.loadEditImg(queue[0]);
   }
   loadEditImg(src: string) {
@@ -857,8 +862,8 @@ export default class App extends Component<object, State> {
   }
   setEd(patch: Partial<EditState>) { this.setState(s => ({ edit: { ...s.edit!, ...patch } })); }
   /** Renders the framed image exactly as shown into a 1600px-tall page. */
-  applyEdit() {
-    const e = this.state.edit, im = this.editImg; if (!e || !im) return;
+  async applyEdit() {
+    const e = this.state.edit, im = this.editImg; if (!e || !im || e.inkBusy) return;
     const { fh } = this.frame(), { bw, bh } = this.baseSize(), outH = 1600, outW = Math.round(outH * this.aspect()), k = outH / fh, r = Math.PI / 180;
     const c = document.createElement('canvas'); c.width = outW; c.height = outH; const ctx = c.getContext('2d')!;
     ctx.fillStyle = '#f3efe6'; ctx.fillRect(0, 0, outW, outH);
@@ -866,6 +871,7 @@ export default class App extends Component<object, State> {
     ctx.transform(1, Math.tan(e.sky * r), Math.tan(e.skx * r), 1, 0, 0);
     ctx.drawImage(im, -bw * k / 2, -bh * k / 2, bw * k, bh * k);
     applyToCanvas(c, e.adj);
+    await drawTexts(ctx, e.texts.filter(t => t.text.trim()), outW, outH);
     const url = c.toDataURL('image/jpeg', 0.9), images = [...this.state.images];
     if (e.target === 'cover') { this.updateBook({ coverImg: url }); this.setState({ edit: null }); return; }
     let patch: Partial<Book> = {};
@@ -881,8 +887,20 @@ export default class App extends Component<object, State> {
     const e = this.state.edit; if (!e) return; const i = e.i + 1;
     if (i >= e.queue.length || e.replaceIdx != null) { this.setState({ edit: null }); cancelAnimationFrame(this.raf); this.target = Math.round(this.target); this.setState({ p: this.target }); return; }
     // The next image keeps the same adjustments: a batch of scans usually needs the same fix.
-    this.setState({ edit: { ...e, i, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0 } }); this.loadEditImg(e.queue[i]);
+    this.setState({ edit: { ...e, i, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, ink: [], texts: [], sel: null, inkErr: '' } }); this.loadEditImg(e.queue[i]);
   }
+
+  /** Write mode: send the handwriting to be read, and place the words where it was written. */
+  async convertInk() {
+    const e = this.state.edit; if (!e || !e.ink.length || e.inkBusy) return;
+    const { fw, fh } = this.frame(), ink = e.ink;
+    this.setEd({ inkBusy: true, inkErr: '' });
+    try {
+      const text = await readInk(inkPng(ink, fw, fh), await api.idToken()), t = textFromInk(ink, text);
+      this.setState(s => s.edit ? { edit: { ...s.edit, inkBusy: false, ink: s.edit.ink.slice(ink.length), texts: [...s.edit.texts, t], sel: t.id } } : null);
+    } catch (err) { this.setEd({ inkBusy: false, inkErr: (err as Error).message }); }
+  }
+  setText(id: string, patch: Partial<PageText>) { this.setState(s => s.edit ? { edit: { ...s.edit, texts: s.edit.texts.map(t => t.id === id ? { ...t, ...patch } : t) } } : null); }
 
   // ---------- explore ----------
   /** Explore's list: the loaded pages (already in order from the server) or the medium/tag results, then the search. */
@@ -1316,6 +1334,42 @@ export default class App extends Component<object, State> {
     };
   }
 
+  // ---------- write mode: pen strokes, and dragging the typed text around ----------
+  inkPen: { id: number; r: DOMRect; drag?: { tid: string; px: number; py: number; x: number; y: number } } | null = null;
+  inkDown(e: PointerEvent<HTMLDivElement>) {
+    const ed = this.state.edit; if (!ed || this.inkPen || ed.inkBusy) return;
+    const r = e.currentTarget.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    const tid = (e.target as HTMLElement).closest?.('[data-tid]')?.getAttribute('data-tid'), t = tid && ed.texts.find(q => q.id === tid);
+    if (t) { this.inkPen = { id: e.pointerId, r, drag: { tid: t.id, px: x, py: y, x: t.x, y: t.y } }; this.setEd({ sel: t.id }); return; }
+    this.inkPen = { id: e.pointerId, r }; this.setEd({ ink: [...ed.ink, [x, y]], sel: null, inkErr: '' });
+  }
+  inkMove(e: PointerEvent) {
+    const p = this.inkPen, ed = this.state.edit; if (!p || p.id !== e.pointerId || !ed) return;
+    const x = (e.clientX - p.r.left) / p.r.width, y = (e.clientY - p.r.top) / p.r.height;
+    if (p.drag) { const d = p.drag; this.setText(d.tid, { x: Math.max(0, Math.min(0.95, d.x + x - d.px)), y: Math.max(0, Math.min(0.97, d.y + y - d.py)) }); return; }
+    const s = ed.ink[ed.ink.length - 1]; if (!s) return;
+    // Skip points under ~1.5px apart: smoother lines, smaller images.
+    if (Math.hypot((x - s[s.length - 2]) * p.r.width, (y - s[s.length - 1]) * p.r.height) < 1.5) return;
+    this.setEd({ ink: [...ed.ink.slice(0, -1), [...s, x, y]] });
+  }
+  inkUp(e: PointerEvent) { if (this.inkPen?.id === e.pointerId) this.inkPen = null; }
+  writeVals(ed: EditState, fr: { fw: number; fh: number }): V {
+    const sel = ed.texts.find(t => t.id === ed.sel);
+    return {
+      edWrite: ed.mode === 'write', inkBusy: !!ed.inkBusy, inkErr: ed.inkErr || '', hasInk: ed.ink.length > 0, edTextCount: ed.texts.length,
+      edInkPaths: ed.ink.map(s => s.reduce((d, n, i) => d + (i % 2 ? `${(n * fr.fh).toFixed(1)} ` : `${i ? 'L' : 'M'}${(n * fr.fw).toFixed(1)} `), '') + (s.length === 2 ? 'l.1 0' : '')),
+      edTexts: ed.texts.map(t => ({ id: t.id, left: t.x * fr.fw, top: t.y * fr.fh, width: t.w * fr.fw, fontPx: t.size * fr.fh, lineH: t.size * fr.fh * LINE_H, sel: t.id === ed.sel,
+        lines: wrapLines(t.text, t.w * fr.fw, t.size * fr.fh) })),
+      convertInk: () => this.convertInk(), undoInk: () => this.setEd({ ink: ed.ink.slice(0, -1) }), clearInk: () => this.setEd({ ink: [], inkErr: '' }),
+      selText: sel ? {
+        text: sel.text, onText: (e: ChangeEvent<HTMLTextAreaElement>) => this.setText(sel.id, { text: e.target.value }),
+        size: Math.round(sel.size * 1000), sizeLbl: `${Math.round(sel.size * 1000)}`, onSize: (e: ChangeEvent<HTMLInputElement>) => this.setText(sel.id, { size: parseFloat(e.target.value) / 1000 }),
+        width: Math.round(sel.w * 100), onWidth: (e: ChangeEvent<HTMLInputElement>) => this.setText(sel.id, { w: Math.min(1 - sel.x, parseFloat(e.target.value) / 100) }),
+        remove: () => this.setEd({ texts: ed.texts.filter(t => t.id !== sel.id), sel: null }), done: () => this.setEd({ sel: null }),
+      } : null,
+    };
+  }
+
   editorVals(): V {
     const ed = this.state.edit; if (!ed) return { editing: false };
     const fr = this.frame(), bs = this.baseSize(), num = (f: 'scale' | 'rot' | 'skx' | 'sky') => (e: ChangeEvent<HTMLInputElement>) => this.setEd({ [f]: parseFloat(e.target.value) });
@@ -1328,7 +1382,8 @@ export default class App extends Component<object, State> {
       onScale: num('scale'), onRot: num('rot'), onSkx: num('skx'), onSky: num('sky'),
       rot90: () => this.setEd({ rot: ((ed.rot + 90 + 180) % 360) - 180 }),
       resetEd: () => ed.mode === 'adjust' ? this.setEd({ adj: NO_ADJUST }) : this.setEd({ scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0 }),
-      edMode: ed.mode, setEdMode: (mode: 'fit' | 'adjust') => this.setEd({ mode }),
+      edMode: ed.mode, setEdMode: (mode: EdMode) => this.setEd({ mode, sel: null }),
+      ...this.writeVals(ed, fr),
       edAdjTool: this.state.edAdjTool || 'white', setEdAdjTool: (t: string) => this.setState({ edAdjTool: t }),
       edPeek: !!this.state.edPeek, peekOn: () => this.setState({ edPeek: true }), peekOff: () => this.state.edPeek && this.setState({ edPeek: false }),
       edFx: feValues(ed.adj), edAdjusted: isAdjusted(ed.adj),
@@ -1339,9 +1394,11 @@ export default class App extends Component<object, State> {
       // One pointer drags the image; two pinch to zoom and twist to rotate.
       edDown: (e: PointerEvent<HTMLDivElement>) => {
         e.stopPropagation(); try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* pointer already gone */ }
+        if (ed.mode === 'write') return this.inkDown(e);
         this.edPts.set(e.pointerId, { x: e.clientX, y: e.clientY }); this.edGestureStart();
       },
       edMove: (e: PointerEvent) => {
+        if (ed.mode === 'write') return this.inkMove(e);
         if (!this.edPts.has(e.pointerId)) return;
         this.edPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
         const pin = this.edPinch, pts = [...this.edPts.values()];
@@ -1353,7 +1410,7 @@ export default class App extends Component<object, State> {
           const d = this.edDrag; this.setEd({ tx: d.tx + e.clientX - d.x, ty: d.ty + e.clientY - d.y });
         }
       },
-      edUp: (e: PointerEvent) => { this.edPts.delete(e.pointerId); this.edGestureStart(); },
+      edUp: (e: PointerEvent) => { if (ed.mode === 'write') return this.inkUp(e); this.edPts.delete(e.pointerId); this.edGestureStart(); },
       edMob: this.state.vw < 640, edTool: this.state.edTool || 'scale', setEdTool: (t: string) => this.setState({ edTool: t }),
       edWheel: (e: WheelEvent) => { e.stopPropagation(); this.setEd({ scale: Math.max(0.3, Math.min(4, ed.scale * (e.deltaY > 0 ? 0.95 : 1.05))) }); },
     };
@@ -1439,7 +1496,7 @@ export default class App extends Component<object, State> {
       caption: notes[u]?.c || '', date: notes[u]?.d || '',
       onCaption: (e: ChangeEvent<HTMLInputElement>) => setNote(u, { c: e.target.value.slice(0, 140) }),
       onDate: (e: ChangeEvent<HTMLInputElement>) => setNote(u, { d: e.target.value }),
-      edit: () => this.startEdit([images[i]], i), adjust: () => this.startEdit([images[i]], i, undefined, 'adjust'), remove: () => this.setImages(images.filter((_, k) => k !== i)),
+      edit: () => this.startEdit([images[i]], i), adjust: () => this.startEdit([images[i]], i, undefined, 'adjust'), write: () => this.startEdit([images[i]], i, undefined, 'write'), remove: () => this.setImages(images.filter((_, k) => k !== i)),
       left: () => { this.movePage(i, i - 1); if (s.mgPage === i && i > 0) this.setState({ mgPage: i - 1 }); },
       right: () => { this.movePage(i, i + 1); if (s.mgPage === i && i < images.length - 1) this.setState({ mgPage: i + 1 }); },
       dragStart: (e: DragEvent) => { this.dragIdx = i; e.dataTransfer.effectAllowed = 'move'; },

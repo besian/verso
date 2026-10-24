@@ -110,3 +110,12 @@ the app falls back to Firebase's plain emails.
 3. Firebase → ⚙ Project settings → Service accounts → Generate new private key → paste the whole JSON file's
    contents into Vercel env var `FIREBASE_SERVICE_ACCOUNT`. Keep this file private; it has full admin access.
 4. Redeploy. Optional: `EMAIL_FROM` (default `Fletora <noreply@fletora.studio>`), `APP_ORIGIN` (default `https://fletora.studio`).
+
+## Handwriting to text (Claude)
+
+The page editor's **Write** mode sends the handwriting to `api/handwriting.ts`, which reads it with
+Claude (Haiku 5.5) and returns the text. Signed-in users only, 60 conversions per person per hour.
+
+1. console.anthropic.com → API keys → create one → Vercel env var `ANTHROPIC_API_KEY`.
+2. It also uses `FIREBASE_SERVICE_ACCOUNT` (already set for the branded emails).
+3. Redeploy. Optional: set a monthly spend limit in the Anthropic console (Settings → Limits).

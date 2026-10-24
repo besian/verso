@@ -616,6 +616,9 @@ export async function checkLink(mode: string, code: string): Promise<{ email: st
 export async function useLink(code: string) { await applyActionCode(need().auth, code); }
 export async function setNewPassword(code: string, pw: string) { await confirmPasswordReset(need().auth, code, pw); }
 
+/** The signed-in user's ID token, for our own api/ functions. */
+export async function idToken() { const u = need().auth.currentUser; return u ? u.getIdToken() : ''; }
+
 export async function resendVerification() { const u = need().auth.currentUser; if (u) await sendVerification(u); }
 
 /** Reloads the signed-in user and reports whether their email is confirmed. */
