@@ -22,6 +22,9 @@ input[type="date"] { color-scheme: inherit; }
 @media (pointer: coarse) {
   .tap { position: relative; }
   .tap::after { content: ''; position: absolute; inset: -12px -6px; }
+  /* Phone browsers zoom into any field with text under 16px when it's tapped; 16px stops that
+     without disabling pinch-zoom for people who need it. */
+  input, textarea, select, [contenteditable] { font-size: 16px !important; }
 }
 
 /* Book-cover name labels don't fit small covers on phones. */
