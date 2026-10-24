@@ -157,7 +157,7 @@ function Carousel({ v }: { v: V }) {
       {v.sideBooks.map((sb: V) => (
         <div key={sb.key} onPointerDown={sb.stop} onClick={sb.open} style={{ position: 'absolute', left: 0, top: sb.top, width: sb.w, height: sb.h, transform: sb.transform, opacity: sb.opacity, cursor: 'pointer' }}>
           <ClosedBook bg={sb.bg} board={sb.board} boardShadow="0 24px 40px rgba(var(--ink-rgb),.16)" band={8} shade={sb.shade}
-            label={sb.showLabel ? sb.name : null} labelStyle={{ padding: '10px 12px', fontSize: 15 }} />
+            label={sb.showLabel ? sb.name : null} labelStyle={{ padding: '10px 12px', fontSize: 'clamp(10px, 8cqw, 15px)' }} />
           <div style={{ position: 'absolute', top: 'calc(100% + 18px)', left: 0, right: 0, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 2, opacity: sb.labelOp }}>
             <div style={{ fontSize: 18, fontWeight: 600 }}>{sb.name}</div>
             <div style={{ fontSize: 14, color: 'rgba(var(--ink-rgb),.7)' }}>{sb.count}</div>

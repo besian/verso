@@ -32,10 +32,11 @@ export default function ClosedBook({ size = 'lg', bg, board, boardShadow, band, 
       <div style={lg
         ? { position: 'absolute', top: 3, bottom: -3, left: 4, right: -4, borderRadius: '2px 9px 9px 2px', background: PAGE_EDGES }
         : { position: 'absolute', top: 3, bottom: -3, left: 3, right: -3, borderRadius: '2px 7px 7px 2px', background: PAGE_EDGES }} />
-      <div style={{ position: 'absolute', inset: 0, borderRadius: r, overflow: 'hidden', background: bg, boxShadow: coverShadow ? '0 1px 2px rgba(0,0,0,.3)' : undefined }}>
+      {/* A size container, so the label's text can scale with the cover (cqw) instead of overflowing small ones. */}
+      <div style={{ position: 'absolute', inset: 0, borderRadius: r, overflow: 'hidden', background: bg, boxShadow: coverShadow ? '0 1px 2px rgba(0,0,0,.3)' : undefined, containerType: 'inline-size' }}>
         <div style={{ position: 'absolute', right: '13%', top: 0, bottom: 0, width: band ?? (lg ? 7 : 6), background: '#1d1d26', boxShadow: bandShadow ? '-2px 0 3px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.25)' : undefined }} />
         {label != null && (
-          <div className="cover-label" style={{ position: 'absolute', left: '16%', right: '26%', top: '14%', background: '#f6f2e9', color: '#222320', ...(lg ? { padding: '8px 10px', borderRadius: 2, boxShadow: '0 1px 2px rgba(0,0,0,.2)', fontSize: 13, fontWeight: 600 } : {}), ...labelStyle }}>{label}</div>
+          <div className="cover-label" style={{ position: 'absolute', left: '16%', right: '26%', top: '14%', background: '#f6f2e9', color: '#222320', boxSizing: 'border-box', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...(lg ? { padding: '8px 10px', borderRadius: 2, boxShadow: '0 1px 2px rgba(0,0,0,.2)', fontSize: 'clamp(9px, 7cqw, 13px)', fontWeight: 600 } : {}), ...labelStyle }}>{label}</div>
         )}
       </div>
       {shade != null && <div style={{ position: 'absolute', inset: 0, borderRadius: r, background: '#1c1d30', opacity: shade, pointerEvents: 'none' }} />}
