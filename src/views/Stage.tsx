@@ -26,6 +26,8 @@ const arrowBtn: CSSProperties = { width: 32, height: 32, borderRadius: '50%', bo
 function TopBar({ v }: { v: V }) {
   return (
     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: `${v.mTop}px ${v.mPad}px 12px`, background: PAPER, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, zIndex: 5, opacity: v.uiOp, pointerEvents: v.uiPE }}>
+      {/* Viewing someone's sketchbook: the way back sits just under the logo. */}
+      {v.isOther && v.notMob && !v.embed && <button onClick={v.goExplore} className={hover(`color:${MARK}`)} style={{ ...textBtn, position: 'absolute', left: v.mPad, top: 'calc(100% + 6px)', height: 'auto', padding: '2px 0' }}>← Explore</button>}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: v.mNavGap }}>
         <button onClick={v.goHome} title="Home" style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', font: `400 30px/1 ${SERIF}`, letterSpacing: '-.01em', color: INK }}>fletora<span style={{ color: MARK }}>.</span></button>
         {/* Phones, signed in: navigation lives in the tab bar at the bottom. */}
@@ -35,7 +37,6 @@ function TopBar({ v }: { v: V }) {
         </div>}
       </div>
       {!v.tabBar && <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {v.isOther && v.notMob && <button onClick={v.goExplore} className={hover(`color:${MARK}`)} style={textBtn}>← Explore</button>}
         {v.isMine && <button onClick={v.newBook} className={hover(`color:${MARK}`)} style={textBtn}>{v.newLbl}</button>}
         {v.ntShow && <MsgBtn v={v} />}
         {v.ntShow && <Bell v={v} />}
