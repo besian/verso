@@ -9,7 +9,7 @@ const hoverText = hover(`color:${MARK}`);
 const hoverLine = hover(`color:${MARK};border-color:${MARK}`);
 const underline = (fs = 14): CSSProperties => ({ padding: '4px 0', border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', color: INK, font: `500 ${fs}px ${SANS}`, cursor: 'pointer' });
 const contact = import.meta.env.VITE_CONTACT_EMAIL;
-const UPDATED = '23 October 2026';
+const UPDATED = '24 October 2026';
 
 function Page({ v, kicker, title, children }: { v: V; kicker: string; title: ReactNode; children: ReactNode }) {
   const mob = !v.notMob;
@@ -43,30 +43,37 @@ const Contact = () => contact ? <>email <a href={`mailto:${contact}`}>{contact}<
 function Privacy() {
   return (
     <>
-      <P>fletora. is a place to share sketchbooks. This page explains what we store about you, who can see it, and how to remove it. Last updated {UPDATED}.</P>
+      <P>fletora. is a place to share sketchbooks, run by Besian Morina. This page explains what we store about you, why, who can see it, how long we keep it, and your rights. Last updated {UPDATED}.</P>
       <Sec title="What we store">
         <Ul items={[
           <><b>Your account:</b> your email address and a password, held by Firebase Authentication (Google). Your password is never visible to us, and your email is never shown on the site.</>,
-          <><b>Your profile:</b> name, handle, bio, location, website, Instagram, contact email (if you add one) and photo. These are public.</>,
-          <><b>Messages:</b> the messages you send and receive, stored so the two people in a conversation can read them. Nobody else can, including other members; we only see a message if it’s reported to us. If you delete your account, messages you sent stay in the other person’s conversation.</>,
-          <><b>Your sketchbooks:</b> page images, covers, captions, dates, mediums and tags. Public sketchbooks can be seen by anyone; private ones only by you.</>,
-          <><b>Activity:</b> who you follow, which sketchbooks you like and save, who you block, your notifications and any reports you file. Follows and likes are visible to others; saved sketchbooks, blocks and reports are private.</>,
-          <><b>Usage:</b> if analytics is enabled, Google Analytics for Firebase records anonymous usage such as pages viewed, device type and approximate location, using cookies or similar storage.</>,
+          <><b>Your profile:</b> name, handle, bio, location, website, social links, a contact email (if you add one) and photo. These are public.</>,
+          <><b>Your sketchbooks:</b> page images, drawings and typed text you add, covers, captions, dates, mediums and tags. Public sketchbooks can be seen by anyone; private ones only by you and anyone you’ve shared that sketchbook with.</>,
+          <><b>Messages:</b> the messages you send and receive, so the two people in a conversation can read them. Nobody else can, including us, unless a message is reported: then its text is sent to our moderators with the report. If you delete your account, messages you sent stay in the other person’s conversation.</>,
+          <><b>Activity:</b> who you follow, which sketchbooks you like and save, who you block, your notifications, the reports you file, and a daily count of new conversations you start (to prevent spam). Follows and likes are visible to others; saved sketchbooks, blocks and reports are private.</>,
+          <><b>On your device:</b> small settings such as light or dark theme, page sounds and which tips you’ve seen, kept in your browser’s storage. If analytics is turned on, Google Analytics for Firebase also records anonymous usage such as pages viewed, device type and approximate location.</>,
         ]} />
       </Sec>
-      <Sec title="Who processes it">
-        <P>Data is stored with Google Firebase (Authentication, Cloud Firestore and Cloud Storage) and the site is served by Vercel. Account emails (confirming your address, resetting your password) are sent through Resend, which receives your email address for that purpose. When you use Write to convert handwriting, an image of just that handwriting is sent to Anthropic’s Claude to read it; it isn’t used to train their models. These services process data for us under their own terms and privacy policies. We don’t sell your data or use it for advertising.</P>
+      <Sec title="Why we use it">
+        <P>To run your account and show your work (our agreement with you when you sign up); to keep fletora. safe, prevent spam and act on reports (our legitimate interest in a safe community); and, only if it’s turned on, anonymous analytics to improve the site.</P>
       </Sec>
-      <Sec title="Your choices">
+      <Sec title="Who processes it">
+        <P>Data is stored with Google Firebase (Authentication, Cloud Firestore and Cloud Storage), and the site is served by Vercel. Account emails (confirming your address, resetting your password) are sent through Resend, which receives your email address for that purpose; replies to them reach our inbox on Google Workspace. When you use Write to convert handwriting, an image of just that handwriting is sent to Anthropic’s Claude to read it; it isn’t used to train their models. These services may store data outside the UK, including in the United States, under their own terms, privacy policies and data protection safeguards. We don’t sell your data or use it for advertising.</P>
+      </Sec>
+      <Sec title="How long we keep it">
+        <P>For as long as you have an account. When you delete your account, your profile, handle, follows, saved list, notifications and every sketchbook with its images are removed straight away (copies in our providers’ backups expire within about 30 days). Reports are kept until they’re dealt with.</P>
+      </Sec>
+      <Sec title="Your choices and rights">
         <Ul items={[
           'Make any sketchbook private from its Pages screen.',
-          'Edit or remove your profile details at any time.',
+          'Edit or remove your profile details at any time, and block anyone from messaging you.',
           'Delete your account from Account settings. This permanently removes your profile, handle, follows, saved list, notifications, and every sketchbook with all its images.',
+          'You can ask for a copy of your data, ask us to correct or delete it, or object to how we use it. If you’re unhappy with how we handle your data, you can complain to the Information Commissioner’s Office (ico.org.uk) or your local data protection authority.',
           'Browsers let you block or clear cookies and site storage.',
         ]} />
       </Sec>
       <Sec title="Children">
-        <P>fletora. isn’t meant for children under 13, and they shouldn’t create an account.</P>
+        <P>fletora. isn’t meant for children under 13, and they shouldn’t create an account. If you think a child under 13 has an account, please tell us and we’ll remove it.</P>
       </Sec>
       <Sec title="Questions">
         <P>To ask about your data or request a copy of it, <Contact />.</P>
@@ -78,27 +85,39 @@ function Privacy() {
 function Terms() {
   return (
     <>
-      <P>These terms cover using fletora. By creating an account you agree to them. Last updated {UPDATED}.</P>
+      <P>These terms cover using fletora., run by Besian Morina. By creating an account you agree to them. Last updated {UPDATED}.</P>
+      <Sec title="Your account">
+        <P>You must be at least 13 to use fletora. Keep your password safe; you’re responsible for what happens on your account. One person per account, and don’t pretend to be someone else.</P>
+      </Sec>
       <Sec title="Your work stays yours">
-        <P>You keep all rights to what you upload. By making a sketchbook public, you let fletora. store and show it to visitors, including as previews when its link is shared. Making it private or deleting it ends that.</P>
+        <P>You keep all rights to what you upload. By making a sketchbook public, you let fletora. store and show it to visitors, including as previews when its link is shared or when it’s embedded on another site. Making it private or deleting it ends that. In a shared sketchbook, each person keeps the rights to the pages they add, and both agree they can be shown together in it.</P>
       </Sec>
       <Sec title="What’s not allowed">
         <Ul items={[
           'Uploading work that isn’t yours, or that you don’t have the right to share.',
-          'Harassment, hate, threats or content that targets someone.',
-          'Sexual content involving minors, or any illegal content.',
-          'Spam, scams, impersonation or automated use of the site.',
-          'Trying to break, overload or get around the security of the service.',
+          'Harassment, hate, threats or content that targets someone, in sketchbooks, profiles or messages.',
+          'Sexual content involving minors, sexual messages to anyone who hasn’t asked for them, or any illegal content.',
+          'Spam, scams, impersonation, or using messages to advertise or contact people in bulk.',
+          'Automated use of the site, or trying to break, overload or get around its security.',
         ]} />
       </Sec>
+      <Sec title="Messages">
+        <P>Messages from people who don’t follow you arrive as requests you can accept, decline or ignore. You can block anyone, and report any message; a reported message is shared with our moderators so they can review it.</P>
+      </Sec>
       <Sec title="Moderation">
-        <P>Anyone can report a sketchbook or artist. We may hide content, suspend accounts or remove them when these terms are broken, sometimes without notice.</P>
+        <P>Anyone can report a sketchbook, artist or message. We may hide content, suspend accounts or remove them when these terms are broken, sometimes without notice. If you think we got it wrong, <Contact /> and we’ll take another look.</P>
+      </Sec>
+      <Sec title="From the archive">
+        <P>Sketchbooks in From the archive are historical works in the public domain, shown with credit to the artist and the museum or library they come from. They’re there for inspiration; the source’s own terms apply to its images.</P>
       </Sec>
       <Sec title="The service">
-        <P>fletora. is provided as is, without warranties. We may change or stop features, and we aren’t liable for lost content or indirect losses to the extent the law allows. Keep your own copies of your work.</P>
+        <P>fletora. is provided as is, without warranties. Converting handwriting is automatic and can get words wrong, so check it before saving. We may change or stop features, and we aren’t liable for lost content or indirect losses to the extent the law allows. Keep your own copies of your work.</P>
+      </Sec>
+      <Sec title="Leaving">
+        <P>You can delete your account at any time from Account settings. We may close accounts that break these terms.</P>
       </Sec>
       <Sec title="Changes and contact">
-        <P>If these terms change, the date above will change too. Questions? <Contact />.</P>
+        <P>If these terms change, the date above will change too, and we’ll let you know on the site about big changes. Questions? <Contact />.</P>
       </Sec>
     </>
   );
