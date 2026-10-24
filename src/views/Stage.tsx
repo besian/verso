@@ -68,7 +68,8 @@ function TabBar({ v }: { v: V }) {
 
 /** First few times on a touch screen: how to turn pages and zoom. */
 function SwipeHint({ v }: { v: V }) {
-  return <div role="status" style={{ position: 'relative', zIndex: 2, marginBottom: 10, padding: '7px 14px', borderRadius: 16, background: 'rgba(var(--ink-rgb),.08)', fontSize: 13, color: INK, opacity: v.uiOp, pointerEvents: 'none' }}>Swipe to turn pages · pinch to zoom in</div>;
+  // Zero-height wrapper: the hint floats above the controls, so showing or hiding it never moves the book.
+  return <div style={{ position: 'relative', height: 0, width: '100%', zIndex: 2 }}><div role="status" style={{ position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap', padding: '7px 14px', borderRadius: 16, background: 'rgba(var(--ink-rgb),.08)', fontSize: 13, color: INK, opacity: v.uiOp, pointerEvents: 'none' }}>Swipe to turn pages · pinch to zoom in</div></div>;
 }
 
 /** Notification bell with unread count and a dropdown of recent likes, follows and goals. */

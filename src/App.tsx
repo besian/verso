@@ -99,7 +99,7 @@ const CURL_DEG = 110;
 const PHONE_CLOSED = 0.6, PHONE_OPEN = 0.44;
 const IS_TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 /** Zooming into a page, and sliding between the two pages of a spread while zoomed (ms). */
-const FOCUS_MS = 300, FOCUS_SHIFT_MS = 280;
+const FOCUS_MS = 300, FOCUS_OUT_MS = 340, FOCUS_SHIFT_MS = 280;
 /** Likes and followers each artist is working toward. */
 const GOAL = 100;
 const avatarBg = (av?: string | null) => av ? `url("${av}") center/cover no-repeat ${INK}` : INK;
@@ -785,8 +785,8 @@ export default class App extends Component<object, State> {
   focusOn(p: number, side: 'L' | 'R') {
     if (this.state.switching) return;
     this.setState({ fside: side }); cancelAnimationFrame(this.sraf);
-    const from = this.state.fsx || 0, to = side === 'L' ? 1 : 0, t0 = performance.now();
-    const tick = (now: number) => { const t = Math.min(1, (now - t0) / FOCUS_SHIFT_MS), e = 1 - Math.pow(1 - t, 3); this.setState({ fsx: from + (to - from) * e }); if (t < 1) this.sraf = requestAnimationFrame(tick); };
+    const from = this.state.fsx || 0, to = side === 'L' ? 1 : 0; let t0 = 0;
+    const tick = (now: number) => { t0 = t0 || now; const t = Math.min(1, (now - t0) / FOCUS_SHIFT_MS), e = 1 - Math.pow(1 - t, 3); this.setState({ fsx: from + (to - from) * e }); if (t < 1) this.sraf = requestAnimationFrame(tick); };
     if (this.state.focus) this.sraf = requestAnimationFrame(tick); else this.setState({ fsx: to });
     if (Math.abs(this.state.p - p) > 0.01) { this.turnTo(p); this.animate(); }
     this.setFocus(true);
@@ -796,8 +796,14 @@ export default class App extends Component<object, State> {
     this.setState({ focus: on, ctrlShow: true, menuOpen: false });
     clearTimeout(this.wakeT); if (on) this.wakeT = setTimeout(() => this.state.focus && this.setState({ ctrlShow: false }), 1800);
     cancelAnimationFrame(this.fraf);
-    const from = this.state.fz || 0, to = on ? 1 : 0, t0 = performance.now(), dur = FOCUS_MS;
-    const tick = (now: number) => { const t = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - t, 3); this.setState({ fz: from + (to - from) * e }); if (t < 1) this.fraf = requestAnimationFrame(tick); };
+    // The clock starts on the first drawn frame, so a slow first render can't make the book skip ahead.
+    // Zooming out eases in and out (a fast start read as a jump); zooming in keeps its quick start.
+    const from = this.state.fz || 0, to = on ? 1 : 0, dur = on ? FOCUS_MS : FOCUS_OUT_MS; let t0 = 0;
+    const tick = (now: number) => {
+      t0 = t0 || now; const t = Math.min(1, (now - t0) / dur);
+      const e = on ? 1 - Math.pow(1 - t, 3) : t < .5 ? 4 * t * t * t : 1 - Math.pow(2 - 2 * t, 3) / 2;
+      this.setState({ fz: from + (to - from) * e }); if (t < 1) this.fraf = requestAnimationFrame(tick);
+    };
     this.fraf = requestAnimationFrame(tick);
   }
   /** A tiny, colour-boosted copy of a page (made once per image) that the browser stretches into a soft blur. */
