@@ -116,7 +116,7 @@ export async function signUp(email: string, pw: string, name: string, handle: st
 type PublicProfile = Omit<Account, 'uid' | 'email'>;
 
 const profileOf = (d: DocumentData): PublicProfile => ({
-  name: d.name || '', handle: d.handle || '', bio: d.bio || '', loc: d.loc || '', web: d.web || '', ig: d.ig || '', mail: d.mail || '',
+  name: d.name || '', handle: d.handle || '', bio: d.bio || '', loc: d.loc || '', web: d.web || '', ig: d.ig || '', mail: d.mail || '', socials: { ...(d.ig ? { instagram: d.ig } : {}), ...(d.socials || {}) },
   accent: d.accent || '#C9C3B4', av: d.av || null, joined: d.joined || Date.now(),
 });
 

@@ -68,9 +68,9 @@ export function EditProfile({ v }: { v: V }) {
       <div style={grid}>
         <TextField label="Location" value={v.dLoc} onChange={v.onDLoc} placeholder="City" />
         <TextField label="Website" value={v.dWeb} onChange={v.onDWeb} placeholder="yoursite.com" />
-        <TextField label="Instagram" value={v.dIg} onChange={v.onDIg} placeholder="@yourname" />
         <TextField label="Contact email (shown on your profile)" value={v.dMail} onChange={v.onDMail} placeholder="hello@yoursite.com" type="email" />
       </div>
+      <SocialFields v={v} />
       <Notice err={v.dErr} />
     </>
   );
@@ -576,6 +576,37 @@ export function Editor({ v }: { v: V }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Edit profile: one row per social link (platform, handle, remove), and a button to add another. */
+function SocialFields({ v }: { v: V }) {
+  const anchor = useRef<HTMLSpanElement>(null);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <span style={{ ...fieldLabel, gap: 0 }}>Social links</span>
+      {v.dSocials.map((x: V) => (
+        <div key={x.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 92, flexShrink: 0, font: `500 13px ${SANS}` }}>{x.label}</span>
+          <input value={x.value} onChange={x.onChange} placeholder={x.hint} aria-label={`${x.label} handle`} autoFocus={!x.value} className={focusMark} style={{ ...field, flex: 1, minWidth: 0 }} />
+          <button onClick={x.remove} title={`Remove ${x.label}`} aria-label={`Remove ${x.label}`} className={hover(`color:${MARK}`)} style={{ width: 36, height: 36, flexShrink: 0, padding: 0, border: 'none', background: 'none', color: 'rgba(var(--ink-rgb),.55)', font: `400 20px ${SANS}`, cursor: 'pointer' }}>×</button>
+        </div>
+      ))}
+      {v.dSocialAdd.length > 0 && (v.isTouch
+        // Phones: the system picker. Elsewhere: our own menu.
+        ? <select value="" onChange={e => v.dSocialAdd.find((o: V) => o.key === e.target.value)?.add()} aria-label="Add a social link" style={{ ...field, alignSelf: 'flex-start', width: 'auto', paddingRight: 30 }}>
+            <option value="" disabled>+ Add a social link</option>
+            {v.dSocialAdd.map((o: V) => <option key={o.key} value={o.key}>{o.label}</option>)}
+          </select>
+        : <span ref={anchor} style={{ alignSelf: 'flex-start' }} onClick={e => e.stopPropagation()}>
+            <button onClick={v.toggleSocialMenu} aria-haspopup="menu" aria-expanded={v.dSocialMenu} className={hoverTint} style={{ ...ghostBtn, height: 40, padding: '0 14px' }}>+ Add a social link</button>
+            {v.dSocialMenu && <Popover anchor={anchor}>
+              <span role="menu" style={{ display: 'flex', flexDirection: 'column', minWidth: 200, padding: 6, background: PAPER, border: `1px solid ${INK}`, boxShadow: '0 12px 30px rgba(34,35,32,.14)' }}>
+                {v.dSocialAdd.map((o: V) => <button key={o.key} role="menuitem" onClick={o.add} className={hover('background:rgba(var(--ink-rgb),.07)')} style={{ textAlign: 'left', padding: '9px 10px', border: 'none', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>{o.label}</button>)}
+              </span>
+            </Popover>}
+          </span>)}
     </div>
   );
 }

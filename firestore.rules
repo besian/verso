@@ -11,17 +11,27 @@ service cloud.firestore {
     function isAdmin() { return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
     function suspended() { return signedIn() && exists(/databases/$(database)/documents/banned/$(request.auth.uid)); }
 
+    // Social links on a profile: known platforms only, one handle (≤ 100 characters) each.
+    function sv(s, k) { return !(k in s) || str(s[k], 100); }
+    function socialsOk(s) {
+      return s is map && s.keys().hasOnly(['instagram', 'tiktok', 'x', 'threads', 'bluesky', 'youtube', 'pinterest', 'behance', 'dribbble', 'artstation', 'deviantart', 'patreon', 'kofi', 'etsy', 'linkedin'])
+        && sv(s, 'instagram') && sv(s, 'tiktok') && sv(s, 'x') && sv(s, 'threads') && sv(s, 'bluesky')
+        && sv(s, 'youtube') && sv(s, 'pinterest') && sv(s, 'behance') && sv(s, 'dribbble') && sv(s, 'artstation')
+        && sv(s, 'deviantart') && sv(s, 'patreon') && sv(s, 'kofi') && sv(s, 'etsy') && sv(s, 'linkedin');
+    }
+
     match /users/{uid} {
       allow read: if true;
       // The handle must be reserved by this user in the same write (see handles below).
       allow create, update: if isUser(uid)
-        && request.resource.data.keys().hasOnly(['name', 'handle', 'bio', 'loc', 'web', 'ig', 'mail', 'accent', 'av', 'joined'])
+        && request.resource.data.keys().hasOnly(['name', 'handle', 'bio', 'loc', 'web', 'ig', 'mail', 'socials', 'accent', 'av', 'joined'])
         && str(request.resource.data.name, 80)
         && str(request.resource.data.bio, 160)
         && str(request.resource.data.loc, 80)
         && str(request.resource.data.web, 200)
         && (!('ig' in request.resource.data) || str(request.resource.data.ig, 40))
         && (!('mail' in request.resource.data) || str(request.resource.data.mail, 120))
+        && (!('socials' in request.resource.data) || socialsOk(request.resource.data.socials))
         && getAfter(/databases/$(database)/documents/handles/$(request.resource.data.handle)).data.uid == uid;
       // Account deletion removes the profile along with everything else.
       allow delete: if isUser(uid);

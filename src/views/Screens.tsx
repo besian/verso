@@ -270,7 +270,7 @@ export function Profile({ v }: { v: V }) {
   const mob = !v.notMob, wide = v.pfWide, zone = mob ? 150 : 200;
   // A slim bar: photo, name and details on the left, actions at the end; the sketchbooks start right below.
   const meta = [<span key="h">{v.pfHandle}</span>, v.pfHasLoc && <span key="l">{v.pfLoc}</span>, v.pfHasWeb && <a key="w" href={v.pfWebHref} target="_blank" rel="noopener noreferrer" style={{ color: MARK, textDecoration: 'none' }}>{v.pfWeb}</a>,
-    v.pfIg && <a key="ig" href={`https://instagram.com/${encodeURIComponent(v.pfIg)}`} target="_blank" rel="noopener noreferrer" style={{ color: MARK, textDecoration: 'none' }}>Instagram</a>,
+    ...v.pfSocials.map((x: V) => <a key={x.key} href={x.href} target="_blank" rel="noopener noreferrer me" style={{ color: MARK, textDecoration: 'none' }}>{x.label}</a>),
     v.pfMail && <a key="m" href={`mailto:${v.pfMail}`} style={{ color: MARK, textDecoration: 'none' }}>Email</a>, v.pfJoined && <span key="j">{v.pfJoined}</span>]
     .filter(Boolean).flatMap((x, i) => i ? [<span key={'d' + i} aria-hidden="true" style={{ color: 'rgba(var(--ink-rgb),.3)' }}>·</span>, x] : [x]);
   const small = (primary: boolean): CSSProperties => ({ ...actionBtn(primary), height: 38, padding: '0 16px', ...(mob ? { flex: '1 1 0' } : {}) });

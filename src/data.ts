@@ -71,5 +71,7 @@ export interface Account {
   name: string; handle: string; email: string; bio: string; loc: string; web: string;
   /** Optional ways to reach the artist, shown on their profile: an Instagram handle and a public contact email. */
   ig?: string; mail?: string;
+  /** Social links: platform key (see socials.ts) → handle. */
+  socials?: Record<string, string>;
   accent: string; av: string | null; joined: number;
 }

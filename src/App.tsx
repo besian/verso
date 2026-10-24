@@ -15,6 +15,7 @@ import type { Adjust } from './adjust';
 import { LINE_H, drawTexts, inkPng, readInk, textFromInk, textWidth, wrapLines } from './handwriting';
 import type { PageText, Stroke } from './handwriting';
 import { RULED, paperUrl } from './paper';
+import { MAX_SOCIALS, PLATFORM, PLATFORMS, cleanHandle, socialLinks } from './socials';
 import { DEFAULT_PEN, drawMarks, markFor, pathD, touched } from './draw';
 import type { Mark, Pen, Tool } from './draw';
 import type { Paper } from './paper';
@@ -78,7 +79,7 @@ interface State {
   /** Sign-in page: which form, and the screen to return to. */
   authFrom?: Mode; suMode?: 'join' | 'signin' | 'reset'; su?: { name: string; handle: string; email: string; pw: string } | null; suHT?: boolean;
   suBusy?: boolean; suErr?: string; suInfo?: string;
-  draft?: (Omit<Account, 'uid' | 'email' | 'joined'>) | null; dBusy?: boolean; dErr?: string;
+  draft?: (Omit<Account, 'uid' | 'email' | 'joined'>) | null; dBusy?: boolean; dErr?: string; socialMenu?: boolean;
   exView?: string; exSort?: 'trending' | 'new'; exQ?: string; stS?: number;
   /** Explore paging, and the medium/tag filter ('m:ink', 't:lisbon') with its results. */
   exMore?: boolean; exBusy?: boolean; exLabel?: string; exLabelBooks?: OtherBook[] | null;
@@ -1068,7 +1069,7 @@ export default class App extends Component<object, State> {
       key: b.id, name: b.name, color: b.color, bg, showLabel, a: this.shapeOf(b).a, s: this.shapeOf(b).s,
       count: `${pages} ${pages === 1 ? 'page' : 'pages'} · ${(b as Book).role === 'collab' ? 'With ' + (b as Book).owner?.name : (b as Book).collab ? 'With ' + (b as Book).collab!.name : this.shapeOf(b).label || 'Portrait'}${(b as Book).isPublic === false ? ' · Private' : ''}`, open,
     });
-    let p: { name?: string; handle?: string; bio?: string; loc?: string; web?: string; ig?: string; mail?: string; accent?: string; av?: string | null; joined: string; stats: [number, string][] };
+    let p: { name?: string; handle?: string; bio?: string; loc?: string; web?: string; ig?: string; mail?: string; socials?: Record<string, string>; accent?: string; av?: string | null; joined: string; stats: [number, string][] };
     let list: ReturnType<typeof card>[], folOn = false;
     if (mine) {
       const tab = pv ? 'books' : s.pfTab || 'books';
@@ -1077,7 +1078,7 @@ export default class App extends Component<object, State> {
         : tab === 'following' ? []
         : s.books.map((b, j) => card(b, this.coverBg(b), !b.coverImg, b.images.length, () => { cancelAnimationFrame(this.raf); this.target = 0; this.setState({ mode: 'mine', profileOf: null, active: j, images: b.images, p: 0, other: null }); }));
       p = {
-        name: a.name, handle: a.handle, bio: a.bio, loc: a.loc, web: a.web, ig: a.ig, mail: a.mail, accent: a.accent, av: a.av,
+        name: a.name, handle: a.handle, bio: a.bio, loc: a.loc, web: a.web, ig: a.ig, mail: a.mail, socials: a.socials, accent: a.accent, av: a.av,
         joined: 'Joined ' + new Date(a.joined || Date.now()).toLocaleDateString('en', { month: 'short', year: 'numeric' }),
         stats: [[s.books.length, s.books.length === 1 ? 'sketchbook' : 'sketchbooks'], [s.books.reduce((t, b) => t + b.images.length, 0), 'pages']],
       };
@@ -1085,14 +1086,14 @@ export default class App extends Component<object, State> {
       const who = s.profileOf!, pf = s.pf?.uid === who.uid ? s.pf : null, pr = pf?.profile, bks = (s.blocked || []).includes(who.uid || '') ? [] : pf?.books || [];
       folOn = !!who.uid && follows.includes(who.uid);
       list = bks.map(b => card(b, this.coverBg(b), !b.coverImg, b.likes, () => this.openOtherBook(b)));
-      p = { name: pr?.name || who.name, handle: pr?.handle, bio: pr?.bio, loc: pr?.loc, web: pr?.web, ig: pr?.ig, mail: pr?.mail, accent: pr?.accent, av: pr?.av,
+      p = { name: pr?.name || who.name, handle: pr?.handle, bio: pr?.bio, loc: pr?.loc, web: pr?.web, ig: pr?.ig, mail: pr?.mail, socials: pr?.socials, accent: pr?.accent, av: pr?.av,
         joined: pr ? 'Joined ' + new Date(pr.joined).toLocaleDateString('en', { month: 'short', year: 'numeric' }) : '',
         stats: [[bks.length, bks.length === 1 ? 'sketchbook' : 'sketchbooks'], [bks.reduce((t, b) => t + b.likes, 0), 'pages']] };
     }
     const pad = mob ? 16 : 40, web = (p.web || '').trim();
     return {
       pfName: p.name, pfHandle: '@' + (p.handle || ''), pfHasBio: !!p.bio || (mine && !pv), pfBio: p.bio || 'Add a short bio so people know what you draw.', pfBioOp: p.bio ? 1 : 0.55,
-      pfHasLoc: !!(p.loc || '').trim(), pfLoc: p.loc, pfHasWeb: !!web, pfWeb: web.replace(/^https?:\/\//, ''), pfIg: (p.ig || '').trim().replace(/^@/, '').replace(/^https?:\/\/(www\.)?instagram\.com\//, '').replace(/\/$/, ''), pfMail: /^\S+@\S+\.\S+$/.test((p.mail || '').trim()) ? (p.mail || '').trim() : '', pfWebHref: /^https?:\/\//.test(web) ? web : 'https://' + web, pfJoined: p.joined,
+      pfHasLoc: !!(p.loc || '').trim(), pfLoc: p.loc, pfHasWeb: !!web, pfWeb: web.replace(/^https?:\/\//, ''), pfSocials: socialLinks({ ...(p.ig ? { instagram: p.ig } : {}), ...(p.socials || {}) }), pfMail: /^\S+@\S+\.\S+$/.test((p.mail || '').trim()) ? (p.mail || '').trim() : '', pfWebHref: /^https?:\/\//.test(web) ? web : 'https://' + web, pfJoined: p.joined,
       pfAvBg: avatarBg(p.av), pfInit: p.av ? '' : ini(p.name),
       ...(() => {
         // Followers and likes update live from the counters (see syncWatches).
@@ -1132,7 +1133,7 @@ export default class App extends Component<object, State> {
       pfDir: mob ? 'column' : 'row', pfAlign: mob ? 'center' : 'flex-start', pfTA: mob ? 'center' : 'left', pfJust: mob ? 'center' : 'flex-start', pfHeadGap: mob ? 16 : 28,
       pfWide: vw >= 980, pfBanH: mob ? 96 : 128, pfInfoTop: mob ? 0 : 2, pfPadX: pad, pfNameSize: mob ? 48 : 72,
       pfCols: Math.max(2, Math.min(5, Math.floor((Math.min(vw, 1080) - pad * 2 + 18) / (mob ? 150 : 200)))),
-      editProfile: () => this.setState({ draft: { name: a.name || '', handle: a.handle || '', bio: a.bio || '', loc: a.loc || '', web: a.web || '', ig: a.ig || '', mail: a.mail || '', accent: a.accent || '#C9C3B4', av: a.av || null } }),
+      editProfile: () => this.setState({ draft: { name: a.name || '', handle: a.handle || '', bio: a.bio || '', loc: a.loc || '', web: a.web || '', ig: '', mail: a.mail || '', socials: { ...(a.socials || {}) }, accent: a.accent || '#C9C3B4', av: a.av || null } }),
       togglePreview: () => this.setState(st => ({ pfPreview: !st.pfPreview })),
       pfNew: this.openNewPick,
       folLbl: folOn ? 'Following' : 'Follow', folBg: folOn ? 'transparent' : MARK, folFg: folOn ? INK : PAPER, folBd: folOn ? 'rgba(var(--ink-rgb),.5)' : MARK,
@@ -1239,7 +1240,14 @@ export default class App extends Component<object, State> {
       },
       isLegal: s.mode === 'legal', legalDoc: s.legal || 'privacy', isNotFound: s.mode === 'notfound', nfWhat: s.nf || 'page',
       ...this.settingsVals(),
-      pfEditing: !!s.draft, dName: d.name || '', dHandle: d.handle || '', dBio: d.bio || '', dLoc: d.loc || '', dWeb: d.web || '', dIg: d.ig || '', dMail: d.mail || '', onDIg: setD('ig'), onDMail: setD('mail'), dEmail: a?.email || '', dBioCount: `${(d.bio || '').length}/160`,
+      pfEditing: !!s.draft, dName: d.name || '', dHandle: d.handle || '', dBio: d.bio || '', dLoc: d.loc || '', dWeb: d.web || '', dMail: d.mail || '', onDMail: setD('mail'),
+      dSocials: Object.keys(d.socials || {}).filter(k => PLATFORM[k]).map(k => ({ key: k, label: PLATFORM[k].label, hint: PLATFORM[k].hint, value: d.socials![k],
+        onChange: (e: ChangeEvent<HTMLInputElement>) => { const val = e.target.value.slice(0, 120); this.setState(st => ({ draft: { ...st.draft!, socials: { ...st.draft!.socials, [k]: val } } })); },
+        remove: () => this.setState(st => { const n = { ...st.draft!.socials }; delete n[k]; return { draft: { ...st.draft!, socials: n } }; }) })),
+      dSocialAdd: Object.keys(d.socials || {}).length >= MAX_SOCIALS ? [] : PLATFORMS.filter(pl => !(d.socials || {})[pl.key]).map(pl => ({ key: pl.key, label: pl.label,
+        add: () => this.setState(st => ({ socialMenu: false, draft: { ...st.draft!, socials: { ...st.draft!.socials, [pl.key]: '' } } })) })),
+      dSocialMenu: !!s.socialMenu, toggleSocialMenu: () => this.setState(st => ({ socialMenu: !st.socialMenu })),
+      dEmail: a?.email || '', dBioCount: `${(d.bio || '').length}/160`,
       onDName: setD('name'), onDHandle: setD('handle'), onDBio: setD('bio'), onDLoc: setD('loc'), onDWeb: setD('web'),
       dAvBg: avatarBg(d.av), dInit: d.av ? '' : ini(d.name), dHasAv: !!d.av,
       avRef: this.avRef, pickAv: () => this.avRef.current?.click(), removeAv: () => this.setState(st => ({ draft: { ...st.draft!, av: null } })),
@@ -1262,7 +1270,8 @@ export default class App extends Component<object, State> {
         if (!a || s.dBusy) return;
         this.setState({ dBusy: true, dErr: '' });
         try {
-          const acct = await api.saveProfile(a, { ...d, ig: (d.ig || '').trim().slice(0, 40), mail: (d.mail || '').trim().slice(0, 120), name: (d.name || '').trim() || a.name, handle: d.handle || a.handle, joined: a.joined });
+          const socials = Object.fromEntries(Object.entries(d.socials || {}).map(([k, h]) => [k, cleanHandle(h)]).filter(([k, h]) => PLATFORM[k] && h));
+          const acct = await api.saveProfile(a, { ...d, socials, ig: '', mail: (d.mail || '').trim().slice(0, 120), name: (d.name || '').trim() || a.name, handle: d.handle || a.handle, joined: a.joined });
           this.setState({ acct, draft: null });
         } catch (e) { this.setState({ dErr: api.errMsg(e) }); }
         finally { this.setState({ dBusy: false }); }
@@ -1816,7 +1825,7 @@ export default class App extends Component<object, State> {
           bkIsAdmin: !!s.admin, bkPickLbl: o && s.pick?.id === o.id ? 'Remove staff pick' : 'Make staff pick', bkPick: () => o && this.togglePick(o),
           bkReport: () => o && this.openReport({ kind: 'book', targetId: o.id, ownerId: o.ownerId || '', label: `“${o.name}”` }),
           bkBlock: () => o?.ownerId && this.toggleBlock(o.ownerId, o.artist), bkBlockLbl: `Block ${o?.artist || ''}`,
-          closeMore: () => (s.more || s.notifOpen || s.colMenu) && this.setState({ more: null, notifOpen: false, colMenu: null }),
+          closeMore: () => (s.more || s.notifOpen || s.colMenu || s.socialMenu) && this.setState({ more: null, notifOpen: false, colMenu: null, socialMenu: false }),
           toastMsg: s.toast || '',
           ...this.notifVals(),
           reportOpen: !!s.reportFor, reportLabel: s.reportFor?.label || '', reportKind: s.reportFor?.kind, reportReasons: api.REPORT_REASONS.map(r => ({ key: r, label: r, on: s.reportReason === r, pick: () => this.setState({ reportReason: r, reportErr: '' }) })),
