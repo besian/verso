@@ -255,7 +255,7 @@ function CurledLeaf({ leaf, W, H }: { leaf: V; W: number; H: number }) {
     );
   };
   const seg = (k: number): ReactNode => (
-    <div style={{ position: 'absolute', left: k ? s : 0, top: 0, width: s + 0.75, height: H, transformOrigin: '0 50%', transformStyle: 'preserve-3d', transform: k ? `rotateY(${(step * k).toFixed(3)}deg)` : undefined }}>
+    <div style={{ position: 'absolute', left: k ? s : 0, top: 0, width: s + 1.25, height: H, transformOrigin: '0 50%', transformStyle: 'preserve-3d', transform: k ? `rotateY(${(step * k).toFixed(3)}deg)` : undefined }}>
       {side(false, k)}
       {side(true, k)}
       {k < n - 1 && seg(k + 1)}
@@ -274,9 +274,11 @@ function Book3D({ v }: { v: V }) {
       </div>
       {v.leaves.map((leaf: V) => (
         <div key={leaf.key} style={{ position: 'absolute', left: 0, top: 0, width: v.W, height: v.H, transformOrigin: '0 50%', transformStyle: 'preserve-3d', transform: leaf.transform, willChange: 'transform' }}>
-          {leaf.curl
-            ? <CurledLeaf leaf={leaf} W={v.W} H={v.H} />
-            : <><FrontFace leaf={leaf} onClick={leaf.openFront} /><BackFace leaf={leaf} onClick={leaf.openBack} /></>}
+          {/* Curl strips stay built for the leaves that may turn next and are only shown mid-turn (building them on the
+              first frame of a turn made it hitch); the flat faces show the rest of the time. */}
+          {(leaf.curlable || leaf.curl) && <div style={{ ...fill, transformStyle: 'preserve-3d', visibility: leaf.curl ? 'visible' : 'hidden' }}><CurledLeaf leaf={leaf} W={v.W} H={v.H} /></div>}
+          <FrontFace leaf={leaf} onClick={leaf.openFront} style={leaf.curl ? { visibility: 'hidden' } : undefined} />
+          <BackFace leaf={leaf} onClick={leaf.openBack} style={leaf.curl ? { visibility: 'hidden' } : undefined} />
         </div>
       ))}
     </div>

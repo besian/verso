@@ -759,14 +759,24 @@ export default class App extends Component<object, State> {
     if (n && IS_TOUCH && !this.state.hintDone) { store.saveHints(store.loadHints() + 1); this.setState({ hintDone: true }); }
     this.target = t;
   }
-  /** Eases the page position toward the target. Time-based, so a turn takes the same time on a slow phone (fewer frames) as on a fast screen. */
+  /** Where the book last came to rest, while it's moving (see bookVals). */
+  rest = 0; tweenAt = 0;
+  /** Being dragged, or animating (a tween that's been cancelled stops counting after a moment). */
+  get moving() { return !!this.drag || performance.now() - this.tweenAt < 120; }
+  startMoving() { if (!this.moving) this.rest = Math.round(this.state.p); }
+  /**
+   * Moves the page position to the target over a fixed time (longer for several pages at once), easing out so it
+   * lands softly; each leaf eases in and out on top of that (see bookVals). Time-based, so a turn takes the same time
+   * on a slow phone (fewer frames) as on a fast screen.
+   */
   animate(onDone?: () => void) {
-    cancelAnimationFrame(this.raf);
-    let last = performance.now();
+    cancelAnimationFrame(this.raf); this.startMoving(); this.tweenAt = performance.now();
+    const from = this.state.p, dist = Math.abs(this.target - from);
+    const dur = Math.max(200, Math.min(900, 430 * Math.sqrt(dist))); let t0 = 0;
     const step = (now: number) => {
-      const p = this.state.p, d = this.target - p, dt = Math.min(64, now - last); last = now;
-      if (Math.abs(d) < 0.002) { this.setState({ p: this.target }); onDone?.(); return; }
-      this.setState({ p: p + d * (1 - Math.pow(1 - 0.16, dt / 16.7)) }); this.raf = requestAnimationFrame(step);
+      t0 = t0 || now; const to = this.target, k = Math.min(1, (now - t0) / dur), e = 1 - (1 - k) * (1 - k);
+      if (k >= 1 || dist < 0.002) { this.tweenAt = 0; this.setState({ p: to }); onDone?.(); return; }
+      this.tweenAt = now; this.setState({ p: from + (to - from) * e }); this.raf = requestAnimationFrame(step);
     };
     this.raf = requestAnimationFrame(step);
   }
@@ -1550,7 +1560,11 @@ export default class App extends Component<object, State> {
 
     // Only the leaves near the open spread are drawn: the rest lie flat under them, out of sight, and drawing every
     // page of a long book (two full-size photos each) is what made opening and turning slow on phones.
-    const lo = Math.max(0, Math.floor(p) - LEAF_WINDOW), hi = Math.min(N - 1, Math.ceil(p) + LEAF_WINDOW);
+    // Everything below is decided around the spread the book last rested on (rest) as well as where it is now, so a
+    // turn doesn't add leaves, swap in sharper photos or build its curl strips on its first frame (which made each
+    // turn start with a hitch); those changes happen once the book settles.
+    const rest = this.moving ? this.rest : Math.round(p), fp = Math.floor(p), cp = Math.ceil(p);
+    const lo = Math.max(0, Math.min(rest - LEAF_WINDOW, fp - 2)), hi = Math.min(N - 1, Math.max(rest + LEAF_WINDOW, cp + 2));
     this.prefetchPages(lo, hi);
     const leaves = Array.from({ length: hi - lo + 1 }, (_, j) => {
       const i = lo + j, x = p - i, t = clamp01(x);
@@ -1561,7 +1575,7 @@ export default class App extends Component<object, State> {
       const rad = -a * Math.PI / 180;
       // Leaves out of sight (under the open spread, waiting to be turned to) use the small copy of each photo;
       // the spread and the leaf turning use the full one. Less to decode and hold in memory on phones.
-      const small = i < Math.floor(p) - 1 || i > Math.ceil(p) + 1, F = this.face(i, 0, W, small), B = this.face(i, 1, W, small);
+      const small = i < Math.min(rest - 2, fp - 1) || i > Math.max(rest + 2, cp + 1), F = this.face(i, 0, W, small), B = this.face(i, 1, W, small);
       // Mid-turn the page bends: the outer edge trails behind the turn, most at halfway.
       // Paper turn: the outer edge leads as the page lifts, then the curl relaxes as it lands.
       // Capped so the tip never swings past the pages lying on either side.
@@ -1570,6 +1584,8 @@ export default class App extends Component<object, State> {
       const curlTotal = Math.min(CURL_DEG * curlAmt, forward ? 178 + a : -a - 2);
       return {
         curl: curlAmt && curlTotal > 0.5 ? (forward ? -1 : 1) * curlTotal : 0, curlAmt: Math.min(1, curlAmt),
+        // The leaves either side of the resting spread keep their curl strips built (hidden) so a turn can start at once.
+        curlable: i >= Math.min(rest - 1, fp) && i <= Math.max(rest, fp),
         wearF: F.wear, wearB: B.wear, overlayF: F.wear?.overlay || (F.inside ? COVER_INSIDE : ''), overlayB: B.wear?.overlay || (B.inside ? COVER_INSIDE : ''),
         key: i, label: book.name, isCover: i === 0 && !book.coverImg, isCoverAny: i === 0, isBackCover: i === N - 1,
         transform: `rotateY(${a}deg) translateZ(${((N - i) * 0.5).toFixed(2)}px)`, frontBg: F.bg, backBg: B.bg,
@@ -1786,7 +1802,7 @@ export default class App extends Component<object, State> {
           if (this.drag) { this.drag = null; this.animate(); }
           return;
         }
-        this.drag = { x: e.clientX, p0: s.p, id: e.pointerId }; this.moved = false; cancelAnimationFrame(this.raf);
+        this.startMoving(); this.drag = { x: e.clientX, p0: s.p, id: e.pointerId }; this.moved = false; cancelAnimationFrame(this.raf);
       },
       onMove: (e: PointerEvent<HTMLDivElement>) => {
         if (this.stPts.has(e.pointerId)) this.stPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
