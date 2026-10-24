@@ -14,6 +14,8 @@ import { ADJUSTERS, NO_ADJUST, applyToCanvas, feValues, isAdjusted } from './adj
 import type { Adjust } from './adjust';
 import { LINE_H, drawTexts, inkPng, readInk, textFromInk, wrapLines } from './handwriting';
 import type { PageText, Stroke } from './handwriting';
+import { RULED, paperUrl } from './paper';
+import type { Paper } from './paper';
 import type { Wear } from './wear';
 import { INK, MARK, PAPER, STONE } from './theme';
 import Stage from './views/Stage';
@@ -38,6 +40,8 @@ interface EditState {
   adj: Adjust; mode: EdMode;
   /** Write mode: handwriting not yet converted, the typed text placed on the page, and the one being edited. */
   ink: Stroke[]; texts: PageText[]; sel: string | null; inkBusy?: boolean; inkErr?: string;
+  /** Set for a blank page, so typed text can sit on lined paper's rules. */
+  paper?: Paper;
 }
 type EdMode = 'fit' | 'adjust' | 'write';
 
@@ -682,6 +686,11 @@ export default class App extends Component<object, State> {
     Promise.all(list.map(f => new Promise<string>(r => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(f); })))
       .then(urls => { if (urls.length) this.startEdit(urls, null); });
   }
+  /** A new blank page (plain, lined, grid or dotted), opened straight in Write mode. */
+  addBlank(paper: Paper) {
+    if (this.state.other || (this.state.mode || 'home') !== 'mine') return;
+    this.startEdit([paperUrl(paper, this.aspect())], null, undefined, 'write'); this.setEd({ paper });
+  }
   /** Data URLs are converted to blob URLs once so CSS backgrounds don't carry megabytes of inline data. */
   blobUrl(d: string) {
     if (!d) return d; let u = this.blobs.get(d); if (u) return u;
@@ -897,6 +906,11 @@ export default class App extends Component<object, State> {
     this.setEd({ inkBusy: true, inkErr: '' });
     try {
       const text = await readInk(inkPng(ink, fw, fh), await api.idToken()), t = textFromInk(ink, text);
+      // On untouched lined paper, size the text to the ruling and sit it on the nearest line.
+      if (e.paper === 'lined' && e.scale === 1 && !e.tx && !e.ty && !e.rot) {
+        const { step, top } = RULED, n = Math.max(0, Math.round((t.y + step * 0.8 - top) / step));
+        Object.assign(t, { size: step / LINE_H, y: top + n * step - step * 0.8 });
+      }
       this.setState(s => s.edit ? { edit: { ...s.edit, inkBusy: false, ink: s.edit.ink.slice(ink.length), texts: [...s.edit.texts, t], sel: t.id } } : null);
     } catch (err) { this.setEd({ inkBusy: false, inkErr: (err as Error).message }); }
   }
@@ -1376,7 +1390,7 @@ export default class App extends Component<object, State> {
     return {
       editing: true, fw: fr.fw, fh: fr.fh, bw: bs.bw, bh: bs.bh, edBg: `url("${this.blobUrl(ed.queue[ed.i])}") center/100% 100% no-repeat`,
       edTransform: `translate(${ed.tx}px, ${ed.ty}px) rotate(${ed.rot}deg) scale(${ed.scale}) skew(${ed.skx}deg, ${ed.sky}deg)`,
-      edTitle: ed.target === 'cover' ? 'Cover image' : ed.replaceIdx != null ? `Edit page ${ed.replaceIdx + 1}` : `Image ${ed.i + 1} of ${ed.queue.length}`,
+      edTitle: ed.paper ? `${ed.paper[0].toUpperCase()}${ed.paper.slice(1)} page` : ed.target === 'cover' ? 'Cover image' : ed.replaceIdx != null ? `Edit page ${ed.replaceIdx + 1}` : `Image ${ed.i + 1} of ${ed.queue.length}`,
       scale: ed.scale, rot: ed.rot, skx: ed.skx, sky: ed.sky,
       scaleLbl: `${Math.round(ed.scale * 100)}%`, rotLbl: `${ed.rot}°`, skxLbl: `${ed.skx}°`, skyLbl: `${ed.sky}°`,
       onScale: num('scale'), onRot: num('rot'), onSkx: num('skx'), onSky: num('sky'),
@@ -1702,7 +1716,7 @@ export default class App extends Component<object, State> {
         if (!foc || focusMode !== 'auto-hide') return; if (this.state.ctrlShow === false) this.setState({ ctrlShow: true });
         clearTimeout(this.wakeT); this.wakeT = setTimeout(() => this.state.focus && this.setState({ ctrlShow: false }), 1800);
       },
-      pick: () => this.fileRef.current?.click(), pickCamera: () => this.camRef.current?.click(),
+      pick: () => this.fileRef.current?.click(), pickCamera: () => this.camRef.current?.click(), addBlank: (k: Paper) => this.addBlank(k),
       onFiles: (e: ChangeEvent<HTMLInputElement>) => { if (e.target.files) this.addFiles(e.target.files); e.target.value = ''; },
       onDragOver: (e: DragEvent) => e.preventDefault(),
       onDrop: (e: DragEvent) => { e.preventDefault(); this.addFiles(e.dataTransfer.files); },

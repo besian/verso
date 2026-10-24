@@ -3,6 +3,7 @@ import type { V } from '../App';
 import { focus, hover, wheelSideways } from '../pseudo';
 import { INK, MARK, MUTED, PAPER, SANS, SERIF, pagePad } from '../theme';
 import { TEXT_FONT, TEXT_INK } from '../handwriting';
+import { PAPERS, PAPER_PREVIEW } from '../paper';
 
 const field: CSSProperties = { height: 44, padding: '0 14px', borderRadius: 2, border: '1.5px solid rgba(var(--ink-rgb),.14)', background: 'rgba(var(--ink-rgb),.06)', color: INK, font: `500 14px ${SANS}`, outline: 'none', width: '100%', boxSizing: 'border-box' };
 const fieldLabel: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'rgba(var(--ink-rgb),.75)' };
@@ -185,6 +186,17 @@ export function Manager({ v }: { v: V }) {
                   <span style={{ fontSize: 28, fontWeight: 300, lineHeight: 1 }}>+</span>Add pages
                   <span style={{ fontSize: 12, fontWeight: 400, color: 'rgba(var(--ink-rgb),.55)' }}>or drop images</span>
                 </button>}
+                {/* A blank page to write or draw on. */}
+                <div style={{ aspectRatio: v.pgAspect, borderRadius: '2px 8px 8px 2px', border: '2px dashed rgba(var(--ink-rgb),.3)', display: 'flex', flexDirection: 'column', gap: 8, padding: 10, boxSizing: 'border-box', justifyContent: 'center' }}>
+                  <span style={{ textAlign: 'center', font: `500 13px ${SANS}`, color: 'rgba(var(--ink-rgb),.7)' }}>Blank page</span>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                    {PAPERS.map(([k, l]) => (
+                      <button key={k} onClick={() => v.addBlank(k)} title={`${l} page`} className={hover(`border-color:${INK}`)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 3, padding: 3, border: '1px solid rgba(var(--ink-rgb),.2)', borderRadius: 2, background: 'none', color: INK, font: `500 11px ${SANS}`, cursor: 'pointer' }}>
+                        <span style={{ height: 26, background: PAPER_PREVIEW[k], borderRadius: 1 }} />{l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </>
           )}

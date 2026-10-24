@@ -32,7 +32,9 @@ export async function drawTexts(ctx: CanvasRenderingContext2D, texts: PageText[]
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = TEXT_INK; ctx.textBaseline = 'top';
   for (const t of texts) {
     const px = t.size * H; ctx.font = `${px}px ${TEXT_FONT}`;
-    wrapLines(t.text, t.w * W, px).forEach((l, i) => ctx.fillText(l, t.x * W, t.y * H + i * px * LINE_H));
+    // Same half-leading as CSS line-height, so the saved page matches the preview.
+    const lh = px * LINE_H, lead = (lh - px) / 2;
+    wrapLines(t.text, t.w * W, px).forEach((l, i) => ctx.fillText(l, t.x * W, t.y * H + lead + i * lh));
   }
   ctx.restore();
 }
