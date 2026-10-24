@@ -61,7 +61,7 @@ function Privacy() {
         <P>Data is stored with Google Firebase (Authentication, Cloud Firestore and Cloud Storage), and the site is served by Vercel. Account emails (confirming your address, resetting your password) are sent through Resend, which receives your email address for that purpose; replies to them reach our inbox on Google Workspace. When you use Write to convert handwriting, an image of just that handwriting is sent to Anthropic’s Claude to read it; it isn’t used to train their models. These services may store data outside the UK, including in the United States, under their own terms, privacy policies and data protection safeguards. We don’t sell your data or use it for advertising.</P>
       </Sec>
       <Sec title="How long we keep it">
-        <P>For as long as you have an account. When you delete your account, your profile, handle, follows, saved list, notifications and every sketchbook with its images are removed straight away (copies in our providers’ backups expire within about 30 days). Reports are kept until they’re dealt with.</P>
+        <P>For as long as you have an account. When you delete your account, your profile, handle, follows, saved list, notifications and every sketchbook with its images are removed straight away; any copies our providers keep for a short time are deleted under their own retention rules. Reports are kept until they’re dealt with.</P>
       </Sec>
       <Sec title="Your choices and rights">
         <Ul items={[
