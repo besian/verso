@@ -61,7 +61,11 @@ export interface OtherBook {
   color: string; images: string[]; pages: number; initials: string; coverImg?: string | null;
   ownerId?: string; handle?: string; updatedAt?: number; thumbs?: Record<string, string>;
   notes?: Record<string, PageNote>; mediums?: string[]; tags?: string[];
+  /** Set for sketchbooks in From the archive: the historical artist and where the pages come from. */
+  arch?: ArchiveEntry;
 }
+/** A historical, public-domain sketchbook featured on Explore (archive/{bookId}). */
+export interface ArchiveEntry { bookId: string; artist: string; years: string; source: string; url: string; note: string; at: number }
 
 /** Cover width (% of its grid cell) per shape, so books in a row read as a shelf. */
 export const GRID_WIDTH: Record<ShapeKey, number> = { pocket: 64, portrait: 78, square: 88, landscape: 100, panorama: 100 };

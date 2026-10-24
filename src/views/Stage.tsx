@@ -141,7 +141,9 @@ function Title({ v }: { v: V }) {
       <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', minWidth: 0, opacity: v.titleOp }}>
         <div style={{ fontSize: v.mTitleSize, fontFamily: SERIF, fontWeight: 400, letterSpacing: '-.01em', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.titleName}</div>
         <div style={label()}>
-          {v.isOther
+          {v.isOther && v.bkArch
+            ? <>by {v.artist}{v.bkArch.years ? ` · ${v.bkArch.years}` : ''} · {v.otherPages} pages</>
+            : v.isOther
             ? <>by <button onClick={v.openArtist} title="View profile" className={'tap ' + hover(`color:${MARK};border-color:${MARK}`)} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: INK, cursor: 'pointer' }}>{v.artist}</button> · {v.otherPages} pages</>
             : v.bookMeta}
         </div>
@@ -151,16 +153,26 @@ function Title({ v }: { v: V }) {
             {v.bkTags.map((t: V) => <button key={t.key} onClick={t.open} className={'tap ' + hover(`color:${MARK}`)} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>{t.label}</button>)}
           </div>
         )}
+        {v.bkArch && (
+          // From the archive: where the pages come from, and a few words about the sketchbook.
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, maxWidth: 520 }}>
+            {v.bkArch.url ? <a href={v.bkArch.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: MARK, textDecoration: 'none' }}>{v.bkArch.source} ↗</a> : <span style={{ fontSize: 12, color: STONE }}>{v.bkArch.source}</span>}
+            {v.notMob && v.bkArch.note && <span style={{ fontSize: 13, lineHeight: 1.45, color: 'rgba(var(--ink-rgb),.7)', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden' } as CSSProperties}>{v.bkArch.note}</span>}
+          </div>
+        )}
         {(v.isOther || (v.isMine && v.bkCanShare)) && (
           // Like, save and share as icons side by side; embed, report and the rest under ⋯.
           <div style={{ display: 'flex', gap: v.notMob ? 14 : 18, alignItems: 'center', marginTop: v.notMob ? 2 : 6, ...label(INK, v.notMob ? 10 : 11) }}>
-            {v.isOther
+            {v.bkArch && v.isOther ? null : v.isOther
               ? <button onClick={v.bkLike} aria-pressed={v.bkLiked} title={v.bkLiked ? 'Unlike' : 'Like'} aria-label={`${v.bkLiked ? 'Unlike' : 'Like'}, ${v.bkLikes} likes`} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct, color: v.bkLiked ? MARK : INK }}><Icon d={HEART} fill={v.bkLiked} />{v.bkLikes}</button>
               : <span title="Likes" style={iconAct}><Icon d={HEART} />{v.bkLikes}</span>}
             {v.isOther && <button onClick={v.bkSave} aria-pressed={v.bkSaved} title={v.bkSaved ? 'Saved' : 'Save'} aria-label={v.bkSaved ? 'Saved' : 'Save'} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct, color: v.bkSaved ? MARK : INK }}><Icon d={BOOKMARK} fill={v.bkSaved} /></button>}
             <button onClick={v.bkShare} title="Share" aria-label="Share" className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct }}><Icon d={SHARE} /></button>
-            <MoreMenu open={v.bkMoreOpen} onToggle={v.bkMore} items={[{ label: 'Embed on a website', onClick: v.bkEmbed },
-              ...(v.isOther ? [...(v.bkIsAdmin ? [{ label: v.bkPickLbl, onClick: v.bkPick }] : []), { label: 'Report sketchbook', onClick: v.bkReport }, { label: v.bkBlockLbl, onClick: v.bkBlock, danger: true }] : [])]} />
+            <MoreMenu open={v.bkMoreOpen} onToggle={v.bkMore} items={[
+              ...(v.bkArch?.url ? [{ label: `View at the source ↗`, onClick: () => window.open(v.bkArch.url, '_blank', 'noopener') }] : []),
+              { label: 'Embed on a website', onClick: v.bkEmbed },
+              ...(v.bkIsAdmin ? [{ label: v.bkArchLbl, onClick: v.bkArchEdit }] : []),
+              ...(v.isOther ? [...(v.bkIsAdmin ? [{ label: v.bkPickLbl, onClick: v.bkPick }] : []), ...(v.bkArch ? [] : [{ label: 'Report sketchbook', onClick: v.bkReport }, { label: v.bkBlockLbl, onClick: v.bkBlock, danger: true }])] : [])]} />
           </div>
         )}
       </div>

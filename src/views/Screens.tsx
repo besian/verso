@@ -123,6 +123,29 @@ export function Explore({ v }: { v: V }) {
           {v.exTag && <button onClick={v.clearLabel} title="Clear tag" style={{ ...chipStyle(true), background: MARK, borderColor: MARK }}>{v.exTag} ×</button>}
           {v.exMediums.map((m: V) => <button key={m.key} onClick={m.pick} aria-pressed={m.on} className={m.on ? undefined : hover('border-color:rgba(var(--ink-rgb),.6)')} style={chipStyle(m.on && !v.exTag)}>{m.label}</button>)}
         </div>
+        {v.exArchive?.length > 0 && (
+          // From the archive: historical sketchbooks, a row you can scroll sideways.
+          <section style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 22, borderBottom: '1px solid rgba(var(--ink-rgb),.2)' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ ...serif(v.notMob ? 30 : 26, 1, '-.01em') }}>From the <em>archive</em></span>
+              <span style={{ fontSize: 13, color: MUTED }}>Sketchbooks of the old masters, page by page.</span>
+            </div>
+            <div onWheel={wheelSideways} style={{ display: 'flex', gap: v.notMob ? 28 : 18, alignItems: 'flex-end', overflowX: 'auto', margin: `0 -${v.exPadX}px`, padding: `6px ${v.exPadX}px 4px`, scrollbarWidth: 'none' } as CSSProperties}>
+              {v.exArchive.map((b: V) => {
+                const h = v.notMob ? 170 : 130, w = Math.round(h * b.a);
+                return (
+                  <button key={b.key} onClick={b.open} className={hover('transform:translateY(-4px)')} style={{ flexShrink: 0, width: Math.max(w + 7, 120), display: 'flex', flexDirection: 'column', gap: 10, padding: 0, border: 'none', background: 'none', color: INK, textAlign: 'left', cursor: 'pointer', transition: 'transform .3s cubic-bezier(.2,.8,.2,1)' }}>
+                    <span style={{ position: 'relative', width: w, height: h, display: 'block' }}><ClosedBook bg={b.bg} board={b.color} label={b.showLabel ? b.name : null} /></span>
+                    <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, width: '100%' }}>
+                      <span style={{ ...serif(18, 1.15, 'normal'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.artist}</span>
+                      <span style={{ fontSize: 12, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{[b.years, b.name].filter(Boolean).join(' · ')}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
         {v.exPeople?.length > 0 && (
           <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <span style={label()}>Artists</span>

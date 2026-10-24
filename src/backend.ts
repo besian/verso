@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import type { DocumentData, QueryConstraint, QueryDocumentSnapshot } from 'firebase/firestore';
 import { connectStorageEmulator, deleteObject, getStorage, listAll, ref, uploadBytes } from 'firebase/storage';
-import type { Account, Book, Member, PageNote, ShapeKey } from './data';
+import type { Account, ArchiveEntry, Book, Member, PageNote, ShapeKey } from './data';
 import { mediumKey } from './data';
 
 const env = import.meta.env;
@@ -585,6 +585,22 @@ export async function getPick(): Promise<{ bookId: string; at: number } | null> 
   if (!db) return null;
   try { const s = await getDoc(doc(db, 'picks', 'current')); return s.exists() && s.data().bookId ? { bookId: s.data().bookId, at: s.data().at || 0 } : null; } catch { return null; }
 }
+/** From the archive: the featured historical sketchbooks, oldest added first. */
+export async function listArchive(): Promise<{ e: ArchiveEntry; d: BookDoc }[]> {
+  if (!db) return [];
+  try {
+    const s = await getDocs(collection(db, 'archive'));
+    const es = s.docs.map(x => ({ bookId: x.id, artist: '', years: '', source: '', url: '', note: '', at: 0, ...x.data() }) as ArchiveEntry).sort((a, b) => a.at - b.at);
+    const ds = await Promise.all(es.map(e => getBook(e.bookId).catch(() => null)));
+    return es.flatMap((e, i) => { const d = ds[i]; return d && d.pageCount > 0 ? [{ e, d }] : []; });
+  } catch (e) { console.warn('archive', e); return []; }
+}
+export async function setArchive(by: string, bookId: string, e: Omit<ArchiveEntry, 'bookId' | 'at'> | null, at?: number) {
+  const r = doc(need().db, 'archive', bookId);
+  if (!e) return deleteDoc(r);
+  await setDoc(r, { artist: e.artist.slice(0, 80), years: e.years.slice(0, 40), source: e.source.slice(0, 80), url: e.url.slice(0, 300), note: e.note.slice(0, 600), by, at: at || Date.now() });
+}
+
 export async function setPick(by: string, bookId: string | null) {
   const r = doc(need().db, 'picks', 'current');
   if (bookId) await setDoc(r, { bookId, by, at: Date.now() }); else await deleteDoc(r);

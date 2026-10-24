@@ -691,6 +691,36 @@ export function Welcome({ v }: { v: V }) {
 }
 
 /** Name a new collection (and optionally move a saved sketchbook into it). */
+/** Moderators: put one of your sketchbooks in From the archive, credited to the historical artist and its source. */
+export function ArchiveModal({ v }: { v: V }) {
+  const f = v.arF;
+  return (
+    <Modal onClose={e => { if (e.target === e.currentTarget) v.arClose(); }} pad={v.mModalPad} maxWidth={480}>
+      <form onSubmit={v.arSave} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={heading}>{v.arExists ? 'Archive details' : 'Add to the archive'}</div>
+          <div style={{ fontSize: 14, lineHeight: 1.5, color: 'rgba(var(--ink-rgb),.7)' }}>Only for public-domain work (the artist died over 70 years ago) with images the source lets anyone reuse, such as the Met, Art Institute of Chicago, Rijksmuseum or National Gallery of Art open-access collections.</div>
+        </div>
+        <TextField label="Artist" value={f.artist} onChange={v.arSet('artist')} placeholder="Rembrandt van Rijn" autoFocus />
+        <TextField label="Years" value={f.years} onChange={v.arSet('years')} placeholder="c. 1635–1640" />
+        <TextField label="Source (museum or library)" value={f.source} onChange={v.arSet('source')} placeholder="Rijksmuseum, Amsterdam · public domain" />
+        <TextField label="Link to the source" value={f.url} onChange={v.arSet('url')} placeholder="https://…" type="url" />
+        <label style={fieldLabel}>A few words about it
+          <textarea value={f.note} onChange={v.arSet('note')} maxLength={600} rows={3} placeholder="Where it was made, what it shows, why it matters." className={focusMark} style={{ ...field, height: 'auto', padding: '10px 14px', resize: 'vertical', font: `400 14px/1.45 ${SANS}` }} />
+        </label>
+        <Notice err={v.arErr} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+          {v.arExists ? <button type="button" onClick={v.arRemove} disabled={v.arBusy} style={{ ...linkBtn(MARK), height: 44 }}>Remove from archive</button> : <span />}
+          <span style={{ display: 'flex', gap: 10 }}>
+            <button type="button" onClick={v.arClose} className={hoverTint} style={{ ...ghostBtn, height: 44, padding: '0 18px', fontSize: 14 }}>Cancel</button>
+            <button type="submit" disabled={v.arBusy} style={{ height: 44, padding: '0 22px', borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer', opacity: v.arBusy ? 0.6 : 1 }}>{v.arBusy ? 'Saving…' : 'Save'}</button>
+          </span>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 export function CollectionModal({ v }: { v: V }) {
   return (
     <Modal onClose={e => { if (e.target === e.currentTarget) v.cnClose(); }} pad={v.mModalPad} maxWidth={420}>

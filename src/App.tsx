@@ -1,7 +1,7 @@
 import { Component, createRef } from 'react';
 import type { ChangeEvent, DragEvent, MouseEvent, PointerEvent, WheelEvent } from 'react';
 import { CONFIG, GRID_WIDTH, MAX_MEDIUMS, MAX_TAGS, MEDIUMS, PALETTE, SHAPES, mediumKey, tagSlug } from './data';
-import type { Account, Book, OtherBook, PageNote, Shape, ShapeKey } from './data';
+import type { Account, ArchiveEntry, Book, OtherBook, PageNote, Shape, ShapeKey } from './data';
 import * as api from './backend';
 import type { AuthUser, BookDoc, Chat, Msg, Notif, Person, Report, Saved } from './backend';
 import * as store from './storage';
@@ -25,7 +25,7 @@ import Stage from './views/Stage';
 import { AuthPage, Explore, HomeScreen, Profile, Settings } from './views/Screens';
 import { Admin, AuthAction, Legal, NotFound } from './views/Pages';
 import { Messages } from './views/Messages';
-import { CollectionModal, Editor, EditProfile, EmbedModal, Manager, NewBookPicker, ReportModal, Toast, Welcome } from './views/Overlays';
+import { ArchiveModal, CollectionModal, Editor, EditProfile, EmbedModal, Manager, NewBookPicker, ReportModal, Toast, Welcome } from './views/Overlays';
 
 export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound' | 'action' | 'messages';
 /** A report with what it points at, for the moderation page. */
@@ -74,6 +74,8 @@ interface State {
   focus?: boolean; fz?: number; fside?: 'L' | 'R'; fsx?: number; ctrlShow?: boolean; menuOpen?: boolean;
   edit?: EditState | null; edTool?: string; edAdjTool?: string; edPeek?: boolean;
   /** Messages: your conversations, the open one (or a new one with chatNew), its messages and the reply being written. */
+  /** From the archive (Explore), and the moderator's add/edit form for it. */
+  archive?: OtherBook[]; archForm?: (Omit<ArchiveEntry, 'at'> & { at?: number; busy?: boolean; err?: string }) | null;
   chats?: Chat[]; chatOpen?: string | null; chatNew?: Person | null; msgs?: Msg[]; msgDraft?: string; msgTab?: 'chats' | 'requests'; msgBusy?: boolean; msgErr?: string;
   newPick?: boolean; pickShape?: ShapeKey;
   /** Sign-in page: which form, and the screen to return to. */
@@ -199,7 +201,7 @@ export default class App extends Component<object, State> {
     this.unAuth = api.watchAuth(u => { if (!this.signingUp) this.loadUser(u); });
     this.loadCommunity();
     api.bannedUsers().then(banned => this.setState({ banned }));
-    this.loadPick();
+    this.loadPick(); this.loadArchive();
   }
   /** Loads (or clears) everything that belongs to the signed-in user. */
   async loadUser(u: AuthUser | null, acct?: Account) {
@@ -273,6 +275,24 @@ export default class App extends Component<object, State> {
   loadPick() {
     api.getPick().then(p => p ? api.getBook(p.bookId) : null).then(d => this.setState({ pick: d && d.pageCount > 0 ? toOther(d, 0) : null })).catch(() => this.setState({ pick: null }));
   }
+  loadArchive() {
+    api.listArchive().then(list => this.setState({ archive: list.map(({ e, d }, i) => ({ ...toOther(d, i), artist: e.artist, arch: e })) })).catch(() => this.setState({ archive: [] }));
+  }
+  /** Moderators: open the form to add a sketchbook to (or edit it in) From the archive. */
+  openArchForm(bookId: string) {
+    const e = (this.state.archive || []).find(b => b.id === bookId)?.arch;
+    this.setState({ more: null, archForm: e ? { ...e } : { bookId, artist: '', years: '', source: '', url: '', note: '' } });
+  }
+  async saveArchForm(remove = false) {
+    const f = this.state.archForm, a = this.state.acct; if (!f || !a) return;
+    if (!remove && (!f.artist.trim() || !f.source.trim())) return this.setState({ archForm: { ...f, err: 'Add the artist and where the pages come from.' } });
+    if (!remove && f.url && !/^https?:\/\//.test(f.url.trim())) return this.setState({ archForm: { ...f, err: 'The link should start with https://' } });
+    this.setState({ archForm: { ...f, busy: true, err: '' } });
+    try {
+      await api.setArchive(a.uid, f.bookId, remove ? null : { artist: f.artist.trim(), years: f.years.trim(), source: f.source.trim(), url: f.url.trim(), note: f.note.trim() }, f.at);
+      this.setState({ archForm: null }); this.toast(remove ? 'Removed from the archive' : 'Saved to From the archive'); this.loadArchive();
+    } catch (e) { console.error(e); this.setState({ archForm: { ...f, busy: false, err: 'Couldn’t save. Only moderators can change the archive.' } }); }
+  }
   togglePick(b: OtherBook) {
     const a = this.state.acct; if (!a || !this.state.admin) return;
     const on = this.state.pick?.id !== b.id;
@@ -294,7 +314,7 @@ export default class App extends Component<object, State> {
   }
   openLabel(lbl: string) { this.goMode('explore'); this.setState({ exQ: '' }); this.setLabel(lbl); }
   /** Community books, minus anyone you've blocked or who's suspended. */
-  community(list = this.state.community): OtherBook[] { const bl = [...(this.state.blocked || []), ...(this.state.banned || [])]; return (list || []).filter(b => !b.ownerId || !bl.includes(b.ownerId)); }
+  community(list = this.state.community): OtherBook[] { const bl = [...(this.state.blocked || []), ...(this.state.banned || [])], ar = new Set((this.state.archive || []).map(b => b.id)); return (list || []).filter(b => (!b.ownerId || !bl.includes(b.ownerId)) && !ar.has(b.id)); }
   loadFollowFeed() {
     const s = this.state, ids = (s.follows || []).filter(id => !(s.blocked || []).includes(id));
     if (!s.acct || !ids.length) return this.setState({ followFeed: [] });
@@ -465,7 +485,7 @@ export default class App extends Component<object, State> {
       case 'admin': return '/admin';
       case 'notfound': case 'action': return here;
       case 'mine': { const b = s.books[s.active]; return s.acct && b && !b.id.startsWith('local') ? '/sketchbooks/' + b.id : '/sketchbooks'; }
-      case 'other': { const o = s.other as OtherBook | null; if (s.embed && o) return '/embed/' + o.id; return o?.handle ? `/@${o.handle}/${o.id}` : here; }
+      case 'other': { const o = s.other as OtherBook | null; if (s.embed && o) return '/embed/' + o.id; if (o?.arch) return '/archive/' + o.id; return o?.handle ? `/@${o.handle}/${o.id}` : here; }
       case 'profile': {
         if (!s.profileOf) return s.acct ? '/@' + s.acct.handle : '/';
         const h = (s.pf?.uid === s.profileOf.uid && s.pf?.profile?.handle) || s.profileOf.handle;
@@ -501,6 +521,11 @@ export default class App extends Component<object, State> {
         const d = await api.getBook(b);
         if (!d) return this.notFound('sketchbook');
         this.setState({ embed: true }); return this.openOtherBook(toOther(d, 0));
+      }
+      if (a === 'archive' && b) {
+        const list = await api.listArchive(), hit = list.find(x => x.e.bookId === b);
+        if (!hit) return this.notFound('sketchbook');
+        return this.openOtherBook({ ...toOther(hit.d, 0), artist: hit.e.artist, arch: hit.e });
       }
       if (a === 'admin') return s.acct ? this.openAdmin() : this.openAuth('signin');
       if (a === 'signin' || a === 'join' || a === 'reset') { if (s.acct) return this.goMode('mine'); this.openAuth(a === 'join' ? 'join' : 'signin'); if (a === 'reset') this.setState({ suMode: 'reset' }); return; }
@@ -1230,6 +1255,9 @@ export default class App extends Component<object, State> {
         };
       })(),
       // New collection dialog.
+      arOpen: !!s.archForm, arF: s.archForm || null, arBusy: !!s.archForm?.busy, arErr: s.archForm?.err || '', arExists: !!s.archForm?.at,
+      arSet: (k: 'artist' | 'years' | 'source' | 'url' | 'note') => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => { const val = e.target.value; this.setState(st => st.archForm ? { archForm: { ...st.archForm, [k]: val, err: '' } } : null); },
+      arSave: (e?: { preventDefault(): void }) => { e?.preventDefault(); this.saveArchForm(); }, arRemove: () => this.saveArchForm(true), arClose: () => this.setState({ archForm: null }),
       cnOpen: !!s.colNew, cnName: s.colNew?.name || '', cnMoving: !!s.colNew?.forId,
       onCnName: (e: ChangeEvent<HTMLInputElement>) => { const name = e.target.value.slice(0, 40); this.setState(st => ({ colNew: { ...st.colNew!, name } })); },
       cnClose: () => this.setState({ colNew: null }),
@@ -1413,7 +1441,10 @@ export default class App extends Component<object, State> {
       stDown0: (e: PointerEvent) => { this.stY = e.clientY; },
       stUp0: (e: PointerEvent) => { if (this.stY == null) return; const dy = e.clientY - this.stY; this.stY = null; if (Math.abs(dy) > 40) this.stackStep(dy < 0 ? 1 : -1); },
       exLoading: !s.community || (!!s.exLabel && !s.exLabelBooks), exEmpty: !s.exLabel && !!s.community && !s.community.length,
-      exNoneLbl: s.exLabel ? (s.exLabel.startsWith('m:') ? `No ${MEDIUMS.find(m => 'm:' + mediumKey(m) === s.exLabel) || 'sketchbooks'} sketchbooks yet` : `Nothing tagged #${s.exLabel.slice(2)} yet`) + (s.exQ ? ` matching “${s.exQ}”` : '') : `No sketchbooks match “${s.exQ}”`,
+      exNoneLbl: s.exLabel ? (s.exLabel.startsWith('m:') ? `No ${MEDIUMS.find(m => 'm:' + mediumKey(m) === s.exLabel) || 'sketchbooks'} sketchbooks yet` : `Nothing tagged #${s.exLabel.slice(2)} yet`) + (s.exQ ? ` matching “${s.exQ}”` : '') : s.exQ ? `No sketchbooks match “${s.exQ}”` : 'No community sketchbooks yet. Be the first to share one.',
+      // From the archive: shown on the main Explore view, not while searching or filtering.
+      exArchive: s.exQ || s.exLabel ? [] : (s.archive || []).map(b => ({ key: b.id, name: b.name, artist: b.artist, years: b.arch?.years || '', color: b.color,
+        bg: this.coverBg(b), showLabel: !b.coverImg, shape: b.shape, a: this.shapeOf(b).a, open: () => this.openOtherBook(b) })),
       exPeople: (() => {
         const q = (s.exQ || '').trim().toLowerCase().replace(/^@/, '');
         if (!q) return [];
@@ -1819,9 +1850,12 @@ export default class App extends Component<object, State> {
           bkSaved: this.isSaved(o?.id), bkSave: () => o && this.toggleSave(o),
           bkLiked: !!(o && s.liked?.[o.id]), bkLike: () => o && this.toggleLike(o),
           bkLikes: (() => { const id = o?.id || (mineB && !mineB.id.startsWith('local') ? mineB.id : ''); return id ? s.counts?.['b:' + id] || 0 : 0; })(),
-          bkShare: () => o ? this.share(`/@${o.handle}/${o.id}`, `${o.name} by ${o.artist}`) : s.acct && mineB && this.share(`/@${mineB.owner?.handle || s.acct.handle}/${mineB.id}`, `${mineB.name} by ${mineB.owner?.name || s.acct.name}`),
+          bkShare: () => o ? this.share(o.arch ? `/archive/${o.id}` : `/@${o.handle}/${o.id}`, `${o.name} by ${o.artist}`) : s.acct && mineB && this.share(`/@${mineB.owner?.handle || s.acct.handle}/${mineB.id}`, `${mineB.name} by ${mineB.owner?.name || s.acct.name}`),
           bkCanShare: !!o || (!!s.acct && mineB?.isPublic !== false && !mineB?.id.startsWith('local')),
           bkMoreOpen: s.more === 'book', bkMore: () => this.setState(st => ({ more: st.more === 'book' ? null : 'book' })),
+          bkArch: o?.arch ? { years: o.arch.years, source: o.arch.source, url: o.arch.url, note: o.arch.note } : (() => { const e = mineB && (s.archive || []).find(b => b.id === mineB.id)?.arch; return s.mode === 'mine' && e ? { years: e.years, source: e.source, url: e.url, note: e.note, own: true } : null; })(),
+          bkArchLbl: (s.archive || []).some(b => b.id === (o?.id || mineB?.id)) ? 'Edit archive details…' : 'Add to the archive…',
+          bkArchEdit: () => { const id = o?.id || (mineB && !mineB.id.startsWith('local') ? mineB.id : ''); if (id) this.openArchForm(id); },
           bkIsAdmin: !!s.admin, bkPickLbl: o && s.pick?.id === o.id ? 'Remove staff pick' : 'Make staff pick', bkPick: () => o && this.togglePick(o),
           bkReport: () => o && this.openReport({ kind: 'book', targetId: o.id, ownerId: o.ownerId || '', label: `“${o.name}”` }),
           bkBlock: () => o?.ownerId && this.toggleBlock(o.ownerId, o.artist), bkBlockLbl: `Block ${o?.artist || ''}`,
@@ -1986,6 +2020,7 @@ export default class App extends Component<object, State> {
         {v.reportOpen && <ReportModal v={v} />}
         {v.emOpen && <EmbedModal v={v} />}
         {v.cnOpen && <CollectionModal v={v} />}
+        {v.arOpen && <ArchiveModal v={v} />}
         {v.toastMsg && <Toast msg={v.toastMsg} />}
         {v.isAuth && <AuthPage v={v} />}
         {v.pfEditing && <EditProfile v={v} />}

@@ -179,6 +179,17 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // From the archive: historical, public-domain sketchbooks moderators feature on Explore, with the artist,
+    // years and source credited (archive/{bookId}). Anyone can read; only moderators add or change them.
+    match /archive/{bookId} {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['artist', 'years', 'source', 'url', 'note', 'by', 'at'])
+        && str(request.resource.data.artist, 80) && str(request.resource.data.years, 40) && str(request.resource.data.source, 80)
+        && str(request.resource.data.url, 300) && str(request.resource.data.note, 600);
+      allow delete: if isAdmin();
+    }
+
     // Staff pick: the sketchbook moderators feature on the home page.
     match /picks/{id} {
       allow read: if true;
