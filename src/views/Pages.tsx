@@ -54,7 +54,7 @@ function Privacy() {
         ]} />
       </Sec>
       <Sec title="Who processes it">
-        <P>Data is stored with Google Firebase (Authentication, Cloud Firestore and Cloud Storage) and the site is served by Vercel. They process data for us under their own terms and privacy policies. We don’t sell your data or use it for advertising.</P>
+        <P>Data is stored with Google Firebase (Authentication, Cloud Firestore and Cloud Storage) and the site is served by Vercel. Account emails (confirming your address, resetting your password) are sent through Resend, which receives your email address for that purpose. When you use Write to convert handwriting, an image of just that handwriting is sent to Anthropic’s Claude to read it; it isn’t used to train their models. These services process data for us under their own terms and privacy policies. We don’t sell your data or use it for advertising.</P>
       </Sec>
       <Sec title="Your choices">
         <Ul items={[
