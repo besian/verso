@@ -1,9 +1,11 @@
+import { useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { V } from '../App';
 import ClosedBook from '../ClosedBook';
 import { hover, wheelSideways } from '../pseudo';
 import { CANVAS, INK, MARK, MUTED, PAGE_EDGES, PAPER, SANS, SERIF, STONE, label, pagePad, serif } from '../theme';
 import { HandleField, MoreMenu, Notice, TextField } from './Overlays';
+import { Popover } from './Popover';
 
 const screen = (overflowY: CSSProperties['overflowY'] = 'auto'): CSSProperties => ({ position: 'absolute', inset: '0 0 var(--tabbar, 0px) 0', zIndex: 4, background: PAPER, overflowX: 'hidden', overflowY });
 const primaryBtn = (h: number, fs: number, px: number): CSSProperties => ({ height: h, padding: `0 ${px}px`, border: 'none', background: INK, color: PAPER, font: `500 ${fs}px ${SANS}`, cursor: 'pointer', transition: 'background .25s' });
@@ -227,25 +229,33 @@ function ShelfBook({ pb, zone }: { pb: V; zone: number }) {
               {pb.cols.map((c: string) => <option key={c} value={c}>{c}</option>)}
               <option value="__new">New collection…</option>
             </select>
-          : <span style={{ position: 'relative', alignSelf: 'flex-start', marginTop: 4 }} onClick={e => e.stopPropagation()}>
-              <button onClick={pb.toggleMenu} aria-haspopup="menu" aria-expanded={pb.menuOpen} className={hover(`border-color:${INK}`)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: 180, height: 30, padding: '0 10px', border: '1px solid rgba(var(--ink-rgb),.2)', borderRadius: 2, background: 'none', color: pb.col ? INK : MUTED, font: `500 12px ${SANS}`, cursor: 'pointer' }}>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pb.col || 'Add to collection'}</span><span aria-hidden="true">▾</span>
-              </button>
-              {pb.menuOpen && (
-                <span role="menu" style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 30, display: 'flex', flexDirection: 'column', minWidth: 200, padding: 6, background: PAPER, border: `1px solid ${INK}`, boxShadow: '0 12px 30px rgba(34,35,32,.14)' }}>
-                  {[['', 'No collection'], ...pb.cols.map((c: string) => [c, c])].map(([c, l]: string[]) => (
-                    <button key={c || '-'} role="menuitemradio" aria-checked={pb.col === c} onClick={() => pb.moveTo(c)} className={hover('background:rgba(var(--ink-rgb),.07)')} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, textAlign: 'left', padding: '9px 10px', border: 'none', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>
-                      <span>{l}</span>{pb.col === c && <span style={{ color: MARK }}>✓</span>}
-                    </button>
-                  ))}
-                  <span style={{ height: 1, margin: '4px 0', background: 'rgba(var(--ink-rgb),.12)' }} />
-                  <button role="menuitem" onClick={() => pb.moveTo('__new')} className={hover('background:rgba(var(--ink-rgb),.07)')} style={{ textAlign: 'left', padding: '9px 10px', border: 'none', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>+ New collection…</button>
-                </span>
-              )}
-            </span>
+          : <CollectionPick pb={pb} />
         )}
       </div>
     </div>
+  );
+}
+
+/** Desktop collection picker: a dropdown that can't be clipped by the card or the bottom of the screen. */
+function CollectionPick({ pb }: { pb: V }) {
+  const anchor = useRef<HTMLSpanElement>(null);
+  return (
+    <span ref={anchor} style={{ position: 'relative', alignSelf: 'flex-start', marginTop: 4 }} onClick={e => e.stopPropagation()}>
+    <button onClick={pb.toggleMenu} aria-haspopup="menu" aria-expanded={pb.menuOpen} className={hover(`border-color:${INK}`)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: 180, height: 30, padding: '0 10px', border: '1px solid rgba(var(--ink-rgb),.2)', borderRadius: 2, background: 'none', color: pb.col ? INK : MUTED, font: `500 12px ${SANS}`, cursor: 'pointer' }}>
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pb.col || 'Add to collection'}</span><span aria-hidden="true">▾</span>
+    </button>
+    {pb.menuOpen && <Popover anchor={anchor}>
+      <span role="menu" onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', minWidth: 200, padding: 6, background: PAPER, border: `1px solid ${INK}`, boxShadow: '0 12px 30px rgba(34,35,32,.14)' }}>
+        {[['', 'No collection'], ...pb.cols.map((c: string) => [c, c])].map(([c, l]: string[]) => (
+          <button key={c || '-'} role="menuitemradio" aria-checked={pb.col === c} onClick={() => pb.moveTo(c)} className={hover('background:rgba(var(--ink-rgb),.07)')} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, textAlign: 'left', padding: '9px 10px', border: 'none', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>
+            <span>{l}</span>{pb.col === c && <span style={{ color: MARK }}>✓</span>}
+          </button>
+        ))}
+        <span style={{ height: 1, margin: '4px 0', background: 'rgba(var(--ink-rgb),.12)' }} />
+        <button role="menuitem" onClick={() => pb.moveTo('__new')} className={hover('background:rgba(var(--ink-rgb),.07)')} style={{ textAlign: 'left', padding: '9px 10px', border: 'none', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>+ New collection…</button>
+      </span>
+    </Popover>}
+  </span>
   );
 }
 

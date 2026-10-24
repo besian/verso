@@ -1,4 +1,6 @@
+import { useRef } from 'react';
 import type { CSSProperties, ChangeEventHandler, MouseEventHandler, ReactNode } from 'react';
+import { Popover } from './Popover';
 import type { V } from '../App';
 import { focus, hover, wheelSideways } from '../pseudo';
 import { INK, MARK, MUTED, PAPER, SANS, SERIF, pagePad } from '../theme';
@@ -578,16 +580,17 @@ export function Editor({ v }: { v: V }) {
 
 /** Small dropdown under a ⋯ button: report, block and the like. */
 export function MoreMenu({ open, onToggle, items, align = 'center' }: { open: boolean; onToggle: () => void; items: { label: string; onClick: () => void; danger?: boolean }[]; align?: 'center' | 'right' }) {
+  const anchor = useRef<HTMLSpanElement>(null);
   return (
-    <span style={{ position: 'relative', display: 'inline-flex' }}>
+    <span ref={anchor} style={{ position: 'relative', display: 'inline-flex' }}>
       <button onClick={e => { e.stopPropagation(); onToggle(); }} aria-haspopup="menu" aria-expanded={open} title="More" className={'tap ' + hover(`color:${MARK}`)} style={{ height: 28, minWidth: 28, padding: '0 6px', border: 'none', background: 'none', color: INK, font: `600 16px/1 ${SANS}`, letterSpacing: 1, cursor: 'pointer' }}>⋯</button>
-      {open && (
-        <span role="menu" style={{ position: 'absolute', top: '100%', [align === 'right' ? 'right' : 'left']: align === 'right' ? 0 : '50%', transform: align === 'right' ? undefined : 'translateX(-50%)', marginTop: 6, zIndex: 30, display: 'flex', flexDirection: 'column', minWidth: 190, padding: 6, background: PAPER, border: `1px solid ${INK}`, boxShadow: '0 12px 30px rgba(34,35,32,.14)' }}>
+      {open && <Popover anchor={anchor} align={align} gap={6}>
+        <span role="menu" onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', minWidth: 190, padding: 6, background: PAPER, border: `1px solid ${INK}`, boxShadow: '0 12px 30px rgba(34,35,32,.14)' }}>
           {items.map(it => (
             <button key={it.label} role="menuitem" onClick={it.onClick} className={hover('background:rgba(var(--ink-rgb),.07)')} style={{ textAlign: 'left', padding: '12px 10px', border: 'none', background: 'none', color: it.danger ? MARK : INK, font: `500 13px ${SANS}`, letterSpacing: 0, textTransform: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>{it.label}</button>
           ))}
         </span>
-      )}
+      </Popover>}
     </span>
   );
 }
