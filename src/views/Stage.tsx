@@ -11,6 +11,14 @@ import { INK, MARK, PAGE_EDGES, PAPER, SANS, SERIF, STONE, label } from '../them
 const navLink: CSSProperties = { border: 'none', background: 'none', padding: '4px 0', cursor: 'pointer', ...label() };
 const textBtn: CSSProperties = { height: 34, padding: 0, border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap', ...label(INK) };
 const roundDark = (size: number, fs: number): CSSProperties => ({ width: size, height: size, borderRadius: '50%', border: 'none', background: INK, color: PAPER, font: `500 ${fs}px ${SANS}`, cursor: 'pointer' });
+const iconAct: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 28 };
+const HEART = 'M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z';
+const BOOKMARK = 'M6.5 4h11v16.5L12 16.8l-5.5 3.7z';
+const SHARE = 'M12 3.5v11.5M7.8 7.7 12 3.5l4.2 4.2M5.5 12.5v7h13v-7';
+/** A small line icon (filled when on), sized to sit with the uppercase action labels. */
+function Icon({ d, fill }: { d: string; fill?: boolean }) {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill={fill ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
+}
 const actLink: CSSProperties = { padding: 0, border: 'none', background: 'none', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: INK, cursor: 'pointer' };
 const arrowBtn: CSSProperties = { width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'rgba(var(--ink-rgb),.12)', color: INK, font: `500 16px ${SANS}`, cursor: 'pointer' };
 
@@ -126,13 +134,15 @@ function Title({ v }: { v: V }) {
           </div>
         )}
         {(v.isOther || (v.isMine && v.bkCanShare)) && (
-          <div style={{ display: 'flex', gap: v.notMob ? 16 : 22, alignItems: 'center', marginTop: v.notMob ? 2 : 6, ...label(INK, v.notMob ? 10 : 11) }}>
-            {v.isOther && <button onClick={v.bkLike} aria-pressed={v.bkLiked} title={v.bkLiked ? 'Unlike' : 'Like'} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, color: v.bkLiked ? MARK : INK }}>{v.bkLiked ? '♥' : '♡'} {v.bkLikes}</button>}
-            {v.isMine && <span title="Likes">♥ {v.bkLikes}</span>}
-            {v.isOther && <button onClick={v.bkSave} aria-pressed={v.bkSaved} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, color: v.bkSaved ? MARK : INK }}>{v.bkSaved ? 'Saved' : 'Save'}</button>}
-            <button onClick={v.bkShare} className={'tap ' + hover(`color:${MARK}`)} style={actLink}>Share</button>
-            <button onClick={v.bkEmbed} className={'tap ' + hover(`color:${MARK}`)} style={actLink}>Embed</button>
-            {v.isOther && <MoreMenu open={v.bkMoreOpen} onToggle={v.bkMore} items={[...(v.bkIsAdmin ? [{ label: v.bkPickLbl, onClick: v.bkPick }] : []), { label: 'Report sketchbook', onClick: v.bkReport }, { label: v.bkBlockLbl, onClick: v.bkBlock, danger: true }]} />}
+          // Like, save and share as icons side by side; embed, report and the rest under ⋯.
+          <div style={{ display: 'flex', gap: v.notMob ? 14 : 18, alignItems: 'center', marginTop: v.notMob ? 2 : 6, ...label(INK, v.notMob ? 10 : 11) }}>
+            {v.isOther
+              ? <button onClick={v.bkLike} aria-pressed={v.bkLiked} title={v.bkLiked ? 'Unlike' : 'Like'} aria-label={`${v.bkLiked ? 'Unlike' : 'Like'}, ${v.bkLikes} likes`} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct, color: v.bkLiked ? MARK : INK }}><Icon d={HEART} fill={v.bkLiked} />{v.bkLikes}</button>
+              : <span title="Likes" style={iconAct}><Icon d={HEART} />{v.bkLikes}</span>}
+            {v.isOther && <button onClick={v.bkSave} aria-pressed={v.bkSaved} title={v.bkSaved ? 'Saved' : 'Save'} aria-label={v.bkSaved ? 'Saved' : 'Save'} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct, color: v.bkSaved ? MARK : INK }}><Icon d={BOOKMARK} fill={v.bkSaved} /></button>}
+            <button onClick={v.bkShare} title="Share" aria-label="Share" className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct }}><Icon d={SHARE} /></button>
+            <MoreMenu open={v.bkMoreOpen} onToggle={v.bkMore} items={[{ label: 'Embed on a website', onClick: v.bkEmbed },
+              ...(v.isOther ? [...(v.bkIsAdmin ? [{ label: v.bkPickLbl, onClick: v.bkPick }] : []), { label: 'Report sketchbook', onClick: v.bkReport }, { label: v.bkBlockLbl, onClick: v.bkBlock, danger: true }] : [])]} />
           </div>
         )}
       </div>
