@@ -4,6 +4,7 @@ import type { V } from '../App';
 import { hover } from '../pseudo';
 import { INK, MARK, MUTED, PAPER, SANS, SERIF, label, pagePad } from '../theme';
 import { MoreMenu } from './Overlays';
+import { Verified } from './Verified';
 
 const avatar = (bg: string, size: number): CSSProperties => ({ width: size, height: size, flexShrink: 0, borderRadius: '50%', background: bg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `500 ${Math.round(size * 0.36)}px ${SANS}` });
 const btn = (filled: boolean): CSSProperties => ({ height: 38, padding: '0 16px', borderRadius: 2, border: filled ? 'none' : '1.5px solid rgba(var(--ink-rgb),.4)', background: filled ? INK : 'none', color: filled ? PAPER : INK, font: `500 14px ${SANS}`, cursor: 'pointer' });
@@ -40,7 +41,7 @@ function ChatList({ v, mob }: { v: V; mob: boolean }) {
             <span style={avatar(c.avBg, 44)}>{c.init}</span>
             <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
               <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                <span style={{ font: `${c.unread ? 600 : 500} 15px ${SANS}`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
+                <span style={{ font: `${c.unread ? 600 : 500} 15px ${SANS}`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}{c.verified && <Verified size={13} />}</span>
                 <span style={{ flexShrink: 0, fontSize: 12, color: MUTED }}>{c.when}</span>
               </span>
               <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -65,7 +66,7 @@ function Thread({ v, t, mob }: { v: V; t: V; mob: boolean }) {
         <button onClick={t.openProfile} style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', textAlign: 'left' }}>
           <span style={avatar(t.avBg, 38)}>{t.init}</span>
           <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-            <span style={{ font: `500 15px ${SANS}`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</span>
+            <span style={{ font: `500 15px ${SANS}`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}{t.verified && <Verified size={13} />}</span>
             {t.handle && <span style={{ fontSize: 12, color: MUTED }}>{t.handle}</span>}
           </span>
         </button>

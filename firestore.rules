@@ -169,8 +169,9 @@ service cloud.firestore {
       }
     }
 
+    // Moderators (the Fletora team). Public, so their accounts can show a verified tick.
     match /admins/{uid} {
-      allow read: if isUser(uid);
+      allow read: if true;
       allow write: if false;
     }
     // Suspended artists can't publish sketchbooks or send notifications.

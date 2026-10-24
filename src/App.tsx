@@ -75,6 +75,8 @@ interface State {
   edit?: EditState | null; edTool?: string; edAdjTool?: string; edPeek?: boolean;
   /** Messages: your conversations, the open one (or a new one with chatNew), its messages and the reply being written. */
   /** From the archive (Explore), and the moderator's add/edit form for it. */
+  /** Fletora team accounts (verified tick). */
+  team?: string[];
   archive?: OtherBook[]; archForm?: (Omit<ArchiveEntry, 'at'> & { at?: number; busy?: boolean; err?: string }) | null;
   chats?: Chat[]; chatOpen?: string | null; chatNew?: Person | null; msgs?: Msg[]; msgDraft?: string; msgTab?: 'chats' | 'requests'; msgBusy?: boolean; msgErr?: string;
   newPick?: boolean; pickShape?: ShapeKey;
@@ -201,7 +203,7 @@ export default class App extends Component<object, State> {
     this.unAuth = api.watchAuth(u => { if (!this.signingUp) this.loadUser(u); });
     this.loadCommunity();
     api.bannedUsers().then(banned => this.setState({ banned }));
-    this.loadPick(); this.loadArchive();
+    this.loadPick(); this.loadArchive(); api.teamIds().then(team => this.setState({ team }));
   }
   /** Loads (or clears) everything that belongs to the signed-in user. */
   async loadUser(u: AuthUser | null, acct?: Account) {
@@ -275,6 +277,7 @@ export default class App extends Component<object, State> {
   loadPick() {
     api.getPick().then(p => p ? api.getBook(p.bookId) : null).then(d => this.setState({ pick: d && d.pageCount > 0 ? toOther(d, 0) : null })).catch(() => this.setState({ pick: null }));
   }
+  isTeam(uid?: string | null) { return !!uid && (this.state.team || []).includes(uid); }
   loadArchive() {
     api.listArchive().then(list => this.setState({ archive: list.map(({ e, d }, i) => ({ ...toOther(d, i), artist: e.artist, arch: e })) })).catch(() => this.setState({ archive: [] }));
   }
@@ -1120,7 +1123,7 @@ export default class App extends Component<object, State> {
     }
     const pad = mob ? 16 : 40, web = (p.web || '').trim();
     return {
-      pfName: p.name, pfHandle: '@' + (p.handle || ''), pfHasBio: !!p.bio || (mine && !pv), pfBio: p.bio || 'Add a short bio so people know what you draw.', pfBioOp: p.bio ? 1 : 0.55,
+      pfName: p.name, pfVerified: this.isTeam(s.profileOf ? s.profileOf.uid : s.acct?.uid), pfHandle: '@' + (p.handle || ''), pfHasBio: !!p.bio || (mine && !pv), pfBio: p.bio || 'Add a short bio so people know what you draw.', pfBioOp: p.bio ? 1 : 0.55,
       pfHasLoc: !!(p.loc || '').trim(), pfLoc: p.loc, pfHasWeb: !!web, pfWeb: web.replace(/^https?:\/\//, ''), pfSocials: socialLinks({ ...(p.ig ? { instagram: p.ig } : {}), ...(p.socials || {}) }), pfMail: /^\S+@\S+\.\S+$/.test((p.mail || '').trim()) ? (p.mail || '').trim() : '', pfWebHref: /^https?:\/\//.test(web) ? web : 'https://' + web, pfJoined: p.joined,
       pfAvBg: avatarBg(p.av), pfInit: p.av ? '' : ini(p.name),
       ...(() => {
@@ -1147,7 +1150,7 @@ export default class App extends Component<object, State> {
           pfPickCol: (c: string) => this.setState({ pfCol: c }),
           pfNewCol: () => this.setState({ colNew: { name: '' } }),
           colMenu: s.colMenu || null, toggleColMenu: (id: string) => this.setState(st => ({ colMenu: st.colMenu === id ? null : id })),
-          pfPeople: tab === 'following' ? (s.followPeople || []).map(x => ({ key: x.uid, name: x.name, handle: '@' + x.handle, avBg: avatarBg(x.av), init: x.av ? '' : ini(x.name), open: () => this.openProfile({ uid: x.uid, name: x.name, handle: x.handle }) })) : null,
+          pfPeople: tab === 'following' ? (s.followPeople || []).map(x => ({ key: x.uid, verified: this.isTeam(x.uid), name: x.name, handle: '@' + x.handle, avBg: avatarBg(x.av), init: x.av ? '' : ini(x.name), open: () => this.openProfile({ uid: x.uid, name: x.name, handle: x.handle }) })) : null,
           pfBlocked: blockedOn, pfUnblock: () => this.toggleBlock(uid, name),
           pfSuspended: !mine && !!uid && (s.banned || []).includes(uid),
           pfAdmin: mine && !pv && !!s.admin, openAdmin: () => this.openAdmin(),
@@ -1343,11 +1346,11 @@ export default class App extends Component<object, State> {
     return {
       isMessages: true, msTab: tab, msSetTab: (t: 'chats' | 'requests') => this.setState({ msgTab: t }), msReqCount: reqs.length,
       msList: list.map(c => { const o = this.chatOther(c); return {
-        key: c.id, name: o.name || '@' + o.handle, avBg: avatarBg(o.av), init: o.av ? '' : ini(o.name), preview: (c.lastFrom === me ? 'You: ' : '') + c.lastText, when: ago(c.lastAt),
+        key: c.id, verified: this.isTeam(o.uid), name: o.name || '@' + o.handle, avBg: avatarBg(o.av), init: o.av ? '' : ini(o.name), preview: (c.lastFrom === me ? 'You: ' : '') + c.lastText, when: ago(c.lastAt),
         unread: this.chatUnread(c) && (c.status === 'open' || c.by !== me), on: c.id === s.chatOpen, open: () => this.openMessages(c.id) }; }),
       msEmpty: tab === 'requests' ? 'No message requests. When someone you don’t follow back writes to you, it waits here until you accept.' : 'No messages yet. Open an artist’s profile and press Message to say hello.',
       msThread: other ? {
-        name: other.name || '@' + other.handle, handle: other.handle ? '@' + other.handle : '', avBg: avatarBg(other.av), init: other.av ? '' : ini(other.name),
+        name: other.name || '@' + other.handle, verified: this.isTeam(other.uid), handle: other.handle ? '@' + other.handle : '', avBg: avatarBg(other.av), init: other.av ? '' : ini(other.name),
         openProfile: () => this.openProfile({ uid: other.uid, name: other.name, handle: other.handle }),
         msgs: msgs.map((m, i) => ({ key: m.id, mine: m.from === me, text: m.text, pending: m.pending, stamp: !i || m.at - msgs[i - 1].at > 30 * 60000 ? stamp(m.at) : '',
           report: m.from === me ? undefined : () => this.setState({ reportFor: { kind: 'message', targetId: `${cur!.id}~${m.id}`, ownerId: m.from, label: `this message from ${other.name || '@' + other.handle}`, quote: m.text }, reportReason: '', reportNote: '', reportErr: '' }) })),
@@ -1443,7 +1446,7 @@ export default class App extends Component<object, State> {
         const q = (s.exQ || '').trim().toLowerCase().replace(/^@/, '');
         if (!q) return [];
         return (s.people || []).filter(p => p.name && !(s.blocked || []).includes(p.uid) && !(s.banned || []).includes(p.uid) && `${p.name} ${p.handle}`.toLowerCase().includes(q)).slice(0, 12).map(p => ({
-          key: p.uid, name: p.name, handle: '@' + p.handle, avBg: avatarBg(p.av), init: p.av ? '' : ini(p.name), open: () => this.openProfile({ uid: p.uid, name: p.name }),
+          key: p.uid, verified: this.isTeam(p.uid), name: p.name, handle: '@' + p.handle, avBg: avatarBg(p.av), init: p.av ? '' : ini(p.name), open: () => this.openProfile({ uid: p.uid, name: p.name }),
         }));
       })(),
       exQ: s.exQ || '', onExQ: (e: ChangeEvent<HTMLInputElement>) => { cancelAnimationFrame(this.exRaf); this.stT = 0; this.setState({ exQ: e.target.value, stS: 0 }); }, exNone: n === 0,
@@ -1454,7 +1457,7 @@ export default class App extends Component<object, State> {
       exGrid: view === 'grid' && n > 0, exStack: view === 'stack' && n > 0, vGridBg, vGridFg, vStackBg, vStackFg, sTrBg, sTrFg, sNewBg, sNewFg,
       viewGrid: () => setView('grid'), viewStack: () => setView('stack'), sortTrend: () => setSort('trending'), sortNew: () => setSort('new'),
       exploreList: list.map(b => ({
-        key: b.id, name: b.name, artist: b.artist, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, no: 'Sketchbook ' + String(b.idx + 1).padStart(3, '0'),
+        key: b.id, name: b.name, artist: b.artist, verified: this.isTeam(b.ownerId), color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, no: 'Sketchbook ' + String(b.idx + 1).padStart(3, '0'),
         count: `${b.pages} pages · ${(b.mediums || []).length ? (b.mediums || []).join(', ') : this.shapeOf(b).label}`,
         ar: String(this.shapeOf(b).a), wp: String(GRID_WIDTH[b.shape] || 78),
         open: () => this.openOtherBook(b), openArtist: (e: MouseEvent) => { e.stopPropagation(); this.openProfile(this.whoOf(b)); },
@@ -1842,6 +1845,7 @@ export default class App extends Component<object, State> {
       ...(() => {
         const o = other as OtherBook | null, mineB = books[active];
         return {
+          bkVerified: !!o && !o.arch && this.isTeam(o.ownerId),
           bkSaved: this.isSaved(o?.id), bkSave: () => o && this.toggleSave(o),
           bkLiked: !!(o && s.liked?.[o.id]), bkLike: () => o && this.toggleLike(o),
           bkLikes: (() => { const id = o?.id || (mineB && !mineB.id.startsWith('local') ? mineB.id : ''); return id ? s.counts?.['b:' + id] || 0 : 0; })(),

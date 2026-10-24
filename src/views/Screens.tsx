@@ -6,6 +6,7 @@ import { hover, wheelSideways } from '../pseudo';
 import { CANVAS, INK, MARK, MUTED, PAGE_EDGES, PAPER, SANS, SERIF, STONE, label, pagePad, serif } from '../theme';
 import { HandleField, MoreMenu, Notice, TextField } from './Overlays';
 import { Popover } from './Popover';
+import { Verified } from './Verified';
 
 const screen = (overflowY: CSSProperties['overflowY'] = 'auto'): CSSProperties => ({ position: 'absolute', inset: '0 0 var(--tabbar, 0px) 0', zIndex: 4, background: PAPER, overflowX: 'hidden', overflowY });
 const primaryBtn = (h: number, fs: number, px: number): CSSProperties => ({ height: h, padding: `0 ${px}px`, border: 'none', background: INK, color: PAPER, font: `500 ${fs}px ${SANS}`, cursor: 'pointer', transition: 'background .25s' });
@@ -158,7 +159,7 @@ export function Explore({ v }: { v: V }) {
                 <button key={p.key} onClick={p.open} className={hover(`color:${MARK}`)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', textAlign: 'left', minWidth: 0 }}>
                   <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: '50%', background: p.avBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 17px ${SERIF}` }}>{p.init}</span>
                   <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                    <span style={{ ...serif(22, 1.1, 'normal'), color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                    <span style={{ ...serif(22, 1.1, 'normal'), color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}{p.verified && <Verified size={14} />}</span>
                     <span style={{ fontSize: 13, color: MUTED }}>{p.handle}</span>
                   </span>
                 </button>
@@ -184,7 +185,7 @@ export function Explore({ v }: { v: V }) {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
                     {v.notMob && <span style={label(STONE, 10)}>{xb.no}</span>}
                     <span style={{ ...serif(22, 1.1, 'normal'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{xb.name}</span>
-                    <span style={{ fontSize: 13, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>by <span onClick={xb.openArtist} className={hoverText} style={{ color: INK, cursor: 'pointer', borderBottom: '1px solid rgba(var(--ink-rgb),.3)' }}>{xb.artist}</span> · {xb.count}</span>
+                    <span style={{ fontSize: 13, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>by <span onClick={xb.openArtist} className={hoverText} style={{ color: INK, cursor: 'pointer', borderBottom: '1px solid rgba(var(--ink-rgb),.3)' }}>{xb.artist}</span>{xb.verified && <Verified size={12} />} · {xb.count}</span>
                   </div>
                 </div>
               ))}
@@ -361,7 +362,7 @@ export function Profile({ v }: { v: V }) {
         <div style={{ width: mob ? 56 : 72, height: mob ? 56 : 72, flexShrink: 0, borderRadius: '50%', background: v.pfAvBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 ${mob ? 22 : 28}px ${SERIF}` }}>{v.pfInit}</div>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '2px 12px', flexWrap: 'wrap' }}>
-            <h1 style={{ margin: 0, ...serif(mob ? 30 : 36, 1.05, '-.01em') }}>{v.pfName}</h1>
+            <h1 style={{ margin: 0, ...serif(mob ? 30 : 36, 1.05, '-.01em') }}>{v.pfName}{v.pfVerified && <Verified size={mob ? 20 : 22} />}</h1>
             <div style={{ display: 'flex', gap: '2px 7px', flexWrap: 'wrap', fontSize: 13, color: MUTED }}>{meta}</div>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: mob ? '2px 12px' : '2px 16px', fontSize: 14, color: MUTED }}>
@@ -414,7 +415,7 @@ export function Profile({ v }: { v: V }) {
               {v.pfPeople.map((p: V) => (
                 <button key={p.key} onClick={p.open} className={hover(`color:${MARK}`)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', textAlign: 'left', minWidth: 0 }}>
                   <span style={{ width: 44, height: 44, flexShrink: 0, borderRadius: '50%', background: p.avBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 18px ${SERIF}` }}>{p.init}</span>
-                  <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}><span style={{ ...serif(22, 1.1, 'normal'), color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span><span style={{ fontSize: 13, color: MUTED }}>{p.handle}</span></span>
+                  <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}><span style={{ ...serif(22, 1.1, 'normal'), color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}{p.verified && <Verified size={14} />}</span><span style={{ fontSize: 13, color: MUTED }}>{p.handle}</span></span>
                 </button>
               ))}
             </div>

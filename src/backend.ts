@@ -585,6 +585,12 @@ export async function getPick(): Promise<{ bookId: string; at: number } | null> 
   if (!db) return null;
   try { const s = await getDoc(doc(db, 'picks', 'current')); return s.exists() && s.data().bookId ? { bookId: s.data().bookId, at: s.data().at || 0 } : null; } catch { return null; }
 }
+/** The Fletora team (moderators), shown with a verified tick. */
+export async function teamIds(): Promise<string[]> {
+  if (!db) return [];
+  try { return (await getDocs(collection(db, 'admins'))).docs.map(d => d.id); } catch { return []; }
+}
+
 /** From the archive: the featured historical sketchbooks, oldest added first. */
 export async function listArchive(): Promise<{ e: ArchiveEntry; d: BookDoc }[]> {
   if (!db) return [];

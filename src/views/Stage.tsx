@@ -5,6 +5,7 @@ import ClosedBook from '../ClosedBook';
 import { hover } from '../pseudo';
 import { earClip } from '../wear';
 import { MoreMenu } from './Overlays';
+import { Verified } from './Verified';
 import type { Wear } from '../wear';
 import { INK, MARK, PAGE_EDGES, PAPER, SANS, SERIF, STONE, label } from '../theme';
 
@@ -144,7 +145,7 @@ function Title({ v }: { v: V }) {
           {v.isOther && v.bkArch
             ? <>by {v.artist}{v.bkArch.years ? ` · ${v.bkArch.years}` : ''} · {v.otherPages} pages</>
             : v.isOther
-            ? <>by <button onClick={v.openArtist} title="View profile" className={'tap ' + hover(`color:${MARK};border-color:${MARK}`)} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: INK, cursor: 'pointer' }}>{v.artist}</button> · {v.otherPages} pages</>
+            ? <>by <button onClick={v.openArtist} title="View profile" className={'tap ' + hover(`color:${MARK};border-color:${MARK}`)} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: INK, cursor: 'pointer' }}>{v.artist}</button>{v.bkVerified && <Verified size={13} />} · {v.otherPages} pages</>
             : v.bookMeta}
         </div>
         {(v.bkMediums || v.bkTags.length > 0) && (
