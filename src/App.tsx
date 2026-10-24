@@ -439,7 +439,7 @@ export default class App extends Component<object, State> {
     const t = mode === 'other' && o ? `${o.name} by ${o.artist}` : mode === 'mine' ? s.books[s.active]?.name : mode === 'explore' ? 'Explore'
       : mode === 'profile' ? (s.profileOf ? (s.pf?.profile?.name || s.profileOf.name) : s.acct?.name) : mode === 'settings' ? 'Account settings' : mode === 'auth' ? (s.suMode === 'join' ? 'Join' : 'Sign in')
       : mode === 'legal' ? (s.legal === 'terms' ? 'Terms' : 'Privacy') : mode === 'admin' ? 'Moderation' : mode === 'notfound' ? 'Not found' : '';
-    return t ? `${t} · verso.` : 'verso. — A place for the unfinished';
+    return t ? `${t} · fletora.` : 'fletora. — A place for the unfinished';
   }
   /** Shows the screen for the current address (first load, back/forward, pasted links). */
   async applyRoute() {
@@ -987,7 +987,7 @@ export default class App extends Component<object, State> {
           pfBlocked: blockedOn, pfUnblock: () => this.toggleBlock(uid, name),
           pfSuspended: !mine && !!uid && (s.banned || []).includes(uid),
           pfAdmin: mine && !pv && !!s.admin, openAdmin: () => this.openAdmin(),
-          pfShare: () => handle && this.share('/@' + handle, `${name} on verso.`),
+          pfShare: () => handle && this.share('/@' + handle, `${name} on fletora.`),
           pfMoreOpen: s.more === 'profile', pfMore: () => this.setState(st => ({ more: st.more === 'profile' ? null : 'profile' })),
           pfReport: () => this.openReport({ kind: 'user', targetId: uid, ownerId: uid, label: name }),
           pfBlock: () => this.toggleBlock(uid, name), pfBlockLbl: blockedOn ? `Unblock ${name}` : `Block ${name}`,
@@ -1031,11 +1031,11 @@ export default class App extends Component<object, State> {
       suName: su.name || '', suHandle: su.handle || '', suEmail: su.email || '', suPw: su.pw || '', suOp: suOk ? 1 : 0.4,
       onSuName: setSu('name'), onSuHandle: setSu('handle'), onSuEmail: setSu('email'), onSuPw: setSu('pw'),
       isAuth: s.mode === 'auth', suMode, suJoin: join, suReset: reset, suOk,
-      suKicker: join ? 'Join verso' : reset ? 'Reset password' : 'Sign in',
+      suKicker: join ? 'Join fletora' : reset ? 'Reset password' : 'Sign in',
       suSub: join ? 'Get a profile page where others can browse your sketchbooks, unfinished pages and all.'
         : reset ? 'Enter the email you joined with and we’ll send you a link to choose a new password.' : 'Pick up where you left off.',
       suBtn: join ? 'Create account' : reset ? 'Send reset link' : 'Sign in',
-      suSwitchQ: join ? 'Already a member?' : 'New to verso?', suSwitchLbl: join ? 'Sign in' : 'Create an account',
+      suSwitchQ: join ? 'Already a member?' : 'New to fletora?', suSwitchLbl: join ? 'Sign in' : 'Create an account',
       suSwitch: () => this.openAuth(join ? 'signin' : 'join'),
       suToReset: () => this.setState({ suMode: 'reset', suErr: '', suInfo: '' }),
       suToSignin: () => this.setState({ suMode: 'signin', suErr: '', suInfo: '' }),
@@ -1068,12 +1068,12 @@ export default class App extends Component<object, State> {
         }
       },
       closeAuth: this.closeAuth,
-      // First visit after joining: a short guide to how verso works.
+      // First visit after joining: a short guide to how fletora works.
       welcomeOpen: !!s.welcome && !!a, welcomeName: (a?.name || '').split(' ')[0],
       welcomeStart: () => { this.setState({ welcome: false }); this.goMode('mine'); this.setState({ managing: true }); },
       welcomeLater: () => { this.setState({ welcome: false }); this.goMode('explore'); },
       inInstalled: installer.installed(), inCanPrompt: installer.canPrompt(), inIOS: installer.isIOS(),
-      inInstall: () => installer.install().then(ok => ok && this.toast('verso is on your home screen')),
+      inInstall: () => installer.install().then(ok => ok && this.toast('fletora is on your home screen')),
       isDark: !!s.dark, setTheme: (t: 'light' | 'dark') => { themeMode.setTheme(t); this.setState({ dark: t === 'dark' }); },
       openPrivacy: () => this.openLegal('privacy'), openTerms: () => this.openLegal('terms'),
       ...(() => {
@@ -1483,8 +1483,8 @@ export default class App extends Component<object, State> {
       // Embed code for a public sketchbook.
       bkEmbed: () => { const o = other as OtherBook | null, mb = books[active]; const id = o?.id || mb?.id, title = o?.name || mb?.name; if (id && !id.startsWith('local')) this.setState({ embedFor: { id, title }, more: null }); },
       emOpen: !!s.embedFor, emTitle: s.embedFor?.title || '',
-      emCode: s.embedFor ? `<iframe src="${location.origin}/embed/${s.embedFor.id}" title="${(s.embedFor.title || 'sketchbook').replace(/"/g, '&quot;')} on verso" width="100%" height="520" style="border:0;max-width:900px" loading="lazy" allowfullscreen></iframe>` : '',
-      emCopy: () => { const f = s.embedFor; if (!f) return; navigator.clipboard.writeText(`<iframe src="${location.origin}/embed/${f.id}" title="${(f.title || 'sketchbook').replace(/"/g, '&quot;')} on verso" width="100%" height="520" style="border:0;max-width:900px" loading="lazy" allowfullscreen></iframe>`).then(() => this.toast('Embed code copied'), () => this.toast('Select the code and copy it')); },
+      emCode: s.embedFor ? `<iframe src="${location.origin}/embed/${s.embedFor.id}" title="${(s.embedFor.title || 'sketchbook').replace(/"/g, '&quot;')} on fletora" width="100%" height="520" style="border:0;max-width:900px" loading="lazy" allowfullscreen></iframe>` : '',
+      emCopy: () => { const f = s.embedFor; if (!f) return; navigator.clipboard.writeText(`<iframe src="${location.origin}/embed/${f.id}" title="${(f.title || 'sketchbook').replace(/"/g, '&quot;')} on fletora" width="100%" height="520" style="border:0;max-width:900px" loading="lazy" allowfullscreen></iframe>`).then(() => this.toast('Embed code copied'), () => this.toast('Select the code and copy it')); },
       emClose: () => this.setState({ embedFor: null }),
       tbOn: mode === 'explore' || mode === 'other' ? 'explore' : mode === 'mine' ? 'mine' : mode === 'profile' && !s.profileOf ? 'me' : '',
       tbNew: () => { if (mode !== 'mine') this.goMode('mine'); this.openNewPick(); },

@@ -495,12 +495,12 @@ const WELCOME_STEPS: [string, string][] = [
 /** Shown once, right after joining. */
 export function Welcome({ v }: { v: V }) {
   return (
-    <div role="dialog" aria-modal="true" aria-label="Welcome to verso" style={{ position: 'absolute', inset: 0, zIndex: 25, background: PAPER, overflowY: 'auto' }}>
+    <div role="dialog" aria-modal="true" aria-label="Welcome to fletora" style={{ position: 'absolute', inset: 0, zIndex: 25, background: PAPER, overflowY: 'auto' }}>
       <div style={{ ...pagePad(!v.notMob), maxWidth: 1100, display: 'flex', flexDirection: 'column', gap: v.notMob ? 40 : 28 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <span style={{ font: `500 11px ${SANS}`, letterSpacing: '.14em', textTransform: 'uppercase', color: MARK }}>Welcome to verso.</span>
+          <span style={{ font: `500 11px ${SANS}`, letterSpacing: '.14em', textTransform: 'uppercase', color: MARK }}>Welcome to fletora.</span>
           <h1 style={{ margin: 0, font: `400 ${v.notMob ? 88 : 52}px/.95 ${SERIF}`, letterSpacing: '-.025em' }}>Hello, {v.welcomeName}. <em style={{ color: MARK }}>Start anywhere.</em></h1>
-          <p style={{ margin: 0, maxWidth: 520, fontSize: 17, lineHeight: 1.55, color: MUTED }}>verso is a home for sketchbooks: the unfinished pages, studies and false starts as much as the finished work. Here’s how it works.</p>
+          <p style={{ margin: 0, maxWidth: 520, fontSize: 17, lineHeight: 1.55, color: MUTED }}>fletora is a home for sketchbooks: the unfinished pages, studies and false starts as much as the finished work. Here’s how it works.</p>
         </div>
         <ol style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,190px),1fr))', gap: v.notMob ? 28 : 20 }}>
           {WELCOME_STEPS.map(([t, d], i) => (

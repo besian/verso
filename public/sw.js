@@ -1,7 +1,7 @@
-// verso. service worker: makes the site installable and quick to reopen.
+// fletora. service worker: makes the site installable and quick to reopen.
 // Pages: network first, falling back to the cached app when offline.
 // Built assets (hashed names) and page images (immutable URLs): cache first.
-const VERSION = 'v1', APP = 'verso-app-' + VERSION, IMG = 'verso-img-' + VERSION, MAX_IMAGES = 400;
+const VERSION = 'v2', APP = 'verso-app-' + VERSION, IMG = 'verso-img-' + VERSION, MAX_IMAGES = 400;
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(APP).then(c => c.addAll(['/', '/manifest.webmanifest', '/icons/icon-192.png'])).then(() => self.skipWaiting()));

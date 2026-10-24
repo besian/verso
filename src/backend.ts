@@ -583,7 +583,7 @@ async function reauth(pw: string) {
   return u;
 }
 
-/** Sends the confirmation email; its link leads back to verso. (Falls back to Firebase's own page
+/** Sends the confirmation email; its link leads back to fletora. (Falls back to Firebase's own page
  *  if this domain isn't in Authentication → Settings → Authorized domains.) */
 async function sendVerification(u: User) {
   try { await sendEmailVerification(u, { url: location.origin + '/settings' }); }

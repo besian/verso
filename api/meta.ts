@@ -19,7 +19,7 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 interface Meta { title: string; description: string; image?: string; url: string }
 
 export async function describe(path: string, origin: string): Promise<Meta> {
-  const site: Meta = { title: 'verso. — A place for the unfinished', description: 'A home for sketchbooks, unfinished thoughts, and the creative process. Share your pages. Discover someone else’s world.', url: origin + path };
+  const site: Meta = { title: 'fletora. — A place for the unfinished', description: 'A home for sketchbooks, unfinished thoughts, and the creative process. Share your pages. Discover someone else’s world.', url: origin + path };
   const m = /^\/@([a-z0-9._]{1,24})(?:\/([A-Za-z0-9]{6,40}))?\/?$/i.exec(path);
   if (!m) return site;
   const [, handle, bookId] = m;
@@ -27,18 +27,18 @@ export async function describe(path: string, origin: string): Promise<Meta> {
     const b = await getDoc(`books/${bookId}`);
     if (!b) return site;
     const pages = b.pages?.arrayValue?.values?.map(v => v.stringValue || '') || [], n = Number(b.pageCount?.integerValue || pages.length);
-    return { title: `${str(b, 'name')} — by ${str(b, 'ownerName') || '@' + handle} · verso.`, description: `A sketchbook of ${n} ${n === 1 ? 'page' : 'pages'} by ${str(b, 'ownerName') || '@' + handle}. Leaf through it on verso.`, image: str(b, 'cover') || pages[0] || undefined, url: site.url };
+    return { title: `${str(b, 'name')} — by ${str(b, 'ownerName') || '@' + handle} · fletora.`, description: `A sketchbook of ${n} ${n === 1 ? 'page' : 'pages'} by ${str(b, 'ownerName') || '@' + handle}. Leaf through it on fletora.`, image: str(b, 'cover') || pages[0] || undefined, url: site.url };
   }
   const h = await getDoc(`handles/${handle.toLowerCase()}`), uid = str(h, 'uid');
   const u = uid ? await getDoc(`users/${uid}`) : null;
   if (!u) return site;
-  return { title: `${str(u, 'name')} (@${str(u, 'handle')}) · verso.`, description: str(u, 'bio') || `Sketchbooks by ${str(u, 'name')} on verso.`, image: str(u, 'av') || undefined, url: site.url };
+  return { title: `${str(u, 'name')} (@${str(u, 'handle')}) · fletora.`, description: str(u, 'bio') || `Sketchbooks by ${str(u, 'name')} on fletora.`, image: str(u, 'av') || undefined, url: site.url };
 }
 
 export function inject(html: string, m: Meta): string {
   const tags = [
     `<meta name="description" content="${esc(m.description)}">`,
-    `<meta property="og:site_name" content="verso.">`, `<meta property="og:type" content="website">`,
+    `<meta property="og:site_name" content="fletora.">`, `<meta property="og:type" content="website">`,
     `<meta property="og:title" content="${esc(m.title)}">`, `<meta property="og:description" content="${esc(m.description)}">`, `<meta property="og:url" content="${esc(m.url)}">`,
     m.image ? `<meta property="og:image" content="${esc(m.image)}">` : '',
     `<meta name="twitter:card" content="${m.image ? 'summary_large_image' : 'summary'}">`, `<meta name="twitter:title" content="${esc(m.title)}">`, `<meta name="twitter:description" content="${esc(m.description)}">`,

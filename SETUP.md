@@ -1,4 +1,4 @@
-# verso. — setup
+# fletora. — setup
 
 Vite + React app. Accounts use Firebase Authentication (email + password); profiles, books and
 follows are in Cloud Firestore; page images, covers and avatars are in Cloud Storage. Without
@@ -59,9 +59,20 @@ npm run dev:emulators    # terminal 2
 11. **Budget alert**: Google Cloud console → Billing → **Budgets & alerts** → Create budget
     (e.g. a small monthly amount with emails at 50%, 90% and 100%).
 
-12. **Email links on verso's own page**: Authentication → **Templates** → any template → pencil →
+12. **Email links on fletora's own page**: Authentication → **Templates** → any template → pencil →
     **Customize action URL** → `https://<your-domain>/auth/action` → Save (it applies to all
-    templates). Confirm-email, reset-password and change-email links then open verso's page.
+    templates). Confirm-email, reset-password and change-email links then open fletora's page.
+
+## Custom domain (fletora.studio)
+
+1. **Vercel** → Project → Settings → **Domains** → add `fletora.studio` (and `www.fletora.studio`,
+   set to redirect to it). Vercel shows the DNS records to add at your registrar (an A record for
+   the bare domain and a CNAME for www); add them and wait for the tick.
+2. **Firebase** → Authentication → Settings → **Authorized domains** → add `fletora.studio`.
+3. **Email links**: Authentication → Templates → Customize action URL →
+   `https://fletora.studio/auth/action`. While there, set the sender name to **Fletora**.
+4. Optional: in Authentication → Templates → **SMTP settings** / custom domain, send from
+   `noreply@fletora.studio` so emails are less likely to land in spam.
 
 ## Vercel
 

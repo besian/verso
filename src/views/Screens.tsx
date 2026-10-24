@@ -379,7 +379,7 @@ export function AuthPage({ v }: { v: V }) {
     <div style={screen()}>
       <div style={{ ...pagePad(mob), display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,360px),1fr))', gap: mob ? '40px' : '48px 96px', alignItems: 'start' }}>
         <section style={{ display: 'flex', flexDirection: 'column', gap: 24, minWidth: 0 }}>
-          <div style={{ display: 'flex', gap: 14, alignItems: 'center', ...label() }}><span style={{ color: MARK }}>{v.suKicker}</span><span style={{ width: 40, height: 1, background: STONE }} /><span>verso.</span></div>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center', ...label() }}><span style={{ color: MARK }}>{v.suKicker}</span><span style={{ width: 40, height: 1, background: STONE }} /><span>fletora.</span></div>
           <h1 style={{ margin: 0, ...serif(mob ? 56 : 96, .94, '-.025em'), textWrap: 'balance' } as CSSProperties}>{AUTH_HEAD[v.suMode]}</h1>
           <p style={{ margin: 0, maxWidth: 400, fontSize: 17, lineHeight: 1.55, color: MUTED, textWrap: 'pretty' } as CSSProperties}>{v.suSub}</p>
         </section>
@@ -482,9 +482,9 @@ export function Settings({ v }: { v: V }) {
             })}
           </div>
         </SettingsSection>
-        <SettingsSection title="App" note="Install verso to open it from your home screen or dock, full screen, like any other app.">
+        <SettingsSection title="App" note="Install fletora to open it from your home screen or dock, full screen, like any other app.">
           {v.inInstalled ? <span style={{ fontSize: 14, color: MUTED }}>You’re using the installed app.</span>
-            : v.inCanPrompt ? <button onClick={v.inInstall} style={formBtn()}>Install verso</button>
+            : v.inCanPrompt ? <button onClick={v.inInstall} style={formBtn()}>Install fletora</button>
             : v.inIOS ? <span style={{ fontSize: 14, lineHeight: 1.5, color: INK }}>In Safari, tap <b style={{ fontWeight: 600 }}>Share</b> (the square with an arrow), then <b style={{ fontWeight: 600 }}>Add to Home Screen</b>.</span>
             : <span style={{ fontSize: 14, lineHeight: 1.5, color: INK }}>Use your browser’s <b style={{ fontWeight: 600 }}>Install</b> option (in Chrome and Edge, the icon at the end of the address bar). On Android, open the browser menu and choose <b style={{ fontWeight: 600 }}>Install app</b>.</span>}
         </SettingsSection>

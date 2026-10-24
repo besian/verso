@@ -18,7 +18,7 @@ function TopBar({ v }: { v: V }) {
   return (
     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: `${v.mTop}px ${v.mPad}px 12px`, background: PAPER, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, zIndex: 5, opacity: v.uiOp, pointerEvents: v.uiPE }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: v.mNavGap }}>
-        <button onClick={v.goHome} title="Home" style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', font: `400 30px/1 ${SERIF}`, letterSpacing: '-.01em', color: INK }}>verso<span style={{ color: MARK }}>.</span></button>
+        <button onClick={v.goHome} title="Home" style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', font: `400 30px/1 ${SERIF}`, letterSpacing: '-.01em', color: INK }}>fletora<span style={{ color: MARK }}>.</span></button>
         {/* Phones, signed in: navigation lives in the tab bar at the bottom. */}
         {!v.tabBar && <div style={{ display: 'flex', gap: v.mGap }}>
           <button onClick={v.goExplore} className={hover(`color:${MARK}`)} style={{ ...navLink, borderBottom: `1px solid ${v.navExLine}`, color: v.navExFg }}>Explore</button>
@@ -140,12 +140,12 @@ function Title({ v }: { v: V }) {
   );
 }
 
-/** Inside an embed: the sketchbook's name and artist, linking back to verso. */
+/** Inside an embed: the sketchbook's name and artist, linking back to fletora. */
 function EmbedTitle({ v }: { v: V }) {
   return (
     <div style={{ marginTop: 14, padding: '0 14px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, textAlign: 'center', opacity: v.uiOp, pointerEvents: v.uiPE, maxWidth: '100%', boxSizing: 'border-box' }}>
       <div style={{ ...{ font: `400 ${v.notMob ? 30 : 24}px/1.1 ${SERIF}` }, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.titleName}</div>
-      <a href={v.embedHref} target="_blank" rel="noopener" style={{ ...label(INK, 10), textDecoration: 'none' }}>by {v.artist} · open on verso<span style={{ color: MARK }}>.</span> ↗</a>
+      <a href={v.embedHref} target="_blank" rel="noopener" style={{ ...label(INK, 10), textDecoration: 'none' }}>by {v.artist} · open on fletora<span style={{ color: MARK }}>.</span> ↗</a>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-// "Install verso": the browser's install prompt (Chrome, Edge, Android) is saved when offered,
+// "Install fletora": the browser's install prompt (Chrome, Edge, Android) is saved when offered,
 // iOS gets instructions, and an installed app says so.
 type Prompt = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> };
 let deferred: Prompt | null = null;

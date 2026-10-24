@@ -43,7 +43,7 @@ const Contact = () => contact ? <>email <a href={`mailto:${contact}`}>{contact}<
 function Privacy() {
   return (
     <>
-      <P>verso. is a place to share sketchbooks. This page explains what we store about you, who can see it, and how to remove it. Last updated {UPDATED}.</P>
+      <P>fletora. is a place to share sketchbooks. This page explains what we store about you, who can see it, and how to remove it. Last updated {UPDATED}.</P>
       <Sec title="What we store">
         <Ul items={[
           <><b>Your account:</b> your email address and a password, held by Firebase Authentication (Google). Your password is never visible to us, and your email is never shown on the site.</>,
@@ -65,7 +65,7 @@ function Privacy() {
         ]} />
       </Sec>
       <Sec title="Children">
-        <P>verso. isn’t meant for children under 13, and they shouldn’t create an account.</P>
+        <P>fletora. isn’t meant for children under 13, and they shouldn’t create an account.</P>
       </Sec>
       <Sec title="Questions">
         <P>To ask about your data or request a copy of it, <Contact />.</P>
@@ -77,9 +77,9 @@ function Privacy() {
 function Terms() {
   return (
     <>
-      <P>These terms cover using verso. By creating an account you agree to them. Last updated {UPDATED}.</P>
+      <P>These terms cover using fletora. By creating an account you agree to them. Last updated {UPDATED}.</P>
       <Sec title="Your work stays yours">
-        <P>You keep all rights to what you upload. By making a sketchbook public, you let verso. store and show it to visitors, including as previews when its link is shared. Making it private or deleting it ends that.</P>
+        <P>You keep all rights to what you upload. By making a sketchbook public, you let fletora. store and show it to visitors, including as previews when its link is shared. Making it private or deleting it ends that.</P>
       </Sec>
       <Sec title="What’s not allowed">
         <Ul items={[
@@ -94,7 +94,7 @@ function Terms() {
         <P>Anyone can report a sketchbook or artist. We may hide content, suspend accounts or remove them when these terms are broken, sometimes without notice.</P>
       </Sec>
       <Sec title="The service">
-        <P>verso. is provided as is, without warranties. We may change or stop features, and we aren’t liable for lost content or indirect losses to the extent the law allows. Keep your own copies of your work.</P>
+        <P>fletora. is provided as is, without warranties. We may change or stop features, and we aren’t liable for lost content or indirect losses to the extent the law allows. Keep your own copies of your work.</P>
       </Sec>
       <Sec title="Changes and contact">
         <P>If these terms change, the date above will change too. Questions? <Contact />.</P>
@@ -106,7 +106,7 @@ function Terms() {
 export function Legal({ v }: { v: V }) {
   const terms = v.legalDoc === 'terms';
   return (
-    <Page v={v} kicker="verso." title={terms ? <>Terms of <em>use</em></> : <>Privacy <em>policy</em></>}>
+    <Page v={v} kicker="fletora." title={terms ? <>Terms of <em>use</em></> : <>Privacy <em>policy</em></>}>
       <div style={{ display: 'flex', gap: 20, ...label() }}>
         <button onClick={v.openPrivacy} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(terms ? undefined : INK), borderBottom: terms ? 'none' : `1px solid ${INK}` }}>Privacy</button>
         <button onClick={v.openTerms} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(terms ? INK : undefined), borderBottom: terms ? `1px solid ${INK}` : 'none' }}>Terms</button>
@@ -194,7 +194,7 @@ const ACTION_TEXT: Record<string, { kicker: string; title: ReactNode; done: stri
   recoverEmail: { kicker: 'Email restored', title: <>Back as <em style={{ color: MARK }}>before.</em></>, done: 'The change to your email address was undone. If you didn’t ask for it, change your password in Account settings.' },
 };
 
-/** Our own page for the links in verso's emails (instead of Firebase's plain one). */
+/** Our own page for the links in fletora's emails (instead of Firebase's plain one). */
 export function AuthAction({ v }: { v: V }) {
   const t = ACTION_TEXT[v.acMode] || ACTION_TEXT.verifyEmail, mob = !v.notMob;
   const primary: CSSProperties = { height: 48, padding: '0 26px', border: 'none', background: INK, color: PAPER, font: `500 15px ${SANS}`, cursor: 'pointer', alignSelf: 'flex-start' };
@@ -211,7 +211,7 @@ export function AuthAction({ v }: { v: V }) {
             <p style={{ margin: 0, fontSize: 17, lineHeight: 1.55, color: MUTED }}>{t.done}</p>
             {v.acMode === 'resetPassword' && !v.acSignedIn
               ? <button onClick={v.acSignIn} className={hover(`background:${MARK}`)} style={primary}>Sign in</button>
-              : <button onClick={v.acContinue} className={hover(`background:${MARK}`)} style={primary}>Continue to verso →</button>}
+              : <button onClick={v.acContinue} className={hover(`background:${MARK}`)} style={primary}>Continue to fletora →</button>}
           </>
         )}
         {(v.acStep === 'form' || v.acStep === 'working') && (
