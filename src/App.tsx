@@ -125,7 +125,8 @@ const IS_TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coar
 const FOCUS_MS = 300, FOCUS_OUT_MS = 340, FOCUS_SHIFT_MS = 280;
 /** Likes and followers each artist is working toward. */
 const GOAL = 100;
-const avatarBg = (av?: string | null) => av ? `url("${av}") center/cover no-repeat ${INK}` : INK;
+// border-box: the photo also fills under the thin avatar border, so the dark fallback colour never shows at the edge.
+const avatarBg = (av?: string | null) => av ? `url("${av}") center/cover no-repeat border-box ${INK}` : INK;
 const isData = (u?: string | null): u is string => !!u && u.startsWith('data:');
 /** Every stored file a book uses: pages, cover and their thumbnails (for cleaning up removed ones). */
 const bookUrls = (b: Book) => { const main = [...b.images, ...(b.coverImg ? [b.coverImg] : [])]; return [...main, ...main.map(u => b.thumbs?.[u]).filter((u): u is string => !!u)]; };
