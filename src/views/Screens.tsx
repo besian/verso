@@ -362,7 +362,7 @@ export function Profile({ v }: { v: V }) {
         <div style={{ width: mob ? 56 : 72, height: mob ? 56 : 72, flexShrink: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.22)', boxSizing: 'border-box', background: v.pfAvBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 ${mob ? 22 : 28}px ${SERIF}` }}>{v.pfInit}</div>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '2px 12px', flexWrap: 'wrap' }}>
-            <h1 style={{ margin: 0, ...serif(mob ? 30 : 36, 1.05, '-.01em') }}>{v.pfName}{v.pfVerified && <Verified size={mob ? 20 : 22} />}</h1>
+            <h1 style={{ margin: 0, display: 'flex', alignItems: 'center', ...serif(mob ? 30 : 36, 1.05, '-.01em') }}>{v.pfName}{v.pfVerified && <Verified size={mob ? 20 : 22} />}</h1>
             <div style={{ display: 'flex', gap: '2px 7px', flexWrap: 'wrap', fontSize: 13, color: MUTED }}>{meta}</div>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: mob ? '2px 12px' : '2px 16px', fontSize: 14, color: MUTED }}>
