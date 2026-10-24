@@ -373,6 +373,8 @@ function EditFrame({ v, radius, shadow, wheel }: { v: V; radius: string; shadow:
       </svg>
       <Layers v={v} />
       {v.edMode === 'fit' && <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundImage: 'linear-gradient(rgba(var(--ink-rgb),.35) 1px,transparent 1px),linear-gradient(90deg,rgba(var(--ink-rgb),.35) 1px,transparent 1px)', backgroundSize: '33.34% 33.34%', mixBlendMode: 'difference', opacity: .5 }} />}
+      {/* Profile photo: everything outside the circle is dimmed, as it won't show. */}
+      {v.edAvatar && <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', boxShadow: '0 0 0 9999px rgba(20,20,22,.5)', outline: '1.5px solid rgba(255,255,255,.85)', pointerEvents: 'none' }} />}
       {v.edPad && <div style={{ position: 'absolute', ...v.padRect, boxSizing: 'border-box', border: `1.5px solid ${MARK}`, borderRadius: 2, background: 'rgba(173,73,58,.06)', pointerEvents: 'none' }} />}
       {v.inkBusy && <span style={{ position: 'absolute', left: '50%', top: 12, transform: 'translateX(-50%)', padding: '5px 12px', borderRadius: 12, background: 'rgba(34,35,32,.8)', color: '#F6F2E8', font: `500 12px ${SANS}` }}>Reading your writing…</span>}
       {v.edPeek && <span style={{ position: 'absolute', left: 8, top: 8, padding: '3px 8px', borderRadius: 10, background: 'rgba(34,35,32,.75)', color: '#F6F2E8', font: `500 11px ${SANS}` }}>Original</span>}
@@ -397,7 +399,7 @@ const TITLES: Record<string, string> = { fit: 'Fit your page', adjust: 'Adjust',
 
 function ModeSwitch({ v, height = 36 }: { v: V; height?: number }) {
   if (v.edMode === 'pick') return null;
-  const modes = v.edBlank ? ['draw', 'write'] : ['fit', 'adjust', 'draw', 'write'];
+  const modes = v.edAvatar ? ['fit', 'adjust'] : v.edBlank ? ['draw', 'write'] : ['fit', 'adjust', 'draw', 'write'];
   return (
     <div role="tablist" aria-label="Editor" style={{ display: 'grid', gridTemplateColumns: `repeat(${modes.length}, 1fr)`, gap: 2, padding: 3, border: '1px solid rgba(var(--ink-rgb),.2)' }}>
       {modes.map(k => (
@@ -484,7 +486,7 @@ function MobileEditor({ v }: { v: V }) {
   const adjust = v.edMode === 'adjust', write = v.edMode === 'write', draw = v.edMode === 'draw', pick = v.edMode === 'pick';
   const tools: { key: string; name: string; min: number; max: number; step: number; value: number; lbl: string; onChange: ChangeEventHandler<HTMLInputElement> }[] = adjust
     ? v.edAdj.map((a: V) => ({ key: a.key, name: ADJ_SHORT[a.key], min: a.min, max: a.max, step: 1, value: a.value, lbl: a.lbl, onChange: a.onChange }))
-    : ED_TOOLS.map(([k, n, min, max, step, lbl]) => ({ key: k, name: n, min, max, step, value: v[k], lbl: v[lbl], onChange: v[ED_ON[k]] }));
+    : ED_TOOLS.filter(([k]) => !v.edAvatar || k === 'scale' || k === 'rot').map(([k, n, min, max, step, lbl]) => ({ key: k, name: n, min, max, step, value: v[k], lbl: v[lbl], onChange: v[ED_ON[k]] }));
   const tool = tools.find(t => t.key === (adjust ? v.edAdjTool : v.edTool)) || tools[0];
   const choose = (k: string) => adjust ? v.setEdAdjTool(k) : v.setEdTool(k);
   const bar: CSSProperties = { background: 'none', border: 'none', padding: '8px 0', color: INK, font: `500 15px ${SANS}`, cursor: 'pointer' };
@@ -495,10 +497,10 @@ function MobileEditor({ v }: { v: V }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8, padding: '12px 0 8px' }}>
         <button onClick={v.cancelEdit} style={{ ...bar, justifySelf: 'start', color: 'rgba(var(--ink-rgb),.75)' }}>Cancel</button>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ font: `400 22px/1.1 ${SERIF}` }}>{TITLES[v.edMode]}</div>
+          <div style={{ font: `400 22px/1.1 ${SERIF}` }}>{v.edAvatar && v.edMode === 'fit' ? 'Your photo' : TITLES[v.edMode]}</div>
           <div style={{ fontSize: 12, color: 'rgba(var(--ink-rgb),.65)' }}>{v.edTitle}</div>
         </div>
-        {v.applyLbl === 'Add to sketchbook' && !v.edBlank ? <button onClick={v.skipEdit} style={{ ...bar, justifySelf: 'end', color: 'rgba(var(--ink-rgb),.75)' }}>Skip</button> : <span />}
+        {v.applyLbl === 'Add to sketchbook' && !v.edOne ? <button onClick={v.skipEdit} style={{ ...bar, justifySelf: 'end', color: 'rgba(var(--ink-rgb),.75)' }}>Skip</button> : <span />}
       </div>
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
         <EditFrame v={v} radius="2px 8px 8px 2px" shadow="0 18px 40px rgba(10,10,30,.3)" />
@@ -543,7 +545,7 @@ export function Editor({ v }: { v: V }) {
       </div>
       <div style={{ width: 260, display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={heading}>{TITLES[v.edMode]}</div>
+          <div style={heading}>{v.edAvatar && v.edMode === 'fit' ? 'Your photo' : TITLES[v.edMode]}</div>
           <div style={{ fontSize: 13, color: 'rgba(var(--ink-rgb),.7)' }}>{v.edTitle} · {sub}</div>
         </div>
         <ModeSwitch v={v} />
@@ -560,8 +562,8 @@ export function Editor({ v }: { v: V }) {
           <>
             <Slider name="Zoom" lbl={v.scaleLbl} min={0.3} max={4} step={0.01} value={v.scale} onChange={v.onScale} />
             <Slider name="Rotate" lbl={v.rotLbl} min={-180} max={180} step={0.5} value={v.rot} onChange={v.onRot} />
-            <Slider name="Skew horizontal" lbl={v.skxLbl} min={-30} max={30} step={0.5} value={v.skx} onChange={v.onSkx} />
-            <Slider name="Skew vertical" lbl={v.skyLbl} min={-30} max={30} step={0.5} value={v.sky} onChange={v.onSky} />
+            {!v.edAvatar && <Slider name="Skew horizontal" lbl={v.skxLbl} min={-30} max={30} step={0.5} value={v.skx} onChange={v.onSkx} />}
+            {!v.edAvatar && <Slider name="Skew vertical" lbl={v.skyLbl} min={-30} max={30} step={0.5} value={v.sky} onChange={v.onSky} />}
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={v.rot90} style={outline}>Rotate 90°</button>
               <button onClick={v.resetEd} style={outline}>Reset</button>
@@ -571,8 +573,8 @@ export function Editor({ v }: { v: V }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {!pick && <button onClick={v.applyEdit} style={{ height: 44, borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer' }}>{v.applyLbl}</button>}
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            {v.edBlank ? <span /> : <button onClick={v.skipEdit} style={linkBtn('rgba(var(--ink-rgb),.75)')}>Skip image</button>}
-            <button onClick={v.cancelEdit} style={linkBtn('rgba(var(--ink-rgb),.75)')}>{v.edBlank ? 'Cancel' : 'Cancel all'}</button>
+            {v.edOne ? <span /> : <button onClick={v.skipEdit} style={linkBtn('rgba(var(--ink-rgb),.75)')}>Skip image</button>}
+            <button onClick={v.cancelEdit} style={linkBtn('rgba(var(--ink-rgb),.75)')}>{v.edOne ? 'Cancel' : 'Cancel all'}</button>
           </div>
         </div>
       </div>

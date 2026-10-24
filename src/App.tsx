@@ -38,7 +38,7 @@ type PublicProfile = Omit<Account, 'uid' | 'email'>;
 export type V = Record<string, any>;
 
 interface EditState {
-  queue: string[]; i: number; replaceIdx: number | null; target?: 'cover';
+  queue: string[]; i: number; replaceIdx: number | null; target?: 'cover' | 'avatar';
   scale: number; rot: number; skx: number; sky: number; tx: number; ty: number; nw: number; nh: number;
   /** Brightness, contrast and the rest (see adjust.ts), and which set of controls is showing. */
   adj: Adjust; mode: EdMode;
@@ -808,6 +808,8 @@ export default class App extends Component<object, State> {
   }
   curBook(): AnyBook { return this.state.other || this.state.books[this.state.active]; }
   aspect() { return this.shapeOf(this.curBook()).a; }
+  /** The editor frame's shape: square for a profile photo, otherwise the sketchbook's page. */
+  edAspect() { return this.state.edit?.target === 'avatar' ? 1 : this.aspect(); }
 
   // ---------- page turning ----------
   nPages() { const o = this.state.other as OtherBook | null | undefined; if (o) return o.pages; const n = this.state.images.length; return Math.max(CONFIG.minPages, n + (n % 2)); }
@@ -959,7 +961,7 @@ export default class App extends Component<object, State> {
   bgRefA = (el: HTMLDivElement | null) => this.drift(el, [{ transform: 'translate(-6%,-4%) rotate(0deg) scale(1.1)' }, { transform: 'translate(5%,4%) rotate(10deg) scale(1.3)' }], 16000);
 
   // ---------- fit-your-page editor ----------
-  startEdit(queue: string[], replaceIdx: number | null, target?: 'cover', mode: EdMode = 'fit') {
+  startEdit(queue: string[], replaceIdx: number | null, target?: 'cover' | 'avatar', mode: EdMode = 'fit') {
     this.setState({ edit: { queue, i: 0, replaceIdx, target, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, adj: NO_ADJUST, mode, ink: [], texts: [], sel: null, marks: [], pen: this.lastPen, pad: true } });
     this.loadEditImg(queue[0]);
   }
@@ -971,12 +973,12 @@ export default class App extends Component<object, State> {
     im.src = this.blobUrl(src);
   }
   frame() {
-    const { vw, vh } = this.state, a = this.aspect();
+    const { vw, vh } = this.state, a = this.edAspect();
     // Phones: the frame fills the width, capped so the controls below still fit.
     if (vw < 640) { let fw = vw - 32, fh = fw / a; const e = this.state.edit, maxH = vh * (e?.mode === 'write' && e.pad ? 0.34 : 0.5); if (fh > maxH) { fh = maxH; fw = fh * a; } return { fw: Math.round(fw), fh: Math.round(fh) }; }
     const ed = this.state.edit, fh = Math.round(Math.max(200, Math.min(vh * (ed?.mode === 'write' && ed.pad ? 0.5 : 0.58), 520))); return { fh, fw: Math.round(fh * a) };
   }
-  baseSize() { const e = this.state.edit!, { fw, fh } = this.frame(); if (!e.nw) return { bw: fw, bh: fh }; const s = Math.min(fw / e.nw, fh / e.nh); return { bw: e.nw * s, bh: e.nh * s }; }
+  baseSize() { const e = this.state.edit!, { fw, fh } = this.frame(); if (!e.nw) return { bw: fw, bh: fh }; const s = (e.target === 'avatar' ? Math.max : Math.min)(fw / e.nw, fh / e.nh); return { bw: e.nw * s, bh: e.nh * s }; }
   /** Re-baselines the drag / pinch gesture whenever a finger is added or lifted. */
   edGestureStart() {
     const e = this.state.edit, pts = [...this.edPts.values()]; this.edDrag = null; this.edPinch = null;
@@ -988,7 +990,7 @@ export default class App extends Component<object, State> {
   /** Renders the framed image exactly as shown into a 1600px-tall page. */
   async applyEdit() {
     const e = this.state.edit, im = this.editImg; if (!e || !im || e.inkBusy) return;
-    const { fh } = this.frame(), { bw, bh } = this.baseSize(), outH = 1600, outW = Math.round(outH * this.aspect()), k = outH / fh, r = Math.PI / 180;
+    const { fh } = this.frame(), { bw, bh } = this.baseSize(), avatar = e.target === 'avatar', outH = avatar ? 512 : 1600, outW = Math.round(outH * this.edAspect()), k = outH / fh, r = Math.PI / 180;
     const c = document.createElement('canvas'); c.width = outW; c.height = outH; const ctx = c.getContext('2d')!;
     ctx.fillStyle = '#f3efe6'; ctx.fillRect(0, 0, outW, outH);
     ctx.translate(outW / 2 + e.tx * k, outH / 2 + e.ty * k); ctx.rotate(e.rot * r); ctx.scale(e.scale, e.scale);
@@ -999,6 +1001,7 @@ export default class App extends Component<object, State> {
     await drawTexts(ctx, e.texts.filter(t => t.text.trim()), outW, outH);
     const url = c.toDataURL('image/jpeg', 0.9), images = [...this.state.images];
     if (e.target === 'cover') { this.updateBook({ coverImg: url }); this.setState({ edit: null }); return; }
+    if (avatar) { this.setState(st => ({ edit: null, draft: st.draft ? { ...st.draft, av: url } : st.draft })); return; }
     let patch: Partial<Book> = {};
     if (e.replaceIdx != null) {
       // A re-fitted page keeps its caption and date.
@@ -1280,18 +1283,9 @@ export default class App extends Component<object, State> {
       dAvBg: avatarBg(d.av), dInit: d.av ? '' : ini(d.name), dHasAv: !!d.av,
       avRef: this.avRef, pickAv: () => this.avRef.current?.click(), removeAv: () => this.setState(st => ({ draft: { ...st.draft!, av: null } })),
       onAvFile: (e: ChangeEvent<HTMLInputElement>) => {
+        // Opens the photo in the editor (move, zoom, rotate, light) with a round guide; Use photo saves a 512px square.
         const f = e.target.files?.[0]; e.target.value = ''; if (!f) return;
-        const fr = new FileReader();
-        fr.onload = () => {
-          const im = new Image();
-          im.onload = () => {
-            const c = document.createElement('canvas'), z = 256, m = Math.min(im.width, im.height); c.width = c.height = z;
-            c.getContext('2d')!.drawImage(im, (im.width - m) / 2, (im.height - m) / 2, m, m, 0, 0, z, z);
-            const av = c.toDataURL('image/jpeg', 0.85); this.setState(st => ({ draft: { ...st.draft!, av } }));
-          };
-          im.src = fr.result as string;
-        };
-        fr.readAsDataURL(f);
+        const fr = new FileReader(); fr.onload = () => this.startEdit([fr.result as string], null, 'avatar'); fr.readAsDataURL(f);
       },
       dBusy: !!s.dBusy, dErr: s.dErr || '',
       pfSave: async () => {
@@ -1638,7 +1632,8 @@ export default class App extends Component<object, State> {
     return {
       editing: true, fw: fr.fw, fh: fr.fh, bw: bs.bw, bh: bs.bh, edBg: `url("${this.blobUrl(ed.queue[ed.i])}") center/100% 100% no-repeat`,
       edTransform: `translate(${ed.tx}px, ${ed.ty}px) rotate(${ed.rot}deg) scale(${ed.scale}) skew(${ed.skx}deg, ${ed.sky}deg)`,
-      edTitle: ed.paper ? `${ed.paper[0].toUpperCase()}${ed.paper.slice(1)} page` : ed.target === 'cover' ? 'Cover image' : ed.replaceIdx != null ? `Edit page ${ed.replaceIdx + 1}` : `Image ${ed.i + 1} of ${ed.queue.length}`,
+      edAvatar: ed.target === 'avatar', edOne: !!ed.paper || ed.target === 'avatar' || ed.target === 'cover',
+      edTitle: ed.target === 'avatar' ? 'Profile photo' : ed.paper ? `${ed.paper[0].toUpperCase()}${ed.paper.slice(1)} page` : ed.target === 'cover' ? 'Cover image' : ed.replaceIdx != null ? `Edit page ${ed.replaceIdx + 1}` : `Image ${ed.i + 1} of ${ed.queue.length}`,
       scale: ed.scale, rot: ed.rot, skx: ed.skx, sky: ed.sky,
       scaleLbl: `${Math.round(ed.scale * 100)}%`, rotLbl: `${ed.rot}°`, skxLbl: `${ed.skx}°`, skyLbl: `${ed.sky}°`,
       onScale: num('scale'), onRot: num('rot'), onSkx: num('skx'), onSky: num('sky'),
@@ -1653,7 +1648,7 @@ export default class App extends Component<object, State> {
       edAdj: ADJUSTERS.map(([k, label, min, max]) => ({ key: k, label, min, max, value: ed.adj[k], lbl: (ed.adj[k] > 0 && min < 0 ? '+' : '') + ed.adj[k],
         onChange: (e: ChangeEvent<HTMLInputElement>) => { const v = Math.round(parseFloat(e.target.value)); this.setState(s => s.edit ? { edit: { ...s.edit, adj: { ...s.edit.adj, [k]: Math.abs(v) < 3 ? 0 : v } } } : null); } })),
       applyEdit: () => this.applyEdit(), skipEdit: () => this.nextEdit(), cancelEdit: () => this.setState({ edit: null }),
-      applyLbl: ed.target === 'cover' ? 'Save cover' : ed.replaceIdx != null ? 'Save page' : 'Add to sketchbook',
+      applyLbl: ed.target === 'avatar' ? 'Use photo' : ed.target === 'cover' ? 'Save cover' : ed.replaceIdx != null ? 'Save page' : 'Add to sketchbook',
       // One pointer drags the image; two pinch to zoom and twist to rotate.
       edDown: (e: PointerEvent<HTMLDivElement>) => {
         e.stopPropagation(); try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* pointer already gone */ }
