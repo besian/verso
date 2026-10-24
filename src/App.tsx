@@ -12,9 +12,11 @@ import { currentPrompt } from './prompts';
 import { COVER_INSIDE, pageWear } from './wear';
 import { ADJUSTERS, NO_ADJUST, applyToCanvas, feValues, isAdjusted } from './adjust';
 import type { Adjust } from './adjust';
-import { LINE_H, drawTexts, inkPng, readInk, textFromInk, wrapLines } from './handwriting';
+import { LINE_H, drawTexts, inkPng, readInk, textFromInk, textWidth, wrapLines } from './handwriting';
 import type { PageText, Stroke } from './handwriting';
 import { RULED, paperUrl } from './paper';
+import { DEFAULT_PEN, drawMarks, markFor, pathD, touched } from './draw';
+import type { Mark, Pen, Tool } from './draw';
 import type { Paper } from './paper';
 import type { Wear } from './wear';
 import { INK, MARK, PAPER, STONE } from './theme';
@@ -42,8 +44,10 @@ interface EditState {
   ink: Stroke[]; texts: PageText[]; sel: string | null; inkBusy?: boolean; inkErr?: string;
   /** Set for a blank page, so typed text can sit on lined paper's rules. */
   paper?: Paper;
+  /** Draw mode: finished strokes and the current tool. Write mode: whether the zoom pad is on, and where it sits on the page. */
+  marks: Mark[]; pen: Pen; pad: boolean; box?: { x: number; y: number };
 }
-type EdMode = 'fit' | 'adjust' | 'write';
+type EdMode = 'fit' | 'adjust' | 'write' | 'draw' | 'pick';
 
 interface State {
   mode?: Mode;
@@ -689,7 +693,7 @@ export default class App extends Component<object, State> {
   /** A new blank page (plain, lined, grid or dotted), opened straight in Write mode. */
   addBlank(paper: Paper) {
     if (this.state.other || (this.state.mode || 'home') !== 'mine') return;
-    this.startEdit([paperUrl(paper, this.aspect())], null, undefined, 'write'); this.setEd({ paper });
+    this.startEdit([paperUrl(paper, this.aspect())], null, undefined, 'pick'); this.setEd({ paper });
   }
   /** Data URLs are converted to blob URLs once so CSS backgrounds don't carry megabytes of inline data. */
   blobUrl(d: string) {
@@ -845,7 +849,7 @@ export default class App extends Component<object, State> {
 
   // ---------- fit-your-page editor ----------
   startEdit(queue: string[], replaceIdx: number | null, target?: 'cover', mode: EdMode = 'fit') {
-    this.setState({ edit: { queue, i: 0, replaceIdx, target, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, adj: NO_ADJUST, mode, ink: [], texts: [], sel: null } });
+    this.setState({ edit: { queue, i: 0, replaceIdx, target, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, adj: NO_ADJUST, mode, ink: [], texts: [], sel: null, marks: [], pen: this.lastPen, pad: true } });
     this.loadEditImg(queue[0]);
   }
   loadEditImg(src: string) {
@@ -858,8 +862,8 @@ export default class App extends Component<object, State> {
   frame() {
     const { vw, vh } = this.state, a = this.aspect();
     // Phones: the frame fills the width, capped so the controls below still fit.
-    if (vw < 640) { let fw = vw - 32, fh = fw / a; const maxH = vh * 0.5; if (fh > maxH) { fh = maxH; fw = fh * a; } return { fw: Math.round(fw), fh: Math.round(fh) }; }
-    const fh = Math.round(Math.max(200, Math.min(vh * 0.58, 520))); return { fh, fw: Math.round(fh * a) };
+    if (vw < 640) { let fw = vw - 32, fh = fw / a; const e = this.state.edit, maxH = vh * (e?.mode === 'write' && e.pad ? 0.34 : 0.5); if (fh > maxH) { fh = maxH; fw = fh * a; } return { fw: Math.round(fw), fh: Math.round(fh) }; }
+    const ed = this.state.edit, fh = Math.round(Math.max(200, Math.min(vh * (ed?.mode === 'write' && ed.pad ? 0.5 : 0.58), 520))); return { fh, fw: Math.round(fh * a) };
   }
   baseSize() { const e = this.state.edit!, { fw, fh } = this.frame(); if (!e.nw) return { bw: fw, bh: fh }; const s = Math.min(fw / e.nw, fh / e.nh); return { bw: e.nw * s, bh: e.nh * s }; }
   /** Re-baselines the drag / pinch gesture whenever a finger is added or lifted. */
@@ -880,6 +884,7 @@ export default class App extends Component<object, State> {
     ctx.transform(1, Math.tan(e.sky * r), Math.tan(e.skx * r), 1, 0, 0);
     ctx.drawImage(im, -bw * k / 2, -bh * k / 2, bw * k, bh * k);
     applyToCanvas(c, e.adj);
+    drawMarks(ctx, e.marks, outW, outH);
     await drawTexts(ctx, e.texts.filter(t => t.text.trim()), outW, outH);
     const url = c.toDataURL('image/jpeg', 0.9), images = [...this.state.images];
     if (e.target === 'cover') { this.updateBook({ coverImg: url }); this.setState({ edit: null }); return; }
@@ -896,7 +901,7 @@ export default class App extends Component<object, State> {
     const e = this.state.edit; if (!e) return; const i = e.i + 1;
     if (i >= e.queue.length || e.replaceIdx != null) { this.setState({ edit: null }); cancelAnimationFrame(this.raf); this.target = Math.round(this.target); this.setState({ p: this.target }); return; }
     // The next image keeps the same adjustments: a batch of scans usually needs the same fix.
-    this.setState({ edit: { ...e, i, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, ink: [], texts: [], sel: null, inkErr: '' } }); this.loadEditImg(e.queue[i]);
+    this.setState({ edit: { ...e, i, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, ink: [], texts: [], sel: null, inkErr: '', marks: [], box: undefined } }); this.loadEditImg(e.queue[i]);
   }
 
   /** Write mode: send the handwriting to be read, and place the words where it was written. */
@@ -911,7 +916,14 @@ export default class App extends Component<object, State> {
         const { step, top } = RULED, n = Math.max(0, Math.round((t.y + step * 0.8 - top) / step));
         Object.assign(t, { size: step / LINE_H, y: top + n * step - step * 0.8 });
       }
-      this.setState(s => s.edit ? { edit: { ...s.edit, inkBusy: false, ink: s.edit.ink.slice(ink.length), texts: [...s.edit.texts, t], sel: t.id } } : null);
+      // Wide enough for the words as written (wrapping only at the page edge), then the pad carries on just after them.
+      const natural = textWidth(text, t.size * fh) / fw + 0.01;
+      t.w = Math.min(0.97 - t.x, Math.max(natural, 0.05));
+      const lines = wrapLines(text, t.w * fw, t.size * fh), lastW = textWidth(lines[lines.length - 1], t.size * fh) / fw;
+      const lineStep = t.size * LINE_H, endX = t.x + lastW + 0.03, endY = t.y + (lines.length - 1) * lineStep;
+      const b = this.padBox(e, { fw, fh }), rowY = endY + lineStep * 0.8 - b.h * 0.75;
+      const box = e.pad ? (endX + b.w * 0.5 > 0.97 ? { x: 0.06, y: rowY + (e.paper === 'lined' ? RULED.step : b.h * 0.8) } : { x: endX, y: rowY }) : e.box;
+      this.setState(s => s.edit ? { edit: { ...s.edit, inkBusy: false, ink: s.edit.ink.slice(ink.length), texts: [...s.edit.texts, t], sel: e.pad ? null : t.id, box } } : null);
     } catch (err) { this.setEd({ inkBusy: false, inkErr: (err as Error).message }); }
   }
   setText(id: string, patch: Partial<PageText>) { this.setState(s => s.edit ? { edit: { ...s.edit, texts: s.edit.texts.map(t => t.id === id ? { ...t, ...patch } : t) } } : null); }
@@ -1348,28 +1360,91 @@ export default class App extends Component<object, State> {
     };
   }
 
-  // ---------- write mode: pen strokes, and dragging the typed text around ----------
-  inkPen: { id: number; r: DOMRect; drag?: { tid: string; px: number; py: number; x: number; y: number } } | null = null;
-  inkDown(e: PointerEvent<HTMLDivElement>) {
-    const ed = this.state.edit; if (!ed || this.inkPen || ed.inkBusy) return;
-    const r = e.currentTarget.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
-    const tid = (e.target as HTMLElement).closest?.('[data-tid]')?.getAttribute('data-tid'), t = tid && ed.texts.find(q => q.id === tid);
-    if (t) { this.inkPen = { id: e.pointerId, r, drag: { tid: t.id, px: x, py: y, x: t.x, y: t.y } }; this.setEd({ sel: t.id }); return; }
-    this.inkPen = { id: e.pointerId, r }; this.setEd({ ink: [...ed.ink, [x, y]], sel: null, inkErr: '' });
+  // ---------- write mode: pen strokes, the zoom pad, and dragging the typed text around ----------
+  inkPen: { id: number; r: DOMRect; pad?: boolean; drag?: { tid: string; px: number; py: number; x: number; y: number } } | null = null;
+  lastPen: Pen = DEFAULT_PEN;
+  /** The zoom pad's size on screen. */
+  padSize(fr: { fw: number }) { return this.state.vw < 640 ? { pw: this.state.vw - 32, ph: 118 } : { pw: fr.fw, ph: 128 }; }
+  /** The part of the page the zoom pad shows (frame fractions), the same shape as the pad. */
+  padBox(ed: EditState, fr: { fw: number; fh: number }) {
+    const { pw, ph } = this.padSize(fr), lined = ed.paper === 'lined', h = lined ? RULED.step * 2 : 0.09, w = Math.min(0.9, pw / ph * h * fr.fh / fr.fw);
+    const b = ed.box || (lined ? { x: 0.06, y: RULED.top - RULED.step * 1.5 } : { x: 0.06, y: 0.08 });
+    return { x: Math.max(0, Math.min(1 - w, b.x)), y: Math.max(0, Math.min(1 - h, b.y)), w, h };
   }
+  /** Moves the pad along the line as you write, and down to the next line at the edge. */
+  padAdvance(ed: EditState, fr: { fw: number; fh: number }, newLine = false) {
+    const b = this.padBox(ed, fr), down = ed.paper === 'lined' ? RULED.step : b.h * 0.8;
+    const x = b.x + b.w * 0.55;
+    this.setEd({ box: newLine || x + b.w > 0.97 ? { x: 0.06, y: b.y + down } : { x, y: b.y } });
+  }
+  inkDown(e: PointerEvent<HTMLDivElement>, pad?: boolean) {
+    const ed = this.state.edit; if (!ed || this.inkPen || ed.inkBusy) return;
+    const r = e.currentTarget.getBoundingClientRect(), fr = this.frame();
+    let x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    if (pad) { const b = this.padBox(ed, fr); x = b.x + x * b.w; y = b.y + y * b.h; }
+    else {
+      const tid = (e.target as HTMLElement).closest?.('[data-tid]')?.getAttribute('data-tid'), t = tid && ed.texts.find(q => q.id === tid);
+      if (t) { this.inkPen = { id: e.pointerId, r, drag: { tid: t.id, px: x, py: y, x: t.x, y: t.y } }; this.setEd({ sel: t.id }); return; }
+      // With the pad on, touching the page moves the pad there instead of writing.
+      if (ed.pad) { this.inkPen = { id: e.pointerId, r }; return this.movePad(x, y); }
+    }
+    this.inkPen = { id: e.pointerId, r, pad }; this.setEd({ ink: [...ed.ink, [x, y]], sel: null, inkErr: '' });
+  }
+  movePad(x: number, y: number) { const ed = this.state.edit!, b = this.padBox(ed, this.frame()); this.setEd({ box: { x: x - b.w / 2, y: y - b.h / 2 } }); }
   inkMove(e: PointerEvent) {
     const p = this.inkPen, ed = this.state.edit; if (!p || p.id !== e.pointerId || !ed) return;
-    const x = (e.clientX - p.r.left) / p.r.width, y = (e.clientY - p.r.top) / p.r.height;
+    let x = (e.clientX - p.r.left) / p.r.width, y = (e.clientY - p.r.top) / p.r.height;
     if (p.drag) { const d = p.drag; this.setText(d.tid, { x: Math.max(0, Math.min(0.95, d.x + x - d.px)), y: Math.max(0, Math.min(0.97, d.y + y - d.py)) }); return; }
+    if (ed.pad && !p.pad) return this.movePad(x, y);
+    let px = p.r.width, py = p.r.height;
+    if (p.pad) { const b = this.padBox(ed, this.frame()); x = b.x + x * b.w; y = b.y + y * b.h; px = p.r.width / b.w; py = p.r.height / b.h; }
     const s = ed.ink[ed.ink.length - 1]; if (!s) return;
-    // Skip points under ~1.5px apart: smoother lines, smaller images.
-    if (Math.hypot((x - s[s.length - 2]) * p.r.width, (y - s[s.length - 1]) * p.r.height) < 1.5) return;
+    // Skip points under ~1.5px apart (on screen): smoother lines, smaller images.
+    if (Math.hypot((x - s[s.length - 2]) * px, (y - s[s.length - 1]) * py) < 1.5) return;
     this.setEd({ ink: [...ed.ink.slice(0, -1), [...s, x, y]] });
   }
-  inkUp(e: PointerEvent) { if (this.inkPen?.id === e.pointerId) this.inkPen = null; }
+  inkUp(e: PointerEvent) {
+    const p = this.inkPen; if (p?.id !== e.pointerId) return; this.inkPen = null;
+    const ed = this.state.edit; if (!ed || !p.pad) return;
+    // Writing near the pad's right edge slides it along.
+    const fr = this.frame(), b = this.padBox(ed, fr), s = ed.ink[ed.ink.length - 1] || [];
+    let mx = 0; for (let i = 0; i < s.length; i += 2) mx = Math.max(mx, s[i]);
+    if (mx > b.x + b.w * 0.7) this.padAdvance(ed, fr);
+  }
+
+  // ---------- draw mode ----------
+  drawDown(e: PointerEvent<HTMLDivElement>) {
+    const ed = this.state.edit; if (!ed || this.inkPen) return;
+    const r = e.currentTarget.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    this.inkPen = { id: e.pointerId, r };
+    if (ed.pen.tool === 'eraser') this.eraseAt(x, y, r); else this.setEd({ marks: [...ed.marks, markFor(ed.pen, x, y)] });
+  }
+  drawMove(e: PointerEvent) {
+    const p = this.inkPen, ed = this.state.edit; if (!p || p.id !== e.pointerId || !ed) return;
+    const x = (e.clientX - p.r.left) / p.r.width, y = (e.clientY - p.r.top) / p.r.height;
+    if (ed.pen.tool === 'eraser') return this.eraseAt(x, y, p.r);
+    const m = ed.marks[ed.marks.length - 1]; if (!m || Math.hypot((x - m.pts[m.pts.length - 2]) * p.r.width, (y - m.pts[m.pts.length - 1]) * p.r.height) < 1) return;
+    this.setEd({ marks: [...ed.marks.slice(0, -1), { ...m, pts: [...m.pts, x, y] }] });
+  }
+  /** The eraser takes away whole strokes it touches. */
+  eraseAt(x: number, y: number, r: DOMRect) {
+    const ed = this.state.edit!, hit = touched(ed.marks, x, y, ed.pen.size * 0.0012 + 0.006, r.width / r.height);
+    if (hit.size) this.setEd({ marks: ed.marks.filter((_, i) => !hit.has(i)) });
+  }
+  drawVals(ed: EditState, fr: { fw: number; fh: number }): V {
+    const pen = ed.pen, setPen = (patch: Partial<Pen>) => { this.lastPen = { ...pen, ...patch }; this.setEd({ pen: this.lastPen }); };
+    return {
+      edDraw: ed.mode === 'draw', hasMarks: ed.marks.length > 0,
+      edMarks: ed.marks.map(m => ({ d: pathD(m.pts, fr.fw, fr.fh), color: m.color, w: Math.max(0.6, m.size * fr.fh), alpha: m.alpha })),
+      penTool: pen.tool, penColor: pen.color, penSize: pen.size, setTool: (tool: Tool) => setPen({ tool }), setColor: (color: string) => setPen({ color, tool: pen.tool === 'eraser' ? 'pen' : pen.tool }),
+      onPenSize: (e: ChangeEvent<HTMLInputElement>) => setPen({ size: parseFloat(e.target.value) }),
+      undoMark: () => this.setEd({ marks: ed.marks.slice(0, -1) }), clearMarks: () => this.setEd({ marks: [] }),
+    };
+  }
   writeVals(ed: EditState, fr: { fw: number; fh: number }): V {
     const sel = ed.texts.find(t => t.id === ed.sel);
     return {
+      ...this.padVals(ed, fr),
       edWrite: ed.mode === 'write', inkBusy: !!ed.inkBusy, inkErr: ed.inkErr || '', hasInk: ed.ink.length > 0, edTextCount: ed.texts.length,
       edInkPaths: ed.ink.map(s => s.reduce((d, n, i) => d + (i % 2 ? `${(n * fr.fh).toFixed(1)} ` : `${i ? 'L' : 'M'}${(n * fr.fw).toFixed(1)} `), '') + (s.length === 2 ? 'l.1 0' : '')),
       edTexts: ed.texts.map(t => ({ id: t.id, left: t.x * fr.fw, top: t.y * fr.fh, width: t.w * fr.fw, fontPx: t.size * fr.fh, lineH: t.size * fr.fh * LINE_H, sel: t.id === ed.sel,
@@ -1381,6 +1456,18 @@ export default class App extends Component<object, State> {
         width: Math.round(sel.w * 100), onWidth: (e: ChangeEvent<HTMLInputElement>) => this.setText(sel.id, { w: Math.min(1 - sel.x, parseFloat(e.target.value) / 100) }),
         remove: () => this.setEd({ texts: ed.texts.filter(t => t.id !== sel.id), sel: null }), done: () => this.setEd({ sel: null }),
       } : null,
+    };
+  }
+
+  padVals(ed: EditState, fr: { fw: number; fh: number }): V {
+    const b = this.padBox(ed, fr), { pw, ph } = this.padSize(fr), mag = pw / (b.w * fr.fw);
+    return {
+      edPad: ed.pad && ed.mode === 'write', togglePad: () => this.setEd({ pad: !ed.pad }), padW: pw, padH: ph,
+      padRect: { left: b.x * fr.fw, top: b.y * fr.fh, width: b.w * fr.fw, height: b.h * fr.fh },
+      padInner: `scale(${mag}) translate(${-b.x * fr.fw}px, ${-b.y * fr.fh}px)`, padGuide: ed.paper === 'lined' ? 0 : 0.75,
+      padDown: (e: PointerEvent<HTMLDivElement>) => { e.stopPropagation(); try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* gone */ } this.inkDown(e, true); },
+      padMove: (e: PointerEvent) => this.inkMove(e), padUp: (e: PointerEvent) => this.inkUp(e),
+      padSpace: () => this.padAdvance(ed, fr), padNewLine: () => this.padAdvance(ed, fr, true),
     };
   }
 
@@ -1396,7 +1483,8 @@ export default class App extends Component<object, State> {
       onScale: num('scale'), onRot: num('rot'), onSkx: num('skx'), onSky: num('sky'),
       rot90: () => this.setEd({ rot: ((ed.rot + 90 + 180) % 360) - 180 }),
       resetEd: () => ed.mode === 'adjust' ? this.setEd({ adj: NO_ADJUST }) : this.setEd({ scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0 }),
-      edMode: ed.mode, setEdMode: (mode: EdMode) => this.setEd({ mode, sel: null }),
+      edMode: ed.mode, setEdMode: (mode: EdMode) => this.setEd({ mode, sel: null }), edBlank: !!ed.paper,
+      ...this.drawVals(ed, fr),
       ...this.writeVals(ed, fr),
       edAdjTool: this.state.edAdjTool || 'white', setEdAdjTool: (t: string) => this.setState({ edAdjTool: t }),
       edPeek: !!this.state.edPeek, peekOn: () => this.setState({ edPeek: true }), peekOff: () => this.state.edPeek && this.setState({ edPeek: false }),
@@ -1409,10 +1497,13 @@ export default class App extends Component<object, State> {
       edDown: (e: PointerEvent<HTMLDivElement>) => {
         e.stopPropagation(); try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* pointer already gone */ }
         if (ed.mode === 'write') return this.inkDown(e);
+        if (ed.mode === 'draw') return this.drawDown(e);
+        if (ed.mode === 'pick') return;
         this.edPts.set(e.pointerId, { x: e.clientX, y: e.clientY }); this.edGestureStart();
       },
       edMove: (e: PointerEvent) => {
         if (ed.mode === 'write') return this.inkMove(e);
+        if (ed.mode === 'draw') return this.drawMove(e);
         if (!this.edPts.has(e.pointerId)) return;
         this.edPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
         const pin = this.edPinch, pts = [...this.edPts.values()];
@@ -1424,7 +1515,7 @@ export default class App extends Component<object, State> {
           const d = this.edDrag; this.setEd({ tx: d.tx + e.clientX - d.x, ty: d.ty + e.clientY - d.y });
         }
       },
-      edUp: (e: PointerEvent) => { if (ed.mode === 'write') return this.inkUp(e); this.edPts.delete(e.pointerId); this.edGestureStart(); },
+      edUp: (e: PointerEvent) => { if (ed.mode === 'write' || ed.mode === 'draw') return this.inkUp(e); this.edPts.delete(e.pointerId); this.edGestureStart(); },
       edMob: this.state.vw < 640, edTool: this.state.edTool || 'scale', setEdTool: (t: string) => this.setState({ edTool: t }),
       edWheel: (e: WheelEvent) => { e.stopPropagation(); this.setEd({ scale: Math.max(0.3, Math.min(4, ed.scale * (e.deltaY > 0 ? 0.95 : 1.05))) }); },
     };

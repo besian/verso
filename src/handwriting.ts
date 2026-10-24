@@ -25,6 +25,13 @@ export function wrapLines(text: string, maxW: number, fontPx: number): string[] 
   return out;
 }
 
+/** Width of the longest line of text at a font size, in px. */
+export function textWidth(text: string, fontPx: number): number {
+  measurer = measurer || document.createElement('canvas').getContext('2d');
+  const ctx = measurer!; ctx.font = `${fontPx}px ${TEXT_FONT}`;
+  return Math.max(0, ...text.split('\n').map(l => ctx.measureText(l).width));
+}
+
 /** Draws the text boxes onto a page canvas of W × H. */
 export async function drawTexts(ctx: CanvasRenderingContext2D, texts: PageText[], W: number, H: number) {
   if (!texts.length) return;
