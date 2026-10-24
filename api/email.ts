@@ -2,6 +2,7 @@
 // because Firebase won't let this project edit its templates. Firebase Admin makes the one-time
 // code; the link in the email goes straight to our /auth/action page, which finishes the job.
 // Needs RESEND_API_KEY and FIREBASE_SERVICE_ACCOUNT (the service account JSON) in Vercel.
+// It also emails the safety inbox (SAFETY_EMAIL) straight away when a report says a child may be at risk.
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -12,6 +13,9 @@ const FROM = process.env.EMAIL_FROM || 'Fletora <noreply@fletora.studio>';
 // Where replies to these emails go (e.g. hello@fletora.studio); without it they go to the no-reply address.
 const REPLY_TO = process.env.EMAIL_REPLY_TO || process.env.VITE_CONTACT_EMAIL || '';
 const GAP_MS = 60_000; // one email per address per minute
+// Who hears about reports that a child may be at risk; must match CHILD_REASON in src/backend.ts.
+const SAFETY_TO = process.env.SAFETY_EMAIL || 'besian@fletora.studio';
+const CHILD_REASON = 'A child may be at risk';
 
 type Kind = 'verify' | 'reset' | 'change';
 const json = (status: number, body: object) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -54,9 +58,53 @@ function render(kind: Kind, email: string, link: string) {
 /** Opening the address in a browser just says it's there. */
 export function GET() { return json(405, { error: 'use POST' }); }
 
+const send = (to: string, subject: string, html: string, text: string, replyTo = REPLY_TO) => fetch('https://api.resend.com/emails', {
+  method: 'POST', headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'content-type': 'application/json' },
+  body: JSON.stringify({ from: FROM, to: [to], subject, html, text, ...(replyTo ? { reply_to: replyTo } : {}) }),
+});
+
+/** A report saying a child may be at risk: check it's real (the reporter's own, already saved), then email the
+ *  safety inbox once with what was reported, so it's seen without waiting for someone to open the admin page. */
+async function childAlert(req: Request, reportId: string) {
+  const { auth, db } = admin();
+  let uid = '';
+  try { uid = (await auth.verifyIdToken((req.headers.get('authorization') || '').replace(/^Bearer /, ''))).uid; }
+  catch { return json(401, { error: 'auth/invalid-user-token' }); }
+  if (!reportId.startsWith(uid + '_')) return json(403, { error: 'not-yours' });
+  const ref = db.collection('reports').doc(reportId), snap = await ref.get(), r = snap.data();
+  if (!r || r.reason !== CHILD_REASON) return json(404, { error: 'no-report' });
+  if (r.alerted) return json(200, { ok: true });
+
+  const user = async (id: string) => (await db.collection('users').doc(id).get()).data() || {};
+  const [owner, by] = await Promise.all([user(r.ownerId), user(r.by)]);
+  const who = (u: Record<string, string>, id: string) => `${u.name || 'No name'} (@${u.handle || '?'}, uid ${id})`;
+  const rows: [string, string][] = [['What', r.kind], ['Reported account', who(owner, r.ownerId)], ['Reported by', who(by, r.by)], ['When', new Date(r.at).toUTCString()]];
+  if (r.kind === 'book') rows.push(['Sketchbook', `${ORIGIN}/@${owner.handle}/${r.targetId}`]);
+  if (r.kind === 'user') rows.push(['Profile', `${ORIGIN}/@${owner.handle}`]);
+  if (r.kind === 'message') {
+    const [chat, msg] = String(r.targetId).split('~');
+    const m = (await db.collection('chats').doc(chat).collection('messages').doc(msg).get()).data();
+    rows.push(['Message', m?.text ? String(m.text) : '(deleted)']);
+  }
+  if (r.note) rows.push(['Their note', r.note]);
+
+  const sans = 'Helvetica,Arial,sans-serif';
+  const html = `<!doctype html><html><body style="margin:0;padding:24px;background:#fbfaf6;color:#222320;font:400 15px/1.55 ${sans}">
+<p style="margin:0 0 6px;color:#ad493a;font-weight:600">Report: a child may be at risk</p>
+<p style="margin:0 0 18px">Look at this now. If a child is in immediate danger call 999. Report child sexual abuse images to the IWF (report.iwf.org.uk) and keep a record; don't delete evidence before it's reported.</p>
+<table cellpadding="6" style="border-collapse:collapse">${rows.map(([k, v]) => `<tr><td style="vertical-align:top;color:#77756e;white-space:nowrap">${k}</td><td style="white-space:pre-wrap;word-break:break-word">${esc(v)}</td></tr>`).join('')}</table>
+<p style="margin:18px 0 0"><a href="${ORIGIN}/admin" style="color:#222320">Open reports</a></p></body></html>`;
+  const text = `Report: a child may be at risk\n\n${rows.map(([k, v]) => `${k}: ${v}`).join('\n')}\n\nOpen reports: ${ORIGIN}/admin`;
+  const res = await send(SAFETY_TO, `Urgent: child safety report (${r.kind})`, html, text, '');
+  if (!res.ok) { console.error('resend', res.status, await res.text()); return json(502, { error: 'send-failed' }); }
+  await ref.update({ alerted: Date.now() });
+  return json(200, { ok: true });
+}
+
 export async function POST(req: Request) {
   if (!process.env.RESEND_API_KEY || !process.env.FIREBASE_SERVICE_ACCOUNT) return json(503, { error: 'not-configured' });
-  const body = await req.json().catch(() => ({})) as { kind?: Kind; email?: string; newEmail?: string };
+  const body = await req.json().catch(() => ({})) as { kind?: Kind | 'child'; email?: string; newEmail?: string; report?: string };
+  if (body.kind === 'child') return childAlert(req, String(body.report || ''));
   const kind = body.kind;
   if (kind !== 'verify' && kind !== 'reset' && kind !== 'change') return json(400, { error: 'bad-request' });
   const { auth, db } = admin();
@@ -102,10 +150,7 @@ export async function POST(req: Request) {
   }
 
   const { subject, html, text } = render(kind, to, ourLink(link));
-  const r = await fetch('https://api.resend.com/emails', {
-    method: 'POST', headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ from: FROM, to: [to], subject, html, text, ...(REPLY_TO ? { reply_to: REPLY_TO } : {}) }),
-  });
+  const r = await send(to, subject, html, text);
   if (!r.ok) { console.error('resend', r.status, await r.text()); return json(502, { error: 'send-failed' }); }
   await ref.set({ at: Date.now() });
   return json(200, { ok: true });

@@ -557,11 +557,18 @@ export async function setBlocked(uid: string, target: string, on: boolean, wasFo
   await batch.commit();
 }
 
-export const REPORT_REASONS = ['Spam or scam', 'Not their own work', 'Harassment or hate', 'Sexual content', 'Something else'] as const;
+// Reports with this reason are emailed to the safety inbox straight away (api/email, which checks the same words).
+export const CHILD_REASON = 'A child may be at risk';
+export const REPORT_REASONS = ['Spam or scam', 'Not their own work', 'Harassment or hate', 'Sexual content', CHILD_REASON, 'Something else'] as const;
 /** Files a report for moderators (one per person per target; reporting again is quietly ignored). */
 export async function report(by: string, r: { kind: 'book' | 'user' | 'message'; targetId: string; ownerId: string; reason: string; note: string }) {
   await setDoc(doc(need().db, 'reports', `${by}_${r.targetId}`), { by, ...r, note: r.note.slice(0, 500), at: Date.now() })
     .catch(e => { if ((e as { code?: string }).code !== 'permission-denied') throw e; });
+  if (r.reason === CHILD_REASON) {
+    const u = need().auth.currentUser;
+    await fetch('/api/email', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + await u!.getIdToken() }, body: JSON.stringify({ kind: 'child', report: `${by}_${r.targetId}` }) })
+      .catch(() => {}); // the report is saved either way and still shows on the admin page
+  }
 }
 
 // ---------- moderation ----------

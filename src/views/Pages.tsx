@@ -105,7 +105,7 @@ function Terms() {
         <P>Messages from people who don’t follow you arrive as requests you can accept, decline or ignore. You can block anyone, and report any message; a reported message is shared with our moderators so they can review it.</P>
       </Sec>
       <Sec title="Moderation">
-        <P>Anyone can report a sketchbook, artist or message. We may hide content, suspend accounts or remove them when these terms are broken, sometimes without notice. If you think we got it wrong, <Contact /> and we’ll take another look.</P>
+        <P>Anyone can report a sketchbook, artist or message. Reports that a child may be at risk come to us straight away and are looked at first; where the law requires it we pass them to the police or the Internet Watch Foundation. We may hide content, suspend accounts or remove them when these terms are broken, sometimes without notice. If you think we got it wrong, <Contact /> and we’ll take another look.</P>
       </Sec>
       <Sec title="From the archive">
         <P>Sketchbooks in From the archive are historical works in the public domain, shown with credit to the artist and the museum or library they come from. They’re there for inspiration; the source’s own terms apply to its images.</P>

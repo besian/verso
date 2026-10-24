@@ -111,6 +111,7 @@ the app falls back to Firebase's plain emails.
    contents into Vercel env var `FIREBASE_SERVICE_ACCOUNT`. Keep this file private; it has full admin access.
 4. Redeploy. Optional: `EMAIL_FROM` (default `Fletora <noreply@fletora.studio>`), `APP_ORIGIN` (default `https://fletora.studio`),
    `EMAIL_REPLY_TO` (where replies go; defaults to `VITE_CONTACT_EMAIL`).
+   `SAFETY_EMAIL` (who gets emailed at once when a report says a child may be at risk; defaults to besian@fletora.studio).
 
 ## Handwriting to text (Claude)
 
