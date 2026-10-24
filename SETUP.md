@@ -98,3 +98,15 @@ redeploy is needed after changing them.
 
 Everything is publicly readable so Explore and artist profiles work signed out. Email
 addresses stay in Firebase Auth and are never written to Firestore.
+
+## Branded emails (Resend)
+
+Firebase won't let this project edit its email templates, so `api/email.ts` sends the account emails
+(confirm email, reset password, change email) itself through Resend. Until the two keys below are set,
+the app falls back to Firebase's plain emails.
+
+1. resend.com → Domains → add `fletora.studio`, and add the DNS records it shows in Vercel → Domains → fletora.studio → DNS.
+2. Resend → API Keys → create one (Sending access) → Vercel env var `RESEND_API_KEY`.
+3. Firebase → ⚙ Project settings → Service accounts → Generate new private key → paste the whole JSON file's
+   contents into Vercel env var `FIREBASE_SERVICE_ACCOUNT`. Keep this file private; it has full admin access.
+4. Redeploy. Optional: `EMAIL_FROM` (default `Fletora <noreply@fletora.studio>`), `APP_ORIGIN` (default `https://fletora.studio`).
