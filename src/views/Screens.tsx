@@ -41,6 +41,7 @@ export function HomeScreen({ v }: { v: V }) {
           {signedOut
             ? <button onClick={v.goExplore} className={hoverLine} style={underlineBtn(15)}>Explore sketchbooks ↗</button>
             : <button onClick={v.startOwn} className={hoverLine} style={underlineBtn(15)}>Start your own →</button>}
+          <button onClick={v.surprise} className={hoverLine} style={underlineBtn(15)}>Surprise me ✦</button>
         </div>
         {signedOut && <div style={{ fontSize: 13, color: STONE }}>Already a member? <button onClick={v.openSignin} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${STONE}`, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Sign in</button></div>}
         {v.hmPick && (
@@ -103,6 +104,7 @@ export function Explore({ v }: { v: V }) {
             <input value={v.exQ} onChange={v.onExQ} placeholder="Search sketchbooks or artists" style={{ flex: 1, minWidth: 0, height: '100%', border: 'none', outline: 'none', background: 'none', color: INK, font: `500 14px ${SANS}` }} />
           </div>
           {v.notMob && <div style={{ flex: 1, minWidth: 0 }} />}
+          {v.notMob && <button onClick={v.surprise} title="Open a random sketchbook" className={hover(`border-color:${INK}`)} style={{ height: 40, padding: '0 14px', border: '1px solid rgba(var(--ink-rgb),.2)', borderRadius: 2, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>Surprise me ✦</button>}
           {v.notMob && <div style={segGroup}>
             <button onClick={v.sortTrend} style={{ ...segBtn(v.sTrBg, v.sTrFg), padding: '0 14px' }}>Featured</button>
             <button onClick={v.sortNew} style={{ ...segBtn(v.sNewBg, v.sNewFg), padding: '0 14px' }}>Recent</button>
@@ -114,6 +116,7 @@ export function Explore({ v }: { v: V }) {
         </div>
         <div role="group" aria-label="Filter by medium" onWheel={wheelSideways} style={{ display: 'flex', gap: 6, overflowX: 'auto', margin: `0 -${v.exPadX}px`, padding: `2px ${v.exPadX}px 4px`, scrollbarWidth: 'none', maskImage: `linear-gradient(90deg,#000 calc(100% - ${v.exPadX + 24}px),transparent)` } as CSSProperties}>
           {!v.notMob && <>
+            <button onClick={v.surprise} style={chipStyle(false)}>Surprise me ✦</button>
             <button onClick={v.sortTrend} aria-pressed={v.sTrBg !== 'transparent'} style={chipStyle(v.sTrBg !== 'transparent')}>Featured</button>
             <button onClick={v.sortNew} aria-pressed={v.sNewBg !== 'transparent'} style={chipStyle(v.sNewBg !== 'transparent')}>Recent</button>
             <span aria-hidden="true" style={{ flexShrink: 0, width: 1, margin: '4px 4px', background: 'rgba(var(--ink-rgb),.2)' }} />

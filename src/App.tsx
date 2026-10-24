@@ -246,6 +246,25 @@ export default class App extends Component<object, State> {
       });
     }).catch(e => { console.error(e); this.setState({ exBusy: false, community: this.state.community || [] }); });
   }
+  /** Surprise me: someone else's public sketchbook at random, opened at a random drawing. */
+  lastSurprise = '';
+  async surprise() {
+    const me = this.state.acct?.uid, ok = (b: OtherBook) => b.images.length > 0 && b.ownerId !== me;
+    let pool = this.community([...(this.state.community || []), ...(this.state.followFeed || []), ...(this.state.pick ? [this.state.pick] : [])]).filter(ok);
+    if (!pool.length) {
+      // Nothing loaded yet (e.g. straight from the home page): fetch a page of the community first.
+      try { pool = this.community((await api.communityPage('trending', null)).books.map((b, i) => toOther(b, i))).filter(ok); } catch (e) { console.error(e); }
+    }
+    pool = [...new Map(pool.map(b => [b.id, b])).values()];
+    if (pool.length > 1) pool = pool.filter(b => b.id !== this.lastSurprise);
+    if (!pool.length) return this.toast('No sketchbooks to show yet. Check back soon.');
+    const b = pool[Math.floor(Math.random() * pool.length)]; this.lastSurprise = b.id;
+    this.openOtherBook(b);
+    // Turn to a random page: leaf L shows image 2(L-1) on its front (right page, at p = L) and the next on its back (left page, at p = L + 1).
+    const k = Math.floor(Math.random() * b.images.length), at = Math.floor(k / 2) + 1 + (k % 2);
+    setTimeout(() => { if (this.state.other?.id === b.id) { this.turnTo(at, 0); this.animate(); } }, 350);
+  }
+
   /** The staff pick, shown first on the home shelf. */
   loadPick() {
     api.getPick().then(p => p ? api.getBook(p.bookId) : null).then(d => this.setState({ pick: d && d.pageCount > 0 ? toOther(d, 0) : null })).catch(() => this.setState({ pick: null }));
@@ -1661,7 +1680,7 @@ export default class App extends Component<object, State> {
       navMineLine: mode === 'mine' ? INK : 'transparent', navMineFg: mode === 'mine' ? INK : STONE,
       navExLine: mode === 'explore' || mode === 'other' ? INK : 'transparent', navExFg: mode === 'explore' || mode === 'other' ? INK : STONE,
       isProfile: mode === 'profile', isHome: mode === 'home' && !!s.acct, isLanding: mode === 'home' && !s.acct,
-      goHome: () => this.goMode('home'), goMine: () => this.goMode('mine'), goExplore: () => this.goMode('explore'),
+      goHome: () => this.goMode('home'), goMine: () => this.goMode('mine'), goExplore: () => this.goMode('explore'), surprise: () => this.surprise(),
       openArtist: () => other && 'artist' in other && this.openProfile(this.whoOf(other)),
       otherPages: (other as OtherBook | null)?.pages || 0,
       artist: (other as OtherBook | null)?.artist || '',
