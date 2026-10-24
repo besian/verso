@@ -157,7 +157,7 @@ export function Explore({ v }: { v: V }) {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 28px', paddingBottom: 18, borderBottom: '1px solid rgba(var(--ink-rgb),.2)' }}>
               {v.exPeople.map((p: V) => (
                 <button key={p.key} onClick={p.open} className={hover(`color:${MARK}`)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', textAlign: 'left', minWidth: 0 }}>
-                  <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: '50%', background: p.avBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 17px ${SERIF}` }}>{p.init}</span>
+                  <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.22)', boxSizing: 'border-box', background: p.avBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 17px ${SERIF}` }}>{p.init}</span>
                   <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                     <span style={{ ...serif(22, 1.1, 'normal'), color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}{p.verified && <Verified size={14} />}</span>
                     <span style={{ fontSize: 13, color: MUTED }}>{p.handle}</span>
@@ -359,7 +359,7 @@ export function Profile({ v }: { v: V }) {
       {v.pfPreviewing && <div style={{ alignSelf: 'flex-start', padding: '5px 10px', border: `1px solid ${MARK}`, ...label(MARK, 10) }}>Previewing as a visitor</div>}
       {v.pfMine && !v.acVerified && <VerifyBanner v={v} />}
       <div style={{ display: 'flex', alignItems: mob ? 'flex-start' : 'center', gap: mob ? 14 : 20, flexWrap: mob ? 'wrap' : 'nowrap' }}>
-        <div style={{ width: mob ? 56 : 72, height: mob ? 56 : 72, flexShrink: 0, borderRadius: '50%', background: v.pfAvBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 ${mob ? 22 : 28}px ${SERIF}` }}>{v.pfInit}</div>
+        <div style={{ width: mob ? 56 : 72, height: mob ? 56 : 72, flexShrink: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.22)', boxSizing: 'border-box', background: v.pfAvBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 ${mob ? 22 : 28}px ${SERIF}` }}>{v.pfInit}</div>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '2px 12px', flexWrap: 'wrap' }}>
             <h1 style={{ margin: 0, ...serif(mob ? 30 : 36, 1.05, '-.01em') }}>{v.pfName}{v.pfVerified && <Verified size={mob ? 20 : 22} />}</h1>
@@ -414,7 +414,7 @@ export function Profile({ v }: { v: V }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 240px), 1fr))', gap: '18px 32px' }}>
               {v.pfPeople.map((p: V) => (
                 <button key={p.key} onClick={p.open} className={hover(`color:${MARK}`)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', textAlign: 'left', minWidth: 0 }}>
-                  <span style={{ width: 44, height: 44, flexShrink: 0, borderRadius: '50%', background: p.avBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 18px ${SERIF}` }}>{p.init}</span>
+                  <span style={{ width: 44, height: 44, flexShrink: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.22)', boxSizing: 'border-box', background: p.avBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 18px ${SERIF}` }}>{p.init}</span>
                   <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}><span style={{ ...serif(22, 1.1, 'normal'), color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}{p.verified && <Verified size={14} />}</span><span style={{ fontSize: 13, color: MUTED }}>{p.handle}</span></span>
                 </button>
               ))}

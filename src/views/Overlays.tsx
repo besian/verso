@@ -51,7 +51,7 @@ export function EditProfile({ v }: { v: V }) {
   const fields = (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <div style={{ width: 80, height: 80, flexShrink: 0, borderRadius: '50%', background: v.dAvBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 600 }}>{v.dInit}</div>
+        <div style={{ width: 80, height: 80, flexShrink: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.22)', boxSizing: 'border-box', background: v.dAvBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 600 }}>{v.dInit}</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button onClick={v.pickAv} className={hoverTint} style={{ ...ghostBtn, height: 40, padding: '0 14px' }}>Upload photo</button>
           {v.dHasAv && <button onClick={v.removeAv} style={{ ...linkBtn(MARK), height: 40, padding: '0 8px' }}>Remove</button>}

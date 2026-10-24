@@ -6,7 +6,7 @@ import { INK, MARK, MUTED, PAPER, SANS, SERIF, label, pagePad } from '../theme';
 import { MoreMenu } from './Overlays';
 import { Verified } from './Verified';
 
-const avatar = (bg: string, size: number): CSSProperties => ({ width: size, height: size, flexShrink: 0, borderRadius: '50%', background: bg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `500 ${Math.round(size * 0.36)}px ${SANS}` });
+const avatar = (bg: string, size: number): CSSProperties => ({ width: size, height: size, flexShrink: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.22)', boxSizing: 'border-box', background: bg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `500 ${Math.round(size * 0.36)}px ${SANS}` });
 const btn = (filled: boolean): CSSProperties => ({ height: 38, padding: '0 16px', borderRadius: 2, border: filled ? 'none' : '1.5px solid rgba(var(--ink-rgb),.4)', background: filled ? INK : 'none', color: filled ? PAPER : INK, font: `500 14px ${SANS}`, cursor: 'pointer' });
 
 /** Messages: your conversations and requests on the left (or the whole screen on a phone), the open one on the right. */
