@@ -227,27 +227,37 @@ function BackFace({ leaf, onClick, style }: { leaf: V; onClick?: () => void; sty
   );
 }
 
-// Phones get half the strips: each strip repaints the whole page, front and back.
+// Phones get half the strips: each strip is another pair of layers to draw.
 const TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
-const CURL_SEGS = TOUCH ? 6 : 12;
+const CURL_SEGS = TOUCH ? 4 : 12;
 /**
  * A leaf mid-turn, bent like paper: split into vertical strips, each rotated a little more than
  * the one before it (nested, so the bends add up toward the outer edge). Each strip shows its
- * slice of the full front and back faces, with a soft shadow that deepens along the curl.
+ * slice of the front and back, with a soft shadow that deepens along the curl.
  */
 function CurledLeaf({ leaf, W, H }: { leaf: V; W: number; H: number }) {
   // Bend grows toward the outer edge (strip k turns by k/Σk of the total), so the curve is flat at the spine.
   const n = CURL_SEGS, s = W / n, step = leaf.curl * 2 / (n * (n - 1));
+  // Covers keep their full faces (label, elastic band). Inner pages draw each strip as one image layer (photo and
+  // wear in a single background) plus one shade layer: the full faces' half-dozen layers per strip were the
+  // biggest cost of turning a page on phones.
+  const full = leaf.isCoverAny || leaf.isBackCover;
+  const side = (back: boolean, k: number) => {
+    const shade = Math.min(0.6, +(back ? leaf.shadeB : leaf.shadeF) + leaf.curlAmt * (back ? 0.16 : 0.22) * (k / n) ** 2);
+    const left = back ? -(W - (k + 1) * s) : -k * s;
+    return (
+      <div style={{ ...fill, overflow: 'hidden', backfaceVisibility: 'hidden', transform: back ? 'rotateY(180deg)' : undefined }}>
+        {full
+          ? <div style={{ position: 'absolute', top: 0, left, width: W, height: H }}>{back ? <BackFace leaf={leaf} style={{ transform: 'none', backfaceVisibility: 'visible' }} /> : <FrontFace leaf={leaf} style={{ backfaceVisibility: 'visible' }} />}</div>
+          : <div style={{ position: 'absolute', top: 0, left, width: W, height: H, borderRadius: back ? '10px 2px 2px 10px' : '2px 10px 10px 2px', background: (back ? leaf.overlayB : leaf.overlayF) ? `${back ? leaf.overlayB : leaf.overlayF},${back ? leaf.backBg : leaf.frontBg}` : back ? leaf.backBg : leaf.frontBg }} />}
+        <div style={{ ...fill, background: '#1e1810', opacity: full ? +(leaf.curlAmt * (back ? 0.16 : 0.22) * (k / n) ** 2).toFixed(3) : +shade.toFixed(3), pointerEvents: 'none' }} />
+      </div>
+    );
+  };
   const seg = (k: number): ReactNode => (
     <div style={{ position: 'absolute', left: k ? s : 0, top: 0, width: s + 0.75, height: H, transformOrigin: '0 50%', transformStyle: 'preserve-3d', transform: k ? `rotateY(${(step * k).toFixed(3)}deg)` : undefined }}>
-      <div style={{ ...fill, overflow: 'hidden', backfaceVisibility: 'hidden' }}>
-        <div style={{ position: 'absolute', top: 0, left: -k * s, width: W, height: H }}><FrontFace leaf={leaf} style={{ backfaceVisibility: 'visible' }} /></div>
-        <div style={{ ...fill, background: `rgba(30,24,16,${(leaf.curlAmt * 0.22 * (k / n) ** 2).toFixed(3)})`, pointerEvents: 'none' }} />
-      </div>
-      <div style={{ ...fill, overflow: 'hidden', backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
-        <div style={{ position: 'absolute', top: 0, left: -(W - (k + 1) * s), width: W, height: H }}><BackFace leaf={leaf} style={{ transform: 'none', backfaceVisibility: 'visible' }} /></div>
-        <div style={{ ...fill, background: `rgba(30,24,16,${(leaf.curlAmt * 0.16 * (k / n) ** 2).toFixed(3)})`, pointerEvents: 'none' }} />
-      </div>
+      {side(false, k)}
+      {side(true, k)}
       {k < n - 1 && seg(k + 1)}
     </div>
   );

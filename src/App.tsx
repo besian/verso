@@ -727,12 +727,12 @@ export default class App extends Component<object, State> {
   nLeaves() { return this.nPages() / 2 + 2; }
   maxP() { return this.nLeaves(); }
   /** Background + page number for one side of a leaf. Leaf 0 is the front cover, the last leaf the back cover. */
-  face(leaf: number, side: 0 | 1, w = 0): { bg: string; num: string; idx: number; wear: Wear | null; inside?: boolean; note?: string } {
+  face(leaf: number, side: 0 | 1, w = 0, small = false): { bg: string; num: string; idx: number; wear: Wear | null; inside?: boolean; note?: string } {
     const N = this.nLeaves(), book = this.curBook(), cover = book?.color ?? '#b8243a', inner = '#e9e2d3';
     if (leaf === 0) return side ? { bg: inner, num: '', idx: -1, wear: null, inside: true } : { bg: this.coverBg(book, true), num: '', idx: -1, wear: null };
     if (leaf === N - 1) return side ? { bg: cover, num: '', idx: -1, wear: null } : { bg: inner, num: '', idx: -1, wear: null, inside: true };
     const pi = 2 * (leaf - 1) + side, img = this.state.images[pi], wear = this.wear(`${book?.id}:${pi}`, side ? 'l' : 'r', w), paper = wear.paper;
-    return { bg: img ? `url("${this.blobUrl(img)}") center/cover no-repeat ${paper}` : paper, num: String(pi + 1), idx: img ? pi : -1, wear, note: img ? noteText(book?.notes?.[img]) : '' };
+    return { bg: img ? `url("${this.blobUrl(small ? this.thumbOf(book, img) : img)}") center/cover no-repeat ${paper}` : paper, num: String(pi + 1), idx: img ? pi : -1, wear, note: img ? noteText(book?.notes?.[img]) : '' };
   }
   /** Decodes the photos a few pages either side of the visible ones, so a page that comes into view is ready to draw. */
   decoded = new Map<string, HTMLImageElement>();
@@ -1559,7 +1559,9 @@ export default class App extends Component<object, State> {
       // Pages near the one turning fan out, always in order so none passes through another.
       const a = -(A * clamp01((x + 2.5) / 2.5) + (180 - 2 * A) * ease + A * clamp01((x - 1) / 2.5));
       const rad = -a * Math.PI / 180;
-      const F = this.face(i, 0, W), B = this.face(i, 1, W);
+      // Leaves out of sight (under the open spread, waiting to be turned to) use the small copy of each photo;
+      // the spread and the leaf turning use the full one. Less to decode and hold in memory on phones.
+      const small = i < Math.floor(p) - 1 || i > Math.ceil(p) + 1, F = this.face(i, 0, W, small), B = this.face(i, 1, W, small);
       // Mid-turn the page bends: the outer edge trails behind the turn, most at halfway.
       // Paper turn: the outer edge leads as the page lifts, then the curl relaxes as it lands.
       // Capped so the tip never swings past the pages lying on either side.
