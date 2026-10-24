@@ -108,6 +108,8 @@ const fmtK = (v: number) => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v);
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 /** Peak total bend from spine to outer edge of a turning page (degrees). */
 const CURL_DEG = 110;
+/** Leaves drawn on each side of the open spread. */
+const LEAF_WINDOW = 3;
 /** Page width as a share of a phone's screen: closed, and open (two pages side by side, plus the fan of turning pages). */
 const PHONE_CLOSED = 0.6, PHONE_OPEN = 0.44;
 const IS_TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
@@ -732,10 +734,22 @@ export default class App extends Component<object, State> {
     const pi = 2 * (leaf - 1) + side, img = this.state.images[pi], wear = this.wear(`${book?.id}:${pi}`, side ? 'l' : 'r', w), paper = wear.paper;
     return { bg: img ? `url("${this.blobUrl(img)}") center/cover no-repeat ${paper}` : paper, num: String(pi + 1), idx: img ? pi : -1, wear, note: img ? noteText(book?.notes?.[img]) : '' };
   }
+  /** Decodes the photos a few pages either side of the visible ones, so a page that comes into view is ready to draw. */
+  decoded = new Map<string, HTMLImageElement>();
+  prefetchPages(lo: number, hi: number) {
+    const imgs = this.state.images, from = Math.max(0, 2 * (lo - 1 - 2)), to = Math.min(imgs.length, 2 * (hi + 2));
+    for (let k = from; k < to; k++) {
+      const u = imgs[k] && this.blobUrl(imgs[k]); if (!u || this.decoded.has(u)) continue;
+      if (this.decoded.size > 60) this.decoded.delete(this.decoded.keys().next().value!);
+      const im = new Image(); im.decoding = 'async'; im.src = u; im.decode?.().catch(() => {}); this.decoded.set(u, im);
+    }
+  }
   wearCache = new Map<string, Wear>();
   /** Per-page wear, cached because the book re-renders every animation frame. */
   wear(seed: string, outer: 'l' | 'r', w: number) {
-    const k = `${seed}|${w}`; let v = this.wearCache.get(k);
+    // Width in 24px steps: on phones the book's size changes every frame while it opens, and an exact key
+    // rebuilt every page's wear (and restyled it) on each of those frames.
+    w = Math.round(w / 24) * 24; const k = `${seed}|${w}`; let v = this.wearCache.get(k);
     if (!v) { if (this.wearCache.size > 2000) this.wearCache.clear(); v = pageWear(seed, outer, w); this.wearCache.set(k, v); }
     return v;
   }
@@ -1534,8 +1548,12 @@ export default class App extends Component<object, State> {
     const shiftR = -W / 2 + W * clamp01(p - (N - 1)), shiftF = shiftR + (W / 2 - shiftR) * fsx;
     const shift = shiftN + (shiftF - shiftN) * fz;
 
-    const leaves = Array.from({ length: N }, (_, i) => {
-      const x = p - i, t = clamp01(x);
+    // Only the leaves near the open spread are drawn: the rest lie flat under them, out of sight, and drawing every
+    // page of a long book (two full-size photos each) is what made opening and turning slow on phones.
+    const lo = Math.max(0, Math.floor(p) - LEAF_WINDOW), hi = Math.min(N - 1, Math.ceil(p) + LEAF_WINDOW);
+    this.prefetchPages(lo, hi);
+    const leaves = Array.from({ length: hi - lo + 1 }, (_, j) => {
+      const i = lo + j, x = p - i, t = clamp01(x);
       const A = fan * 2.5 * clamp01(Math.min(p, N - p));
       const ease = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
       // Pages near the one turning fan out, always in order so none passes through another.

@@ -185,7 +185,8 @@ function DogEar({ ear }: { ear?: Wear['ear'] }) {
   );
 }
 function PageWear({ overlay }: { overlay?: string }) {
-  return overlay ? <div style={{ ...fill, background: overlay, mixBlendMode: 'multiply', pointerEvents: 'none' }} /> : null;
+  // Multiply blending costs a lot to composite in 3D on phones; plain blending looks nearly the same for these faint tints.
+  return overlay ? <div style={{ ...fill, background: overlay, mixBlendMode: TOUCH ? undefined : 'multiply', pointerEvents: 'none' }} /> : null;
 }
 
 const leafNum: CSSProperties = { position: 'absolute', bottom: 12, fontSize: 11, color: 'rgba(40,40,60,.45)' };
@@ -226,7 +227,9 @@ function BackFace({ leaf, onClick, style }: { leaf: V; onClick?: () => void; sty
   );
 }
 
-const CURL_SEGS = 12;
+// Phones get half the strips: each strip repaints the whole page, front and back.
+const TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+const CURL_SEGS = TOUCH ? 6 : 12;
 /**
  * A leaf mid-turn, bent like paper: split into vertical strips, each rotated a little more than
  * the one before it (nested, so the bends add up toward the outer edge). Each strip shows its
@@ -254,7 +257,7 @@ function CurledLeaf({ leaf, W, H }: { leaf: V; W: number; H: number }) {
 function Book3D({ v }: { v: V }) {
   return (
     <div style={{ position: 'relative', width: 0, height: v.H, transformStyle: 'preserve-3d', transform: v.bookTransform, opacity: v.bookOp }}>
-      <div style={{ position: 'absolute', left: v.shadowLeft, top: 0, width: v.shadowW, height: v.H, transform: 'translateZ(-2px) translateY(26px)', background: 'rgba(var(--ink-rgb),.16)', filter: 'blur(22px)', borderRadius: 2, opacity: v.openShadowOp }} />
+      <div style={{ position: 'absolute', left: v.shadowLeft, top: 0, width: v.shadowW, height: v.H, transform: 'translateZ(-2px) translateY(26px) scale(1.12)', background: 'radial-gradient(closest-side, rgba(var(--ink-rgb),.17), rgba(var(--ink-rgb),.08) 60%, transparent)', opacity: v.openShadowOp }} />
       <div style={{ position: 'absolute', left: v.bodyLeft, top: 0, width: v.W, height: v.H, transform: 'translateZ(-1px)', opacity: v.bodyOp, pointerEvents: 'none' }}>
         <div style={{ ...fill, transform: v.bodyBack ? 'translate(-7px,6px)' : 'translate(7px,6px)', borderRadius: v.bodyBack ? '11px 3px 3px 11px' : '3px 11px 11px 3px', background: v.boardColor, filter: 'brightness(.6)', boxShadow: '0 24px 40px rgba(34,35,32,.16)' }} />
         <div style={{ position: 'absolute', top: 3, bottom: -3, left: v.bodyBack ? -4 : 4, right: v.bodyBack ? 4 : -4, borderRadius: v.bodyBack ? '9px 2px 2px 9px' : '2px 9px 9px 2px', background: PAGE_EDGES }} />

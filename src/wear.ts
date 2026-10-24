@@ -20,9 +20,17 @@ function rng(seed: number) {
   return () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t ^= t + Math.imul(t ^ (t >>> 7), 61 | t); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 
-const grain = (alpha: number) => `url("data:image/svg+xml,${encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 .55  0 0 0 0 .47  0 0 0 0 .36  0 0 0 ${alpha} 0"/></filter><rect width="100%" height="100%" filter="url(#n)"/></svg>`,
-)}")`;
+/** Paper grain as a small noise tile, drawn once to a PNG. (An SVG feTurbulence background looked the same but
+ *  phones, Safari especially, re-ran the filter whenever a page was drawn, which made turning pages slow.) */
+const grain = (alpha: number) => {
+  if (typeof document === 'undefined') return 'none';
+  const c = document.createElement('canvas'); c.width = c.height = 160;
+  const ctx = c.getContext('2d'); if (!ctx) return 'none';
+  const img = ctx.createImageData(160, 160), d = img.data, r = rng(7);
+  for (let i = 0; i < d.length; i += 4) { d[i] = 140; d[i + 1] = 120; d[i + 2] = 92; d[i + 3] = Math.round(r() * r() * alpha * 1.5 * 255); }
+  ctx.putImageData(img, 0, 0);
+  return `url("${c.toDataURL('image/png')}")`;
+};
 const GRAIN = grain(0.11);
 const PAPERS = ['#f3efe6', '#f1ece1', '#f4f0e7', '#efe9dc', '#f2ede3'];
 
