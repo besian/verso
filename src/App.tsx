@@ -271,7 +271,7 @@ export default class App extends Component<object, State> {
   /** Handles an emailed link: confirm email straight away, or ask for the new password first. */
   async openAction() {
     const q = new URLSearchParams(location.search), mode = q.get('mode') || '', code = q.get('oobCode') || '';
-    let next = '/'; try { const c = new URL(q.get('continueUrl') || '', location.origin); if (c.origin === location.origin) next = c.pathname + c.search; } catch { /* no continue link */ }
+    let next = '/'; try { const c = new URL(q.get('continueUrl') || '', location.origin); if (c.origin === location.origin && !c.pathname.startsWith('/auth/')) next = c.pathname + c.search; } catch { /* no continue link */ }
     const set = (p: Partial<NonNullable<State['act']>>) => this.setState(s => ({ act: { ...(s.act || { mode, code, next, step: 'checking', email: '', pw: '', err: '' }), ...p } }));
     cancelAnimationFrame(this.raf); this.setState({ mode: 'action', other: null, focus: false, fz: 0, managing: false, act: { mode, code, next, step: 'checking', email: '', pw: '', err: '' } });
     try {

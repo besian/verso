@@ -91,7 +91,7 @@ export function watchAuth(cb: (u: AuthUser | null) => void): () => void {
 
 export async function signIn(email: string, pw: string) { await signInWithEmailAndPassword(need().auth, email, pw); }
 export async function signOut() { if (auth) await fbSignOut(auth); }
-export async function resetPassword(email: string) { await sendPasswordResetEmail(need().auth, email); }
+export async function resetPassword(email: string) { await withLink(s => sendPasswordResetEmail(need().auth, email, s)); }
 
 /** Creates the auth user, then claims the handle and writes the public profile. */
 export async function signUp(email: string, pw: string, name: string, handle: string): Promise<Account> {
@@ -583,12 +583,14 @@ async function reauth(pw: string) {
   return u;
 }
 
-/** Sends the confirmation email; its link leads back to fletora. (Falls back to Firebase's own page
- *  if this domain isn't in Authentication → Settings → Authorized domains.) */
-async function sendVerification(u: User) {
-  try { await sendEmailVerification(u, { url: location.origin + '/settings' }); }
-  catch (e) { if ((e as { code?: string }).code !== 'auth/unauthorized-continue-uri') throw e; await sendEmailVerification(u); }
+/** Sends an email whose link opens our own /auth/action page: handleCodeInApp makes Firebase pass the code
+ *  straight through instead of acting on it, so this works without the console's custom action URL.
+ *  (Falls back to Firebase's own page if this domain isn't in Authentication → Settings → Authorized domains.) */
+async function withLink(send: (s?: { url: string; handleCodeInApp: boolean }) => Promise<void>) {
+  try { await send({ url: location.origin + '/auth/action', handleCodeInApp: true }); }
+  catch (e) { if ((e as { code?: string }).code !== 'auth/unauthorized-continue-uri') throw e; await send(); }
 }
+const sendVerification = (u: User) => withLink(s => sendEmailVerification(u, s));
 // ---------- email links (our own page at /auth/action instead of Firebase's) ----------
 
 /** What an emailed link is for, and the address it concerns. Throws for expired or used links. */
@@ -607,7 +609,7 @@ export async function resendVerification() { const u = need().auth.currentUser; 
 export async function refreshVerified(): Promise<boolean> { const u = need().auth.currentUser; if (!u) return false; await u.reload(); return u.emailVerified; }
 
 /** Sends a confirmation link to the new address; the email changes once it's clicked. */
-export async function changeEmail(pw: string, next: string) { await verifyBeforeUpdateEmail(await reauth(pw), next); }
+export async function changeEmail(pw: string, next: string) { const u = await reauth(pw); await withLink(s => verifyBeforeUpdateEmail(u, next, s)); }
 
 export async function changePassword(pw: string, next: string) { await updatePassword(await reauth(pw), next); }
 
