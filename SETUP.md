@@ -109,7 +109,8 @@ the app falls back to Firebase's plain emails.
 2. Resend → API Keys → create one (Sending access) → Vercel env var `RESEND_API_KEY`.
 3. Firebase → ⚙ Project settings → Service accounts → Generate new private key → paste the whole JSON file's
    contents into Vercel env var `FIREBASE_SERVICE_ACCOUNT`. Keep this file private; it has full admin access.
-4. Redeploy. Optional: `EMAIL_FROM` (default `Fletora <noreply@fletora.studio>`), `APP_ORIGIN` (default `https://fletora.studio`).
+4. Redeploy. Optional: `EMAIL_FROM` (default `Fletora <noreply@fletora.studio>`), `APP_ORIGIN` (default `https://fletora.studio`),
+   `EMAIL_REPLY_TO` (where replies go; defaults to `VITE_CONTACT_EMAIL`).
 
 ## Handwriting to text (Claude)
 

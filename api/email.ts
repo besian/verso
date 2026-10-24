@@ -9,6 +9,8 @@ import { createHash } from 'node:crypto';
 
 const ORIGIN = process.env.APP_ORIGIN || 'https://fletora.studio';
 const FROM = process.env.EMAIL_FROM || 'Fletora <noreply@fletora.studio>';
+// Where replies to these emails go (e.g. hello@fletora.studio); without it they go to the no-reply address.
+const REPLY_TO = process.env.EMAIL_REPLY_TO || process.env.VITE_CONTACT_EMAIL || '';
 const GAP_MS = 60_000; // one email per address per minute
 
 type Kind = 'verify' | 'reset' | 'change';
@@ -102,7 +104,7 @@ export async function POST(req: Request) {
   const { subject, html, text } = render(kind, to, ourLink(link));
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST', headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ from: FROM, to: [to], subject, html, text }),
+    body: JSON.stringify({ from: FROM, to: [to], subject, html, text, ...(REPLY_TO ? { reply_to: REPLY_TO } : {}) }),
   });
   if (!r.ok) { console.error('resend', r.status, await r.text()); return json(502, { error: 'send-failed' }); }
   await ref.set({ at: Date.now() });
