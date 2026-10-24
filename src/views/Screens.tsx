@@ -211,9 +211,11 @@ const actionBtn = (filled: boolean): CSSProperties => filled
   : { height: 44, padding: '0 18px', borderRadius: 2, border: '1.5px solid rgba(var(--ink-rgb),.5)', background: 'none', color: INK, font: `500 14px ${SANS}`, cursor: 'pointer' };
 
 /** One sketchbook on the profile shelf: covers share a height scaled by shape (not by column width), sitting on a common line so titles align. */
-function ShelfBook({ pb, zone }: { pb: V; zone: number }) {
+function ShelfBook({ pb, zone, fit }: { pb: V; zone: number; fit?: boolean }) {
+  // fit: the item is exactly as wide as its cover, so the shelf's gaps are even whatever the shapes (see Profile).
+  const w = Math.round(zone * 0.94 * pb.s * pb.a);
   return (
-    <div onClick={pb.open} style={{ display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer', minWidth: 0 }}>
+    <div onClick={pb.open} style={{ display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer', minWidth: 0, width: fit ? w + 7 : undefined }}>
       <div style={{ height: zone, display: 'flex', alignItems: 'flex-end' }}>
         <div className={hover('transform:translateY(-6px)')} style={{ position: 'relative', width: `min(calc(100% - 7px), ${Math.round(zone * 0.94 * pb.s * pb.a)}px)`, aspectRatio: String(pb.a), transition: 'transform .35s cubic-bezier(.2,.8,.2,1)' }}>
           <ClosedBook bg={pb.bg} board={pb.color} label={pb.showLabel ? pb.name : null} />
@@ -356,10 +358,12 @@ export function Profile({ v }: { v: V }) {
             </div>
           ) : <div style={{ fontSize: 14, color: MUTED }}>You’re not following anyone yet. Follow artists from their profile to see their new pages on your home shelf.</div>)}
           {(v.pfBooks.length > 0 || v.pfShowNew) && (
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${mob ? 140 : 180}px, 1fr))`, gap: mob ? '28px 16px' : '40px 28px' }}>
-              {v.pfBooks.map((pb: V) => <ShelfBook key={pb.key} pb={pb.moveTo ? { ...pb, cols: v.pfColl || [], native: v.isTouch || mob, menuOpen: v.colMenu === pb.key, toggleMenu: () => v.toggleColMenu(pb.key) } : pb} zone={zone} />)}
+            // Phones: two even columns. Wider screens: a row of books each as wide as its cover with even gaps between
+            // (equal columns left a big gap after tall, narrow covers and a small one after wide ones).
+            <div style={mob ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '28px 16px' } : { display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: '40px 44px' }}>
+              {v.pfBooks.map((pb: V) => <ShelfBook key={pb.key} fit={!mob} pb={pb.moveTo ? { ...pb, cols: v.pfColl || [], native: v.isTouch || mob, menuOpen: v.colMenu === pb.key, toggleMenu: () => v.toggleColMenu(pb.key) } : pb} zone={zone} />)}
               {v.pfShowNew && (
-                <div onClick={v.pfNew} style={{ display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer', minWidth: 0 }}>
+                <div onClick={v.pfNew} style={{ display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer', minWidth: 0, width: mob ? undefined : Math.round(zone * 0.94 * 0.72) + 7 }}>
                   <div style={{ height: zone, display: 'flex', alignItems: 'flex-end' }}>
                     <div className={hover(`border-color:${MARK};color:${MARK}`)} style={{ width: `min(100%, ${Math.round(zone * 0.94 * 0.72)}px)`, aspectRatio: '.72', boxSizing: 'border-box', border: '1.5px dashed rgba(var(--ink-rgb),.35)', borderRadius: '2px 10px 10px 2px', display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 500, color: MUTED }}>
                       <span style={{ fontSize: 26, fontWeight: 300, lineHeight: 1 }}>+</span>New

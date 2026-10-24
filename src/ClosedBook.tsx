@@ -36,7 +36,7 @@ export default function ClosedBook({ size = 'lg', bg, board, boardShadow, band, 
       <div style={{ position: 'absolute', inset: 0, borderRadius: r, overflow: 'hidden', background: bg, boxShadow: coverShadow ? '0 1px 2px rgba(0,0,0,.3)' : undefined, containerType: 'inline-size' }}>
         <div style={{ position: 'absolute', right: '13%', top: 0, bottom: 0, width: band ?? (lg ? 7 : 6), background: '#1d1d26', boxShadow: bandShadow ? '-2px 0 3px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.25)' : undefined }} />
         {label != null && (
-          <div className="cover-label" style={{ position: 'absolute', left: '16%', right: '26%', top: '14%', background: '#f6f2e9', color: '#222320', boxSizing: 'border-box', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...(lg ? { padding: '8px 10px', borderRadius: 2, boxShadow: '0 1px 2px rgba(0,0,0,.2)', fontSize: 'clamp(9px, 7cqw, 13px)', fontWeight: 600 } : {}), ...labelStyle }}>{label}</div>
+          <div className="cover-label" style={{ position: 'absolute', left: '16%', right: '26%', top: '14%', background: '#f6f2e9', color: '#222320', boxSizing: 'border-box', overflow: 'hidden', overflowWrap: 'anywhere', lineHeight: 1.2, display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, ...(lg ? { padding: '8px 10px', borderRadius: 2, boxShadow: '0 1px 2px rgba(0,0,0,.2)', fontSize: 'clamp(9px, 7cqw, 13px)', fontWeight: 600 } : {}), ...labelStyle }}>{label}</div>
         )}
       </div>
       {shade != null && <div style={{ position: 'absolute', inset: 0, borderRadius: r, background: '#1c1d30', opacity: shade, pointerEvents: 'none' }} />}
