@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { V } from '../App';
 import ClosedBook from '../ClosedBook';
@@ -96,33 +96,37 @@ export function Explore({ v }: { v: V }) {
             <span style={label()}>{v.exCountLbl}</span>
           </div>
         )}
-        {/* Phones: search and view on one line; Featured / Recent join the filter row below. */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: v.notMob ? 'wrap' : 'nowrap' }}>
-          <div style={{ flex: v.notMob ? `1 1 ${v.exSearchBasis}` : '1 1 0', minWidth: v.notMob ? 200 : 0, maxWidth: v.exSearchMax, height: 40, display: 'flex', alignItems: 'center', gap: 10, padding: 0, borderBottom: '1px solid rgba(var(--ink-rgb),.35)', boxSizing: 'border-box' }}>
-            <span style={{ fontSize: 15, color: 'rgba(var(--ink-rgb),.6)' }}>⌕</span>
-            <input value={v.exQ} onChange={v.onExQ} placeholder="Search sketchbooks or artists" style={{ flex: 1, minWidth: 0, height: '100%', border: 'none', outline: 'none', background: 'none', color: INK, font: `500 14px ${SANS}` }} />
-          </div>
-          {v.notMob && <div style={{ flex: 1, minWidth: 0 }} />}
-          {v.notMob && <button onClick={v.surprise} title="Open a random sketchbook" className={hover(`border-color:${INK}`)} style={{ height: 40, padding: '0 14px', border: '1px solid rgba(var(--ink-rgb),.2)', borderRadius: 2, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>Surprise me ✦</button>}
-          {v.notMob && <div style={segGroup}>
-            <button onClick={v.sortTrend} style={{ ...segBtn(v.sTrBg, v.sTrFg), padding: '0 14px' }}>Featured</button>
-            <button onClick={v.sortNew} style={{ ...segBtn(v.sNewBg, v.sNewFg), padding: '0 14px' }}>Recent</button>
-          </div>}
-          <div style={{ ...segGroup, flexShrink: 0 }}>
-            <button onClick={v.viewGrid} title="Grid" style={iconSeg(v.vGridBg, v.vGridFg)}>▦</button>
-            <button onClick={v.viewStack} title="Stack" style={iconSeg(v.vStackBg, v.vStackFg)}>≡</button>
-          </div>
-        </div>
-        <div role="group" aria-label="Filter by medium" onWheel={wheelSideways} style={{ display: 'flex', gap: 6, overflowX: 'auto', margin: `0 -${v.exPadX}px`, padding: `2px ${v.exPadX}px 4px`, scrollbarWidth: 'none', maskImage: `linear-gradient(90deg,#000 calc(100% - ${v.exPadX + 24}px),transparent)` } as CSSProperties}>
-          {!v.notMob && <>
-            <button onClick={v.surprise} style={chipStyle(false)}>Surprise me ✦</button>
-            <button onClick={v.sortTrend} aria-pressed={v.sTrBg !== 'transparent'} style={chipStyle(v.sTrBg !== 'transparent')}>Featured</button>
-            <button onClick={v.sortNew} aria-pressed={v.sNewBg !== 'transparent'} style={chipStyle(v.sNewBg !== 'transparent')}>Recent</button>
-            <span aria-hidden="true" style={{ flexShrink: 0, width: 1, margin: '4px 4px', background: 'rgba(var(--ink-rgb),.2)' }} />
-          </>}
-          {v.exTag && <button onClick={v.clearLabel} title="Clear tag" style={{ ...chipStyle(true), background: MARK, borderColor: MARK }}>{v.exTag} ×</button>}
-          {v.exMediums.map((m: V) => <button key={m.key} onClick={m.pick} aria-pressed={m.on} className={m.on ? undefined : hover('border-color:rgba(var(--ink-rgb),.6)')} style={chipStyle(m.on && !v.exTag)}>{m.label}</button>)}
-        </div>
+        {/* One row: search, then surprise, sort, medium and view. Phones put sort and medium on a short second row. */}
+        {(() => {
+          const sortItems = [{ key: 'trend', label: 'Featured', on: v.sTrBg !== 'transparent', pick: v.sortTrend }, { key: 'new', label: 'Recent', on: v.sNewBg !== 'transparent', pick: v.sortNew }];
+          const med = v.exMediums.find((m: V) => m.on && m.key), medLbl = med ? med.label : 'Medium';
+          const sort = <Pick label={sortItems.find(i => i.on)?.label || 'Featured'} title="Sort" items={sortItems} touch={v.isTouch} />;
+          const medium = <Pick label={medLbl} title="Filter by medium" items={v.exMediums} touch={v.isTouch} active={!!med} />;
+          const surprise = <button onClick={v.surprise} title="Surprise me: open a random sketchbook" aria-label="Surprise me" className={hover(`border-color:${INK};color:${MARK}`)} style={{ ...toolBtn(false), width: 40, padding: 0, justifyContent: 'center', fontSize: 16 }}>✦</button>;
+          const tag = v.exTag && <button onClick={v.clearLabel} title="Clear tag" style={{ ...toolBtn(true), background: MARK, borderColor: MARK, color: PAPER }}>{v.exTag} ×</button>;
+          const view = (
+            <div style={{ ...segGroup, flexShrink: 0 }}>
+              <button onClick={v.viewGrid} title="Grid" style={iconSeg(v.vGridBg, v.vGridFg)}>▦</button>
+              <button onClick={v.viewStack} title="Stack" style={iconSeg(v.vStackBg, v.vStackFg)}>≡</button>
+            </div>
+          );
+          const search = (
+            <div style={{ flex: v.notMob ? `1 1 ${v.exSearchBasis}` : '1 1 0', minWidth: v.notMob ? 200 : 0, maxWidth: v.exSearchMax, height: 40, display: 'flex', alignItems: 'center', gap: 10, padding: 0, borderBottom: '1px solid rgba(var(--ink-rgb),.35)', boxSizing: 'border-box' }}>
+              <span style={{ fontSize: 15, color: 'rgba(var(--ink-rgb),.6)' }}>⌕</span>
+              <input value={v.exQ} onChange={v.onExQ} placeholder="Search sketchbooks or artists" style={{ flex: 1, minWidth: 0, height: '100%', border: 'none', outline: 'none', background: 'none', color: INK, font: `500 14px ${SANS}` }} />
+            </div>
+          );
+          return v.notMob ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              {search}{tag}<div style={{ flex: 1, minWidth: 0 }} />{surprise}{sort}{medium}{view}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>{search}{surprise}{view}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>{sort}{medium}{tag}</div>
+            </div>
+          );
+        })()}
         {v.exArchive?.length > 0 && (
           // From the archive: historical sketchbooks, a row you can scroll sideways.
           <section style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 22, borderBottom: '1px solid rgba(var(--ink-rgb),.2)' }}>
@@ -283,6 +287,36 @@ function CollectionPick({ pb }: { pb: V }) {
       </span>
     </Popover>}
   </span>
+  );
+}
+
+const toolBtn = (on: boolean): CSSProperties => ({ height: 40, padding: '0 12px', display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, boxSizing: 'border-box', border: `1px solid ${on ? INK : 'rgba(var(--ink-rgb),.2)'}`, borderRadius: 2, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' });
+/** A compact dropdown for the Explore toolbar: the system picker on touch screens, our own menu elsewhere. */
+function Pick({ label, title, items, touch, active }: { label: string; title: string; items: { key: string; label: string; on: boolean; pick: () => void }[]; touch: boolean; active?: boolean }) {
+  const [open, setOpen] = useState(false), anchor = useRef<HTMLSpanElement>(null);
+  useEffect(() => { if (!open) return; const close = () => setOpen(false); addEventListener('click', close); return () => removeEventListener('click', close); }, [open]);
+  const chev = <span aria-hidden="true" style={{ fontSize: 10, color: 'rgba(var(--ink-rgb),.6)' }}>▾</span>;
+  if (touch) return (
+    <label title={title} style={{ ...toolBtn(!!active), position: 'relative' }}>
+      {label}{chev}
+      <select aria-label={title} value={items.find(i => i.on)?.key ?? ''} onChange={e => items.find(i => i.key === e.target.value)?.pick()} style={{ position: 'absolute', inset: 0, width: '100%', opacity: 0, cursor: 'pointer' }}>
+        {items.map(i => <option key={i.key} value={i.key}>{i.label}</option>)}
+      </select>
+    </label>
+  );
+  return (
+    <span ref={anchor} onClick={e => e.stopPropagation()} style={{ display: 'inline-flex', flexShrink: 0 }}>
+      <button onClick={() => setOpen(o => !o)} title={title} aria-haspopup="menu" aria-expanded={open} className={hover(`border-color:${INK}`)} style={toolBtn(!!active || open)}>{label}{chev}</button>
+      {open && <Popover anchor={anchor} align="right">
+        <span role="menu" style={{ display: 'flex', flexDirection: 'column', minWidth: 180, maxHeight: 360, overflowY: 'auto', padding: 6, background: PAPER, border: `1px solid ${INK}`, boxShadow: '0 12px 30px rgba(34,35,32,.14)' }}>
+          {items.map(i => (
+            <button key={i.key || '-'} role="menuitemradio" aria-checked={i.on} onClick={() => { i.pick(); setOpen(false); }} className={hover('background:rgba(var(--ink-rgb),.07)')} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, textAlign: 'left', padding: '9px 10px', border: 'none', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>
+              <span>{i.label}</span>{i.on && <span style={{ color: MARK }}>✓</span>}
+            </button>
+          ))}
+        </span>
+      </Popover>}
+    </span>
   );
 }
 
