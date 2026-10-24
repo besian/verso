@@ -1287,7 +1287,7 @@ export default class App extends Component<object, State> {
     const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd'; };
     const msgNew = s.acct ? this.myChats().filter(c => this.chatUnread(c) && (c.status === 'open' || c.by !== s.acct!.uid)).length : 0;
     return {
-      ntShow: !!s.acct, ntUnread: unread.length + (s.invites || []).length + msgNew, ntOpen: !!s.notifOpen,
+      ntShow: !!s.acct, ntUnread: unread.length + (s.invites || []).length, isMessagesMode: s.mode === 'messages', ntOpen: !!s.notifOpen,
       ntMsgs: msgNew, ntMsgLbl: msgNew ? `${msgNew} new` : 'Your conversations', ntOpenMsgs: () => this.openMessages(),
       ntInvites: (s.invites || []).map(d => ({ key: d.id, who: d.ownerName || '@' + d.ownerHandle, book: d.name, accept: () => this.answerInvite(d, true), decline: () => this.answerInvite(d, false) })),
       ntToggle: () => {

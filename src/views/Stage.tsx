@@ -36,6 +36,7 @@ function TopBar({ v }: { v: V }) {
       {!v.tabBar && <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         {v.isOther && v.notMob && <button onClick={v.goExplore} className={hover(`color:${MARK}`)} style={textBtn}>← Explore</button>}
         {v.isMine && <button onClick={v.newBook} className={hover(`color:${MARK}`)} style={textBtn}>{v.newLbl}</button>}
+        {v.ntShow && <MsgBtn v={v} />}
         {v.ntShow && <Bell v={v} />}
         {v.hasAcct && <button onClick={v.openMe} title="Your profile" className={hover('transform:scale(1.06)')} style={{ width: 34, height: 34, flexShrink: 0, borderRadius: '50%', border: 'none', padding: 0, background: v.meAvBg, color: PAPER, font: `500 11px ${SANS}`, cursor: 'pointer', boxShadow: v.meRing }}>{v.meInit}</button>}
         {v.noAcct && (
@@ -68,6 +69,7 @@ function TabBar({ v }: { v: V }) {
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <button onClick={v.tbNew} aria-label="New sketchbook" className={hover('transform:scale(1.06)')} style={{ width: 46, height: 46, borderRadius: '50%', border: 'none', background: MARK, color: '#F6F2E8', font: `300 28px/1 ${SANS}`, cursor: 'pointer', boxShadow: '0 6px 16px rgba(173,73,58,.35)' }}>+</button>
       </div>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><MsgBtn v={v} sheet /></div>
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Bell v={v} sheet /></div>
       {item('me', 'You', v.tbOn === 'me', v.openMe, <span style={{ width: 24, height: 24, borderRadius: '50%', background: v.meAvBg, color: PAPER, font: `600 9px/24px ${SANS}`, textAlign: 'center', letterSpacing: 0, boxShadow: v.tbOn === 'me' ? `0 0 0 1.5px ${PAPER}, 0 0 0 3px ${INK}` : 'none' }}>{v.meInit}</span>)}
     </nav>
@@ -78,6 +80,17 @@ function TabBar({ v }: { v: V }) {
 function SwipeHint({ v }: { v: V }) {
   // Zero-height wrapper: the hint floats above the controls, so showing or hiding it never moves the book.
   return <div style={{ position: 'relative', height: 0, width: '100%', zIndex: 2 }}><div role="status" style={{ position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap', padding: '7px 14px', borderRadius: 16, background: 'rgba(var(--ink-rgb),.08)', fontSize: 13, color: INK, opacity: v.uiOp, pointerEvents: 'none' }}>Swipe to turn pages · pinch to zoom in</div></div>;
+}
+
+/** Messages, next to the bell: opens your conversations, with a count of unread ones and requests. */
+function MsgBtn({ v, sheet }: { v: V; sheet?: boolean }) {
+  const on = v.isMessagesMode;
+  return (
+    <button onClick={v.ntOpenMsgs} title="Messages" aria-label={`Messages${v.ntMsgs ? `, ${v.ntMsgs} new` : ''}`} aria-current={on ? 'page' : undefined} className={hover(`color:${MARK}`)} style={{ position: 'relative', width: sheet ? 48 : 34, height: sheet ? 48 : 34, padding: 0, border: 'none', background: 'none', color: sheet && !on ? STONE : INK, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <svg width={sheet ? 22 : 19} height={sheet ? 22 : 19} viewBox="0 0 24 24" fill={on ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4.5 5.5h15v10h-8l-4.5 3.5v-3.5h-2.5z" /></svg>
+      {v.ntMsgs > 0 && <span style={{ position: 'absolute', top: 3, right: 2, minWidth: 16, height: 16, padding: '0 4px', boxSizing: 'border-box', borderRadius: 8, background: MARK, color: PAPER, font: `600 10px/16px ${SANS}`, textAlign: 'center' }}>{v.ntMsgs > 9 ? '9+' : v.ntMsgs}</span>}
+    </button>
+  );
 }
 
 /** Notification bell with unread count and a dropdown of recent likes, follows and goals. */
