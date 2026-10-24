@@ -642,11 +642,15 @@ export async function deleteAccount(pw: string, acct: Account) {
   const [shared, invited] = await Promise.all([getDocs(query(collection(d, 'books'), where('collab', '==', acct.uid))), getDocs(query(collection(d, 'books'), where('invite', '==', acct.uid)))]);
   await Promise.all([...shared.docs.map(b => endShare(b.id)), ...invited.docs.map(b => declineInvite(b.id))]).catch(e => console.warn('leaving shared books', e));
   const subs = await Promise.all(['following', 'followers', 'saved', 'blocked', 'notifications'].map(c => getDocs(collection(d, 'users', acct.uid, c))));
-  const batch = writeBatch(d);
-  books.forEach(b => batch.delete(b.ref)); subs.forEach(c => c.forEach(f => batch.delete(f.ref)));
-  subs[0].forEach(f => batch.delete(doc(d, 'users', f.id, 'followers', acct.uid)));
-  batch.delete(doc(d, 'handles', acct.handle)); batch.delete(doc(d, 'users', acct.uid));
-  await batch.commit();
+  // The username is only removed if it's really this account's: older accounts may not have one (or have an old
+  // one), and deleting a missing or someone else's handle is refused, which used to fail the whole deletion.
+  const handle = acct.handle ? await getDoc(doc(d, 'handles', acct.handle)).catch(() => null) : null;
+  const refs = [...books.docs.map(b => b.ref), ...subs.flatMap(c => c.docs.map(f => f.ref)),
+    ...subs[0].docs.map(f => doc(d, 'users', f.id, 'followers', acct.uid)),
+    ...(handle?.exists() && handle.data().uid === acct.uid ? [handle.ref] : [])];
+  // In batches (Firestore takes at most 500 writes in one), the profile itself last.
+  for (let i = 0; i < refs.length; i += 400) { const batch = writeBatch(d); refs.slice(i, i + 400).forEach(r => batch.delete(r)); await batch.commit(); }
+  await deleteDoc(doc(d, 'users', acct.uid));
   await removeFolder(`users/${acct.uid}`).catch(() => {});
   await deleteUser(u);
 }
