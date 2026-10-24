@@ -93,6 +93,11 @@ function Bell({ v, sheet }: { v: V; sheet?: boolean }) {
           ? { position: 'absolute', left: 8, right: 8, bottom: 'calc(100% + 8px)', maxHeight: '65vh' } as CSSProperties
           : { position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 'min(340px, calc(100vw - 24px))', maxHeight: '60vh' } as CSSProperties), overflowY: 'auto', zIndex: 30, background: PAPER, border: `1px solid ${INK}`, boxShadow: '0 16px 40px rgba(34,35,32,.16)' }}>
           <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(var(--ink-rgb),.15)', ...label(INK) }}>Notifications</div>
+          <button onClick={v.ntOpenMsgs} className={hover('background:rgba(var(--ink-rgb),.06)')} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '12px 14px', border: 'none', borderBottom: '1px solid rgba(var(--ink-rgb),.15)', background: v.ntMsgs ? 'rgba(173,73,58,.06)' : 'none', color: INK, font: `500 14px ${SANS}`, textAlign: 'left', cursor: 'pointer' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4.5 5.5h15v10h-8l-4.5 3.5v-3.5h-2.5z" /></svg>
+            <span style={{ flex: 1 }}>Messages</span>
+            <span style={{ fontSize: 12, color: v.ntMsgs ? MARK : 'rgba(var(--ink-rgb),.55)' }}>{v.ntMsgLbl} →</span>
+          </button>
           {v.ntInvites.map((iv: V) => (
             <div key={iv.key} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '12px 14px', borderBottom: '1px solid rgba(var(--ink-rgb),.08)', background: 'rgba(173,73,58,.06)', font: `400 14px/1.4 ${SANS}` }}>
               <span><b style={{ fontWeight: 600 }}>{iv.who}</b> invited you to draw in <i>{iv.book}</i></span>

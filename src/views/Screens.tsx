@@ -269,7 +269,9 @@ const quietBtn: CSSProperties = { padding: '0 4px', border: 'none', background: 
 export function Profile({ v }: { v: V }) {
   const mob = !v.notMob, wide = v.pfWide, zone = mob ? 150 : 200;
   // A slim bar: photo, name and details on the left, actions at the end; the sketchbooks start right below.
-  const meta = [<span key="h">{v.pfHandle}</span>, v.pfHasLoc && <span key="l">{v.pfLoc}</span>, v.pfHasWeb && <a key="w" href={v.pfWebHref} target="_blank" rel="noopener noreferrer" style={{ color: MARK, textDecoration: 'none' }}>{v.pfWeb}</a>, v.pfJoined && <span key="j">{v.pfJoined}</span>]
+  const meta = [<span key="h">{v.pfHandle}</span>, v.pfHasLoc && <span key="l">{v.pfLoc}</span>, v.pfHasWeb && <a key="w" href={v.pfWebHref} target="_blank" rel="noopener noreferrer" style={{ color: MARK, textDecoration: 'none' }}>{v.pfWeb}</a>,
+    v.pfIg && <a key="ig" href={`https://instagram.com/${encodeURIComponent(v.pfIg)}`} target="_blank" rel="noopener noreferrer" style={{ color: MARK, textDecoration: 'none' }}>Instagram</a>,
+    v.pfMail && <a key="m" href={`mailto:${v.pfMail}`} style={{ color: MARK, textDecoration: 'none' }}>Email</a>, v.pfJoined && <span key="j">{v.pfJoined}</span>]
     .filter(Boolean).flatMap((x, i) => i ? [<span key={'d' + i} aria-hidden="true" style={{ color: 'rgba(var(--ink-rgb),.3)' }}>·</span>, x] : [x]);
   const small = (primary: boolean): CSSProperties => ({ ...actionBtn(primary), height: 38, padding: '0 16px', ...(mob ? { flex: '1 1 0' } : {}) });
   const iconBtn: CSSProperties = { width: 38, height: 38, flexShrink: 0, padding: 0, borderRadius: 2, border: '1.5px solid rgba(var(--ink-rgb),.35)', background: 'none', color: INK, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' };
@@ -290,6 +292,7 @@ export function Profile({ v }: { v: V }) {
       )}
       {v.pfPreviewing && <button onClick={v.togglePreview} className={hoverMark} style={small(true)}>Exit preview</button>}
       {v.pfOther && <button onClick={v.toggleFollow} style={{ height: 38, minWidth: 112, padding: '0 20px', borderRadius: 2, border: `1.5px solid ${v.folBd}`, background: v.folBg, color: v.folFg, font: `500 14px ${SANS}`, cursor: 'pointer', ...(mob ? { flex: '1 1 0' } : {}) }}>{v.folLbl}</button>}
+      {v.pfOther && v.pfCanMessage && <button onClick={v.pfMessage} className={hover('background:rgba(var(--ink-rgb),.08)')} style={small(false)}>Message</button>}
       {v.pfOther && <button onClick={v.pfShare} className={hover('background:rgba(var(--ink-rgb),.08)')} style={small(false)}>Share</button>}
       {v.pfOther && <MoreMenu open={v.pfMoreOpen} onToggle={v.pfMore} align="right" items={[{ label: 'Report artist', onClick: v.pfReport }, { label: v.pfBlockLbl, onClick: v.pfBlock, danger: true }]} />}
     </div>

@@ -3,7 +3,7 @@ import type { ChangeEvent, DragEvent, MouseEvent, PointerEvent, WheelEvent } fro
 import { CONFIG, GRID_WIDTH, MAX_MEDIUMS, MAX_TAGS, MEDIUMS, PALETTE, SHAPES, mediumKey, tagSlug } from './data';
 import type { Account, Book, OtherBook, PageNote, Shape, ShapeKey } from './data';
 import * as api from './backend';
-import type { AuthUser, BookDoc, Notif, Person, Report, Saved } from './backend';
+import type { AuthUser, BookDoc, Chat, Msg, Notif, Person, Report, Saved } from './backend';
 import * as store from './storage';
 import * as sound from './sound';
 import * as themeMode from './themeMode';
@@ -23,9 +23,10 @@ import { INK, MARK, PAPER, STONE } from './theme';
 import Stage from './views/Stage';
 import { AuthPage, Explore, HomeScreen, Profile, Settings } from './views/Screens';
 import { Admin, AuthAction, Legal, NotFound } from './views/Pages';
+import { Messages } from './views/Messages';
 import { CollectionModal, Editor, EditProfile, EmbedModal, Manager, NewBookPicker, ReportModal, Toast, Welcome } from './views/Overlays';
 
-export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound' | 'action';
+export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound' | 'action' | 'messages';
 /** A report with what it points at, for the moderation page. */
 type AdminItem = Report & { targetName: string; ownerName: string; ownerHandle: string; hidden: boolean; banned: boolean; gone: boolean };
 type AnyBook = Book | OtherBook;
@@ -61,9 +62,9 @@ interface State {
   ac?: { email?: string; pwEmail?: string; pwOld?: string; pwNew?: string; delHandle?: string; pwDel?: string };
   community?: OtherBook[]; people?: Person[];
   saved?: Saved[]; blocked?: string[]; followFeed?: OtherBook[]; followPeople?: Person[]; pfTab?: 'books' | 'saved' | 'following';
-  toast?: string; more?: 'book' | 'profile' | null;
+  toast?: string; more?: 'book' | 'profile' | 'chat' | null;
   counts?: Record<string, number>; liked?: Record<string, boolean>; notifs?: Notif[]; notifOpen?: boolean;
-  reportFor?: { kind: 'book' | 'user'; targetId: string; ownerId: string; label: string } | null; reportReason?: string; reportNote?: string; reportBusy?: boolean; reportErr?: string;
+  reportFor?: { kind: 'book' | 'user' | 'message'; targetId: string; ownerId: string; label: string; quote?: string } | null; reportReason?: string; reportNote?: string; reportBusy?: boolean; reportErr?: string;
   p: number; zoom: number; managing: boolean;
   vw: number; vh: number; sw?: number; sh?: number;
   /** Top of the book area on screen (it sits below the title), used to centre a zoomed page on the whole screen. */
@@ -71,6 +72,8 @@ interface State {
   switching?: boolean; car?: number; swT?: number;
   focus?: boolean; fz?: number; fside?: 'L' | 'R'; fsx?: number; ctrlShow?: boolean; menuOpen?: boolean;
   edit?: EditState | null; edTool?: string; edAdjTool?: string; edPeek?: boolean;
+  /** Messages: your conversations, the open one (or a new one with chatNew), its messages and the reply being written. */
+  chats?: Chat[]; chatOpen?: string | null; chatNew?: Person | null; msgs?: Msg[]; msgDraft?: string; msgTab?: 'chats' | 'requests'; msgBusy?: boolean; msgErr?: string;
   newPick?: boolean; pickShape?: ShapeKey;
   /** Sign-in page: which form, and the screen to return to. */
   authFrom?: Mode; suMode?: 'join' | 'signin' | 'reset'; su?: { name: string; handle: string; email: string; pw: string } | null; suHT?: boolean;
@@ -396,6 +399,10 @@ export default class App extends Component<object, State> {
     }
     if (me) want.set('nt:' + me, () => api.watchNotifications(me, notifs => this.setState({ notifs })));
     if (me) want.set('iv:' + me, () => api.watchInvites(me, invites => this.setState({ invites })));
+    if (me) want.set('ch:' + me, () => api.watchChats(me, chats => this.setState({ chats })));
+    const openChat = s.mode === 'messages' && s.chatOpen && (s.chats || []).some(c => c.id === s.chatOpen) ? s.chatOpen : null;
+    if (me && openChat) want.set('msg:' + openChat, () => api.watchMessages(openChat, msgs => this.setState({ msgs })));
+    if (me && openChat) this.markSeen(openChat);
     // Books two people can change are kept in sync live.
     if (me) for (const b of s.books) if (b.role === 'collab' || b.collab || b.invite) want.set('sb:' + b.id, () => api.watchBook(b.id, (d, local) => this.onSharedBook(b.id, d, local)));
     for (const [k, stop] of this.watches) if (!want.has(k)) { stop(); this.watches.delete(k); }
@@ -465,13 +472,14 @@ export default class App extends Component<object, State> {
       }
       case 'auth': return s.suMode === 'signin' ? '/signin' : s.suMode === 'reset' ? '/reset' : '/join';
       case 'settings': return '/settings';
+      case 'messages': return s.chatOpen ? '/messages/' + s.chatOpen : '/messages';
       default: return '/';
     }
   }
   titleFor(): string {
     const s = this.state, mode = s.mode || 'home', o = s.other as OtherBook | null;
     const t = mode === 'other' && o ? `${o.name} by ${o.artist}` : mode === 'mine' ? s.books[s.active]?.name : mode === 'explore' ? 'Explore'
-      : mode === 'profile' ? (s.profileOf ? (s.pf?.profile?.name || s.profileOf.name) : s.acct?.name) : mode === 'settings' ? 'Account settings' : mode === 'auth' ? (s.suMode === 'join' ? 'Join' : 'Sign in')
+      : mode === 'profile' ? (s.profileOf ? (s.pf?.profile?.name || s.profileOf.name) : s.acct?.name) : mode === 'settings' ? 'Account settings' : mode === 'messages' ? 'Messages' : mode === 'auth' ? (s.suMode === 'join' ? 'Join' : 'Sign in')
       : mode === 'legal' ? (s.legal === 'terms' ? 'Terms' : 'Privacy') : mode === 'admin' ? 'Moderation' : mode === 'notfound' ? 'Not found' : '';
     return t ? `${t} · fletora.` : 'fletora. — A place for the unfinished';
   }
@@ -496,6 +504,7 @@ export default class App extends Component<object, State> {
       if (a === 'admin') return s.acct ? this.openAdmin() : this.openAuth('signin');
       if (a === 'signin' || a === 'join' || a === 'reset') { if (s.acct) return this.goMode('mine'); this.openAuth(a === 'join' ? 'join' : 'signin'); if (a === 'reset') this.setState({ suMode: 'reset' }); return; }
       if (a === 'settings') return s.acct ? this.openSettings() : this.openAuth('signin');
+      if (a === 'messages') return s.acct ? this.openMessages(b || null) : this.openAuth('signin');
       if (a === 'sketchbooks') {
         if (!s.acct) return this.openAuth('signin');
         const j = b ? s.books.findIndex(x => x.id === b) : -1;
@@ -521,6 +530,39 @@ export default class App extends Component<object, State> {
       setTimeout(() => { this.applying = false; }, 0);
     }
   }
+  // ---------- messages ----------
+  openMessages = (id: string | null = null, chatNew: Person | null = null) => {
+    cancelAnimationFrame(this.raf);
+    this.setState(s => ({ mode: 'messages', chatOpen: id, chatNew, msgs: s.chatOpen === id ? s.msgs : [], msgDraft: s.chatOpen === id ? s.msgDraft : '', msgErr: '', other: null, focus: false, fz: 0, managing: false, draft: null, notifOpen: false, more: null }));
+  };
+  /** Message button on a profile: opens your conversation with them, or a new one. */
+  messageUser(p: Person) {
+    const a = this.state.acct; if (!a) return this.openJoin();
+    const id = api.chatIdFor(a.uid, p.uid);
+    this.openMessages(id, (this.state.chats || []).some(c => c.id === id) ? null : p);
+  }
+  seen = new Set<string>();
+  /** Marks the open conversation read when something new from the other person is in it. */
+  markSeen(id: string) {
+    const me = this.state.acct?.uid, c = (this.state.chats || []).find(x => x.id === id);
+    if (!me || !c || c.lastFrom === me || c.lastAt <= (c.read[me] || 0) || (c.status !== 'open' && c.by !== me)) return;
+    const k = id + ':' + c.lastAt; if (this.seen.has(k)) return; this.seen.add(k);
+    api.markChatRead(id, me).catch(e => console.warn('read', e));
+  }
+  async sendMsg() {
+    const s = this.state, a = s.acct, text = (s.msgDraft || '').trim(); if (!a || !text || s.msgBusy) return;
+    const c = (s.chats || []).find(x => x.id === s.chatOpen) || null, other = c ? this.chatOther(c) : s.chatNew;
+    if (!other) return;
+    this.setState({ msgBusy: true, msgErr: '', msgDraft: '' });
+    try { await api.sendMessage(a, other, text, c); this.setState({ chatNew: null }); }
+    catch (e) { console.error(e); this.setState({ msgDraft: text, msgErr: (e as { code?: string }).code === 'permission-denied' ? 'Couldn’t send. They may not be accepting messages from you, or you’ve started a lot of new conversations today.' : 'Couldn’t send. Check your connection and try again.' }); }
+    finally { this.setState({ msgBusy: false }); }
+  }
+  chatOther(c: Chat): Person { const me = this.state.acct?.uid || '', uid = c.members.find(m => m !== me) || me, i = c.info[uid] || { name: '', handle: '', av: null }; return { uid, ...i }; }
+  /** Conversations you can see: not with anyone you've blocked, and declined requests stay out of sight. */
+  myChats() { const s = this.state, me = s.acct?.uid || '', bl = s.blocked || []; return (s.chats || []).filter(c => !bl.includes(this.chatOther(c).uid) && !(c.status === 'declined' && c.by !== me)); }
+  chatUnread(c: Chat) { const me = this.state.acct?.uid || ''; return c.lastFrom !== me && c.lastAt > (c.read[me] || 0); }
+
   openSettings = () => { cancelAnimationFrame(this.raf); this.setState({ mode: 'settings', other: null, focus: false, fz: 0, managing: false, draft: null, acErr: '', acInfo: '' }); };
   closeAuth = () => {
     // Coming from an emailed link (e.g. after resetting a password), carry on to the sketchbooks rather than back to the link page.
@@ -1026,7 +1068,7 @@ export default class App extends Component<object, State> {
       key: b.id, name: b.name, color: b.color, bg, showLabel, a: this.shapeOf(b).a, s: this.shapeOf(b).s,
       count: `${pages} ${pages === 1 ? 'page' : 'pages'} · ${(b as Book).role === 'collab' ? 'With ' + (b as Book).owner?.name : (b as Book).collab ? 'With ' + (b as Book).collab!.name : this.shapeOf(b).label || 'Portrait'}${(b as Book).isPublic === false ? ' · Private' : ''}`, open,
     });
-    let p: { name?: string; handle?: string; bio?: string; loc?: string; web?: string; accent?: string; av?: string | null; joined: string; stats: [number, string][] };
+    let p: { name?: string; handle?: string; bio?: string; loc?: string; web?: string; ig?: string; mail?: string; accent?: string; av?: string | null; joined: string; stats: [number, string][] };
     let list: ReturnType<typeof card>[], folOn = false;
     if (mine) {
       const tab = pv ? 'books' : s.pfTab || 'books';
@@ -1035,7 +1077,7 @@ export default class App extends Component<object, State> {
         : tab === 'following' ? []
         : s.books.map((b, j) => card(b, this.coverBg(b), !b.coverImg, b.images.length, () => { cancelAnimationFrame(this.raf); this.target = 0; this.setState({ mode: 'mine', profileOf: null, active: j, images: b.images, p: 0, other: null }); }));
       p = {
-        name: a.name, handle: a.handle, bio: a.bio, loc: a.loc, web: a.web, accent: a.accent, av: a.av,
+        name: a.name, handle: a.handle, bio: a.bio, loc: a.loc, web: a.web, ig: a.ig, mail: a.mail, accent: a.accent, av: a.av,
         joined: 'Joined ' + new Date(a.joined || Date.now()).toLocaleDateString('en', { month: 'short', year: 'numeric' }),
         stats: [[s.books.length, s.books.length === 1 ? 'sketchbook' : 'sketchbooks'], [s.books.reduce((t, b) => t + b.images.length, 0), 'pages']],
       };
@@ -1043,14 +1085,14 @@ export default class App extends Component<object, State> {
       const who = s.profileOf!, pf = s.pf?.uid === who.uid ? s.pf : null, pr = pf?.profile, bks = (s.blocked || []).includes(who.uid || '') ? [] : pf?.books || [];
       folOn = !!who.uid && follows.includes(who.uid);
       list = bks.map(b => card(b, this.coverBg(b), !b.coverImg, b.likes, () => this.openOtherBook(b)));
-      p = { name: pr?.name || who.name, handle: pr?.handle, bio: pr?.bio, loc: pr?.loc, web: pr?.web, accent: pr?.accent, av: pr?.av,
+      p = { name: pr?.name || who.name, handle: pr?.handle, bio: pr?.bio, loc: pr?.loc, web: pr?.web, ig: pr?.ig, mail: pr?.mail, accent: pr?.accent, av: pr?.av,
         joined: pr ? 'Joined ' + new Date(pr.joined).toLocaleDateString('en', { month: 'short', year: 'numeric' }) : '',
         stats: [[bks.length, bks.length === 1 ? 'sketchbook' : 'sketchbooks'], [bks.reduce((t, b) => t + b.likes, 0), 'pages']] };
     }
     const pad = mob ? 16 : 40, web = (p.web || '').trim();
     return {
       pfName: p.name, pfHandle: '@' + (p.handle || ''), pfHasBio: !!p.bio || (mine && !pv), pfBio: p.bio || 'Add a short bio so people know what you draw.', pfBioOp: p.bio ? 1 : 0.55,
-      pfHasLoc: !!(p.loc || '').trim(), pfLoc: p.loc, pfHasWeb: !!web, pfWeb: web.replace(/^https?:\/\//, ''), pfWebHref: /^https?:\/\//.test(web) ? web : 'https://' + web, pfJoined: p.joined,
+      pfHasLoc: !!(p.loc || '').trim(), pfLoc: p.loc, pfHasWeb: !!web, pfWeb: web.replace(/^https?:\/\//, ''), pfIg: (p.ig || '').trim().replace(/^@/, '').replace(/^https?:\/\/(www\.)?instagram\.com\//, '').replace(/\/$/, ''), pfMail: /^\S+@\S+\.\S+$/.test((p.mail || '').trim()) ? (p.mail || '').trim() : '', pfWebHref: /^https?:\/\//.test(web) ? web : 'https://' + web, pfJoined: p.joined,
       pfAvBg: avatarBg(p.av), pfInit: p.av ? '' : ini(p.name),
       ...(() => {
         // Followers and likes update live from the counters (see syncWatches).
@@ -1081,6 +1123,7 @@ export default class App extends Component<object, State> {
           pfSuspended: !mine && !!uid && (s.banned || []).includes(uid),
           pfAdmin: mine && !pv && !!s.admin, openAdmin: () => this.openAdmin(),
           pfShare: () => handle && this.share('/@' + handle, `${name} on fletora.`),
+          pfMessage: () => uid && this.messageUser({ uid, name: name || '', handle: handle || '', av: p.av || null }), pfCanMessage: !mine && !!uid && !blockedOn,
           pfMoreOpen: s.more === 'profile', pfMore: () => this.setState(st => ({ more: st.more === 'profile' ? null : 'profile' })),
           pfReport: () => this.openReport({ kind: 'user', targetId: uid, ownerId: uid, label: name }),
           pfBlock: () => this.toggleBlock(uid, name), pfBlockLbl: blockedOn ? `Unblock ${name}` : `Block ${name}`,
@@ -1089,7 +1132,7 @@ export default class App extends Component<object, State> {
       pfDir: mob ? 'column' : 'row', pfAlign: mob ? 'center' : 'flex-start', pfTA: mob ? 'center' : 'left', pfJust: mob ? 'center' : 'flex-start', pfHeadGap: mob ? 16 : 28,
       pfWide: vw >= 980, pfBanH: mob ? 96 : 128, pfInfoTop: mob ? 0 : 2, pfPadX: pad, pfNameSize: mob ? 48 : 72,
       pfCols: Math.max(2, Math.min(5, Math.floor((Math.min(vw, 1080) - pad * 2 + 18) / (mob ? 150 : 200)))),
-      editProfile: () => this.setState({ draft: { name: a.name || '', handle: a.handle || '', bio: a.bio || '', loc: a.loc || '', web: a.web || '', accent: a.accent || '#C9C3B4', av: a.av || null } }),
+      editProfile: () => this.setState({ draft: { name: a.name || '', handle: a.handle || '', bio: a.bio || '', loc: a.loc || '', web: a.web || '', ig: a.ig || '', mail: a.mail || '', accent: a.accent || '#C9C3B4', av: a.av || null } }),
       togglePreview: () => this.setState(st => ({ pfPreview: !st.pfPreview })),
       pfNew: this.openNewPick,
       folLbl: folOn ? 'Following' : 'Follow', folBg: folOn ? 'transparent' : MARK, folFg: folOn ? INK : PAPER, folBd: folOn ? 'rgba(var(--ink-rgb),.5)' : MARK,
@@ -1115,7 +1158,7 @@ export default class App extends Component<object, State> {
         return { su: n, suHT: st.suHT || k === 'handle' };
       });
     };
-    const setD = (k: 'name' | 'handle' | 'bio' | 'loc' | 'web') => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const setD = (k: 'name' | 'handle' | 'bio' | 'loc' | 'web' | 'ig' | 'mail') => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       const v = k === 'handle' ? slug(e.target.value) : e.target.value; this.setState(st => ({ draft: { ...st.draft!, [k]: v } }));
     };
     return {
@@ -1196,7 +1239,7 @@ export default class App extends Component<object, State> {
       },
       isLegal: s.mode === 'legal', legalDoc: s.legal || 'privacy', isNotFound: s.mode === 'notfound', nfWhat: s.nf || 'page',
       ...this.settingsVals(),
-      pfEditing: !!s.draft, dName: d.name || '', dHandle: d.handle || '', dBio: d.bio || '', dLoc: d.loc || '', dWeb: d.web || '', dEmail: a?.email || '', dBioCount: `${(d.bio || '').length}/160`,
+      pfEditing: !!s.draft, dName: d.name || '', dHandle: d.handle || '', dBio: d.bio || '', dLoc: d.loc || '', dWeb: d.web || '', dIg: d.ig || '', dMail: d.mail || '', onDIg: setD('ig'), onDMail: setD('mail'), dEmail: a?.email || '', dBioCount: `${(d.bio || '').length}/160`,
       onDName: setD('name'), onDHandle: setD('handle'), onDBio: setD('bio'), onDLoc: setD('loc'), onDWeb: setD('web'),
       dAvBg: avatarBg(d.av), dInit: d.av ? '' : ini(d.name), dHasAv: !!d.av,
       avRef: this.avRef, pickAv: () => this.avRef.current?.click(), removeAv: () => this.setState(st => ({ draft: { ...st.draft!, av: null } })),
@@ -1219,7 +1262,7 @@ export default class App extends Component<object, State> {
         if (!a || s.dBusy) return;
         this.setState({ dBusy: true, dErr: '' });
         try {
-          const acct = await api.saveProfile(a, { ...d, name: (d.name || '').trim() || a.name, handle: d.handle || a.handle, joined: a.joined });
+          const acct = await api.saveProfile(a, { ...d, ig: (d.ig || '').trim().slice(0, 40), mail: (d.mail || '').trim().slice(0, 120), name: (d.name || '').trim() || a.name, handle: d.handle || a.handle, joined: a.joined });
           this.setState({ acct, draft: null });
         } catch (e) { this.setState({ dErr: api.errMsg(e) }); }
         finally { this.setState({ dBusy: false }); }
@@ -1233,8 +1276,10 @@ export default class App extends Component<object, State> {
     // An invitation still waiting for an answer shows as its own Accept / Decline card instead.
     const s = this.state, pending = new Set((s.invites || []).map(d => d.id)), list = (s.notifs || []).filter(n => !(n.type === 'invite' && n.bookId && pending.has(n.bookId))), unread = list.filter(n => !n.read);
     const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd'; };
+    const msgNew = s.acct ? this.myChats().filter(c => this.chatUnread(c) && (c.status === 'open' || c.by !== s.acct!.uid)).length : 0;
     return {
-      ntShow: !!s.acct, ntUnread: unread.length + (s.invites || []).length, ntOpen: !!s.notifOpen,
+      ntShow: !!s.acct, ntUnread: unread.length + (s.invites || []).length + msgNew, ntOpen: !!s.notifOpen,
+      ntMsgs: msgNew, ntMsgLbl: msgNew ? `${msgNew} new` : 'Your conversations', ntOpenMsgs: () => this.openMessages(),
       ntInvites: (s.invites || []).map(d => ({ key: d.id, who: d.ownerName || '@' + d.ownerHandle, book: d.name, accept: () => this.answerInvite(d, true), decline: () => this.answerInvite(d, false) })),
       ntToggle: () => {
         const open = !s.notifOpen; this.setState({ notifOpen: open, more: null });
@@ -1253,6 +1298,39 @@ export default class App extends Component<object, State> {
           else this.openProfile(null);
         },
       })),
+    };
+  }
+
+  messagesVals(): V {
+    const s = this.state, me = s.acct?.uid || '', all = this.myChats();
+    const inbox = all.filter(c => c.status === 'open' || c.by === me), reqs = all.filter(c => c.status === 'request' && c.by !== me);
+    const tab = s.msgTab || 'chats', list = tab === 'requests' ? reqs : inbox;
+    const cur = all.find(c => c.id === s.chatOpen) || null, other = cur ? this.chatOther(cur) : s.chatNew || null;
+    const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'now' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); };
+    const stamp = (t: number) => { const d = new Date(t), today = new Date().toDateString() === d.toDateString(); return (today ? 'Today' : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })) + ', ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); };
+    const msgs = cur ? (s.msgs || []) : [], askMe = !!cur && cur.status === 'request' && cur.by !== me;
+    return {
+      isMessages: true, msTab: tab, msSetTab: (t: 'chats' | 'requests') => this.setState({ msgTab: t }), msReqCount: reqs.length,
+      msList: list.map(c => { const o = this.chatOther(c); return {
+        key: c.id, name: o.name || '@' + o.handle, avBg: avatarBg(o.av), init: o.av ? '' : ini(o.name), preview: (c.lastFrom === me ? 'You: ' : '') + c.lastText, when: ago(c.lastAt),
+        unread: this.chatUnread(c) && (c.status === 'open' || c.by !== me), on: c.id === s.chatOpen, open: () => this.openMessages(c.id) }; }),
+      msEmpty: tab === 'requests' ? 'No message requests. When someone you don’t follow back writes to you, it waits here until you accept.' : 'No messages yet. Open an artist’s profile and press Message to say hello.',
+      msThread: other ? {
+        name: other.name || '@' + other.handle, handle: other.handle ? '@' + other.handle : '', avBg: avatarBg(other.av), init: other.av ? '' : ini(other.name),
+        openProfile: () => this.openProfile({ uid: other.uid, name: other.name, handle: other.handle }),
+        msgs: msgs.map((m, i) => ({ key: m.id, mine: m.from === me, text: m.text, pending: m.pending, stamp: !i || m.at - msgs[i - 1].at > 30 * 60000 ? stamp(m.at) : '',
+          report: m.from === me ? undefined : () => this.setState({ reportFor: { kind: 'message', targetId: `${cur!.id}~${m.id}`, ownerId: m.from, label: `this message from ${other.name || '@' + other.handle}`, quote: m.text }, reportReason: '', reportNote: '', reportErr: '' }) })),
+        isNew: !cur, askMe, waiting: !!cur && cur.status !== 'open' && cur.by === me,
+        accept: () => cur && api.answerChat(cur.id, true).catch(e => { console.error(e); this.toast('Couldn’t accept. Try again.'); }),
+        decline: () => { if (!cur) return; api.answerChat(cur.id, false).catch(e => console.error(e)); this.openMessages(null); this.toast('Request declined. They won’t be told.'); },
+        block: () => { this.setState({ more: null }); this.toggleBlock(other.uid, other.name || '@' + other.handle); this.openMessages(null); },
+        reportChat: () => this.setState({ more: null, reportFor: { kind: 'user', targetId: other.uid, ownerId: other.uid, label: other.name || '@' + other.handle }, reportReason: '', reportNote: '', reportErr: '' }),
+        moreOpen: s.more === 'chat', more: () => this.setState(st => ({ more: st.more === 'chat' ? null : 'chat' })),
+        back: () => this.openMessages(null),
+      } : null,
+      msDraft: s.msgDraft || '', onMsgDraft: (e: ChangeEvent<HTMLTextAreaElement>) => this.setState({ msgDraft: e.target.value.slice(0, 2000) }),
+      msSend: () => this.sendMsg(), msKey: (e: { key: string; shiftKey: boolean; preventDefault(): void; nativeEvent: { isComposing?: boolean } }) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !IS_TOUCH) { e.preventDefault(); this.sendMsg(); } },
+      msBusy: !!s.msgBusy, msErr: s.msgErr || '', msCanSend: !!(s.msgDraft || '').trim() && !s.msgBusy,
     };
   }
 
@@ -1368,7 +1446,7 @@ export default class App extends Component<object, State> {
       ]);
       const adReports = rs.map((r): AdminItem => {
         const b = books.get(r.targetId), pr = people.get(r.ownerId);
-        return { ...r, targetName: r.kind === 'book' ? b?.name || 'Deleted sketchbook' : pr?.name || 'Deleted account', ownerName: pr?.name || '', ownerHandle: pr?.handle || '',
+        return { ...r, targetName: r.kind === 'book' ? b?.name || 'Deleted sketchbook' : r.kind === 'message' ? `A message from ${pr?.name || 'a deleted account'}` : pr?.name || 'Deleted account', ownerName: pr?.name || '', ownerHandle: pr?.handle || '',
           hidden: !!b?.hidden, banned: banned.includes(r.ownerId), gone: r.kind === 'book' ? !b : !pr };
       });
       this.setState({ adReports, banned });
@@ -1388,7 +1466,7 @@ export default class App extends Component<object, State> {
       isAdminPage: s.mode === 'admin', adAllowed: !!s.admin, adLoading: !list, adErr: s.adErr || '', adReload: () => this.loadReports(),
       adCount: list ? `${list.length} open ${list.length === 1 ? 'report' : 'reports'}` : '',
       adItems: (list || []).map(r => ({
-        key: r.id, kind: r.kind === 'book' ? 'Sketchbook' : 'Artist', name: r.targetName, owner: r.ownerName ? `${r.ownerName} · @${r.ownerHandle}` : '',
+        key: r.id, kind: r.kind === 'book' ? 'Sketchbook' : r.kind === 'message' ? 'Message' : 'Artist', name: r.targetName, owner: r.ownerName ? `${r.ownerName} · @${r.ownerHandle}` : '',
         reason: r.reason, note: r.note, when: ago(r.at), hidden: r.hidden, banned: r.banned, gone: r.gone, isBook: r.kind === 'book', busy: s.adBusy?.startsWith(r.id) ? s.adBusy : '',
         open: () => r.kind === 'book' ? this.openBookById(r.targetId) : this.openProfile({ uid: r.ownerId, name: r.ownerName, handle: r.ownerHandle }),
         openOwner: () => this.openProfile({ uid: r.ownerId, name: r.ownerName, handle: r.ownerHandle }),
@@ -1748,7 +1826,9 @@ export default class App extends Component<object, State> {
             const r = s.reportFor, a = s.acct; if (!r || !a) return;
             if (!s.reportReason) return this.setState({ reportErr: 'Choose a reason.' });
             this.setState({ reportBusy: true });
-            try { await api.report(a.uid, { kind: r.kind, targetId: r.targetId, ownerId: r.ownerId, reason: s.reportReason, note: s.reportNote || '' }); this.setState({ reportFor: null }); this.toast('Thanks. We’ll take a look.'); }
+            // Moderators can't read conversations, so a reported message travels with the report.
+            const note = r.quote ? `Message: “${r.quote.slice(0, 300)}”\n${s.reportNote || ''}`.slice(0, 500) : s.reportNote || '';
+            try { await api.report(a.uid, { kind: r.kind, targetId: r.targetId, ownerId: r.ownerId, reason: s.reportReason, note }); this.setState({ reportFor: null }); this.toast('Thanks. We’ll take a look.'); }
             catch (e) { this.setState({ reportErr: api.errMsg(e) }); }
             finally { this.setState({ reportBusy: false }); }
           },
@@ -1880,6 +1960,7 @@ export default class App extends Component<object, State> {
       ...(mode === 'profile' ? this.profileVals() : {}),
       ...(mode === 'explore' ? this.exploreVals() : {}),
       ...(mode === 'admin' ? this.adminVals() : {}),
+      ...(mode === 'messages' && this.state.acct ? this.messagesVals() : {}),
       ...this.accountVals(),
     };
     return (
@@ -1892,6 +1973,7 @@ export default class App extends Component<object, State> {
         {v.isNotFound && <NotFound v={v} />}
         {v.isAction && <AuthAction v={v} />}
         {v.isAdminPage && <Admin v={v} />}
+        {v.isMessages && <Messages v={v} />}
         {v.reportOpen && <ReportModal v={v} />}
         {v.emOpen && <EmbedModal v={v} />}
         {v.cnOpen && <CollectionModal v={v} />}

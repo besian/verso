@@ -15,11 +15,13 @@ service cloud.firestore {
       allow read: if true;
       // The handle must be reserved by this user in the same write (see handles below).
       allow create, update: if isUser(uid)
-        && request.resource.data.keys().hasOnly(['name', 'handle', 'bio', 'loc', 'web', 'accent', 'av', 'joined'])
+        && request.resource.data.keys().hasOnly(['name', 'handle', 'bio', 'loc', 'web', 'ig', 'mail', 'accent', 'av', 'joined'])
         && str(request.resource.data.name, 80)
         && str(request.resource.data.bio, 160)
         && str(request.resource.data.loc, 80)
         && str(request.resource.data.web, 200)
+        && (!('ig' in request.resource.data) || str(request.resource.data.ig, 40))
+        && (!('mail' in request.resource.data) || str(request.resource.data.mail, 120))
         && getAfter(/databases/$(database)/documents/handles/$(request.resource.data.handle)).data.uid == uid;
       // Account deletion removes the profile along with everything else.
       allow delete: if isUser(uid);
@@ -99,10 +101,62 @@ service cloud.firestore {
         && id == request.auth.uid + '_' + request.resource.data.targetId
         && request.resource.data.by == request.auth.uid
         && request.resource.data.keys().hasOnly(['by', 'kind', 'targetId', 'ownerId', 'reason', 'note', 'at'])
-        && request.resource.data.kind in ['book', 'user']
+        && request.resource.data.kind in ['book', 'user', 'message']
         && str(request.resource.data.reason, 60) && str(request.resource.data.note, 500);
       allow read, delete: if isAdmin();
       allow update: if false;
+    }
+
+    // ---------- messages ----------
+    // A conversation between two people: chats/{a}_{b} (uids in order). Only its two members can read it or its
+    // messages. Someone who follows you can start one with you directly ('open'); anyone else's first message
+    // arrives as a request, which only you can accept or decline, and you can't reply until you accept.
+    // Nobody you've blocked can message you, suspended accounts can't send, and starting conversations is
+    // limited to 20 a day per person (chatLimits, counted in the same write).
+    function today() { return math.floor(request.time.toMillis() / 86400000); }
+    function otherOf(m) { return m[0] == request.auth.uid ? m[1] : m[0]; }
+    function blockedBy(u) { return exists(/databases/$(database)/documents/users/$(u)/blocked/$(request.auth.uid)); }
+    match /chatLimits/{uid} {
+      allow read: if isUser(uid);
+      allow create, update: if isUser(uid) && request.resource.data.keys().hasOnly(['day', 'n'])
+        && request.resource.data.day == today() && request.resource.data.n <= 20
+        && request.resource.data.n == (resource == null || resource.data.day != today() ? 1 : resource.data.n + 1);
+    }
+    match /chats/{id} {
+      function lim() { return /databases/$(database)/documents/chatLimits/$(request.auth.uid); }
+      function counted() { return existsAfter(lim()) && (!exists(lim()) || getAfter(lim()).data != get(lim()).data); }
+      function lastIsMine(d) { return d.lastFrom == request.auth.uid && d.lastAt == request.time && str(d.lastText, 140); }
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
+      allow create: if signedIn() && !suspended()
+        && request.resource.data.keys().hasOnly(['members', 'info', 'by', 'status', 'lastText', 'lastFrom', 'lastAt', 'read'])
+        && request.resource.data.members is list && request.resource.data.members.size() == 2
+        && request.auth.uid in request.resource.data.members
+        && request.resource.data.members[0] < request.resource.data.members[1]
+        && id == request.resource.data.members[0] + '_' + request.resource.data.members[1]
+        && request.resource.data.by == request.auth.uid && lastIsMine(request.resource.data)
+        && (request.resource.data.status == 'request' || (request.resource.data.status == 'open'
+          && exists(/databases/$(database)/documents/users/$(otherOf(request.resource.data.members))/following/$(request.auth.uid))))
+        && !blockedBy(otherOf(request.resource.data.members)) && counted();
+      allow update: if signedIn() && request.auth.uid in resource.data.members
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastText', 'lastFrom', 'lastAt', 'read', 'status'])
+        // Only the person asked accepts or declines (and may accept a request they declined earlier).
+        && (request.resource.data.status == resource.data.status
+          || (resource.data.by != request.auth.uid && resource.data.status in ['request', 'declined'] && request.resource.data.status in ['open', 'declined']))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastText', 'lastFrom', 'lastAt']) || lastIsMine(request.resource.data))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['read'])
+          || request.resource.data.read.diff(resource.data.read).affectedKeys().hasOnly([request.auth.uid]));
+      allow delete: if false;
+      match /messages/{mid} {
+        function chat() { return getAfter(/databases/$(database)/documents/chats/$(id)).data; }
+        allow read: if signedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(id)).data.members;
+        allow create: if signedIn() && !suspended()
+          && request.resource.data.keys().hasOnly(['from', 'text', 'at'])
+          && request.resource.data.from == request.auth.uid && request.resource.data.at == request.time
+          && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
+          && request.auth.uid in chat().members && (chat().status == 'open' || chat().by == request.auth.uid)
+          && !blockedBy(otherOf(chat().members));
+        allow update, delete: if false;
+      }
     }
 
     match /admins/{uid} {

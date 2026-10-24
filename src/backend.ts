@@ -12,7 +12,7 @@ import {
 import type { User } from 'firebase/auth';
 import {
   collection, connectFirestoreEmulator, deleteDoc, doc, getDoc, getDocs, getFirestore, increment, limit, onSnapshot,
-  orderBy, query, runTransaction, setDoc, startAfter, updateDoc, where, writeBatch,
+  limitToLast, orderBy, query, runTransaction, serverTimestamp, setDoc, startAfter, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
 import type { DocumentData, QueryConstraint, QueryDocumentSnapshot } from 'firebase/firestore';
 import { connectStorageEmulator, deleteObject, getStorage, listAll, ref, uploadBytes } from 'firebase/storage';
@@ -116,7 +116,7 @@ export async function signUp(email: string, pw: string, name: string, handle: st
 type PublicProfile = Omit<Account, 'uid' | 'email'>;
 
 const profileOf = (d: DocumentData): PublicProfile => ({
-  name: d.name || '', handle: d.handle || '', bio: d.bio || '', loc: d.loc || '', web: d.web || '',
+  name: d.name || '', handle: d.handle || '', bio: d.bio || '', loc: d.loc || '', web: d.web || '', ig: d.ig || '', mail: d.mail || '',
   accent: d.accent || '#C9C3B4', av: d.av || null, joined: d.joined || Date.now(),
 });
 
@@ -341,6 +341,65 @@ export async function declineInvite(bookId: string) { await updateDoc(doc(need()
 /** The owner removing the other person, or that person leaving. */
 export async function endShare(bookId: string) { await updateDoc(doc(need().db, 'books', bookId), { collab: null, collabName: null, collabHandle: null }); }
 
+// ---------- messages ----------
+// chats/{a}_{b}: a conversation between two people (see firestore.rules for who may do what).
+export interface ChatPerson { name: string; handle: string; av: string | null }
+export interface Chat {
+  id: string; members: string[]; info: Record<string, ChatPerson>; by: string; status: 'open' | 'request' | 'declined';
+  lastText: string; lastFrom: string; lastAt: number; read: Record<string, number>;
+}
+export interface Msg { id: string; from: string; text: string; at: number; pending: boolean }
+const ms = (t: unknown) => (t && typeof (t as { toMillis?: () => number }).toMillis === 'function' ? (t as { toMillis: () => number }).toMillis() : typeof t === 'number' ? t : Date.now());
+export const chatIdFor = (a: string, b: string) => [a, b].sort().join('_');
+const chatOf = (id: string, d: DocumentData): Chat => ({
+  id, members: d.members || [], info: d.info || {}, by: d.by || '', status: d.status || 'open', lastText: d.lastText || '', lastFrom: d.lastFrom || '',
+  lastAt: ms(d.lastAt), read: Object.fromEntries(Object.entries(d.read || {}).map(([k, v]) => [k, ms(v)])),
+});
+
+/** Your conversations, newest first. */
+export function watchChats(uid: string, cb: (c: Chat[]) => void): () => void {
+  if (!db) return () => {};
+  return onSnapshot(query(collection(db, 'chats'), where('members', 'array-contains', uid)),
+    s => cb(s.docs.map(x => chatOf(x.id, x.data({ serverTimestamps: 'estimate' }))).sort((a, b) => b.lastAt - a.lastAt)), e => { console.warn('chats', e); cb([]); });
+}
+/** The latest 200 messages of a conversation, oldest first. */
+export function watchMessages(id: string, cb: (m: Msg[]) => void): () => void {
+  if (!db) return () => {};
+  const d = db; let stop = () => {}, timer = 0, tries = 0, done = false;
+  // A conversation you've just started may not have reached the server yet, and until it has, reading its
+  // messages is refused; so a refused listener tries again a few times.
+  const start = () => {
+    stop = onSnapshot(query(collection(d, 'chats', id, 'messages'), orderBy('at'), limitToLast(200)), { includeMetadataChanges: true },
+      s => { tries = 0; cb(s.docs.map(x => { const m = x.data({ serverTimestamps: 'estimate' }); return { id: x.id, from: m.from, text: m.text, at: ms(m.at), pending: x.metadata.hasPendingWrites }; })); },
+      e => { if (done) return; if (tries++ < 6) timer = window.setTimeout(start, 400 * tries); else { console.warn('messages', e); cb([]); } });
+  };
+  start();
+  return () => { done = true; clearTimeout(timer); stop(); };
+}
+const person = (p: { name?: string; handle?: string; av?: string | null }): ChatPerson => ({ name: (p.name || '').slice(0, 80), handle: p.handle || '', av: p.av || null });
+/** Sends a message, starting the conversation if it's the first. Someone who follows you gets it in their
+ *  inbox; anyone else gets a request. */
+export async function sendMessage(me: Account, other: Person, text: string, existing: Chat | null) {
+  const { db: d } = need(), t = text.trim().slice(0, 2000); if (!t) return;
+  const id = chatIdFor(me.uid, other.uid), ref = doc(d, 'chats', id), batch = writeBatch(d);
+  const last = { lastText: t.slice(0, 140), lastFrom: me.uid, lastAt: serverTimestamp() };
+  if (!existing) {
+    // Read first in case the other person started it at the same moment.
+    const cur = await getDoc(ref).catch(() => null);
+    if (!cur?.exists()) {
+      const follows = (await getDoc(doc(d, 'users', other.uid, 'following', me.uid)).catch(() => null))?.exists();
+      const day = Math.floor(Date.now() / 86400000), lr = doc(d, 'chatLimits', me.uid), l = (await getDoc(lr).catch(() => null))?.data();
+      batch.set(lr, { day, n: l && l.day === day ? l.n + 1 : 1 });
+      batch.set(ref, { members: [me.uid, other.uid].sort(), info: { [me.uid]: person(me), [other.uid]: person(other) }, by: me.uid, status: follows ? 'open' : 'request', ...last, read: { [me.uid]: serverTimestamp() } });
+    } else batch.update(ref, { ...last, [`read.${me.uid}`]: serverTimestamp() });
+  } else batch.update(ref, { ...last, [`read.${me.uid}`]: serverTimestamp() });
+  batch.set(doc(collection(d, 'chats', id, 'messages')), { from: me.uid, text: t, at: serverTimestamp() });
+  await batch.commit();
+}
+export async function markChatRead(id: string, uid: string) { await updateDoc(doc(need().db, 'chats', id), { [`read.${uid}`]: serverTimestamp() }); }
+/** Accept (or decline) a message request. Declining is silent: the sender isn't told. */
+export async function answerChat(id: string, accept: boolean) { await updateDoc(doc(need().db, 'chats', id), { status: accept ? 'open' : 'declined' }); }
+
 /** Live list of sketchbooks the user has been invited to draw in. */
 export function watchInvites(uid: string, cb: (b: BookDoc[]) => void): () => void {
   if (!db) return () => {};
@@ -500,14 +559,14 @@ export async function setBlocked(uid: string, target: string, on: boolean, wasFo
 
 export const REPORT_REASONS = ['Spam or scam', 'Not their own work', 'Harassment or hate', 'Sexual content', 'Something else'] as const;
 /** Files a report for moderators (one per person per target; reporting again is quietly ignored). */
-export async function report(by: string, r: { kind: 'book' | 'user'; targetId: string; ownerId: string; reason: string; note: string }) {
+export async function report(by: string, r: { kind: 'book' | 'user' | 'message'; targetId: string; ownerId: string; reason: string; note: string }) {
   await setDoc(doc(need().db, 'reports', `${by}_${r.targetId}`), { by, ...r, note: r.note.slice(0, 500), at: Date.now() })
     .catch(e => { if ((e as { code?: string }).code !== 'permission-denied') throw e; });
 }
 
 // ---------- moderation ----------
 
-export interface Report { id: string; by: string; kind: 'book' | 'user'; targetId: string; ownerId: string; reason: string; note: string; at: number }
+export interface Report { id: string; by: string; kind: 'book' | 'user' | 'message'; targetId: string; ownerId: string; reason: string; note: string; at: number }
 
 export async function isAdmin(uid: string): Promise<boolean> {
   try { return (await getDoc(doc(need().db, 'admins', uid))).exists(); } catch { return false; }

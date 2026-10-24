@@ -68,6 +68,8 @@ export function EditProfile({ v }: { v: V }) {
       <div style={grid}>
         <TextField label="Location" value={v.dLoc} onChange={v.onDLoc} placeholder="City" />
         <TextField label="Website" value={v.dWeb} onChange={v.onDWeb} placeholder="yoursite.com" />
+        <TextField label="Instagram" value={v.dIg} onChange={v.onDIg} placeholder="@yourname" />
+        <TextField label="Contact email (shown on your profile)" value={v.dMail} onChange={v.onDMail} placeholder="hello@yoursite.com" type="email" />
       </div>
       <Notice err={v.dErr} />
     </>

@@ -47,7 +47,8 @@ function Privacy() {
       <Sec title="What we store">
         <Ul items={[
           <><b>Your account:</b> your email address and a password, held by Firebase Authentication (Google). Your password is never visible to us, and your email is never shown on the site.</>,
-          <><b>Your profile:</b> name, handle, bio, location, website and photo. These are public.</>,
+          <><b>Your profile:</b> name, handle, bio, location, website, Instagram, contact email (if you add one) and photo. These are public.</>,
+          <><b>Messages:</b> the messages you send and receive, stored so the two people in a conversation can read them. Nobody else can, including other members; we only see a message if it’s reported to us. If you delete your account, messages you sent stay in the other person’s conversation.</>,
           <><b>Your sketchbooks:</b> page images, covers, captions, dates, mediums and tags. Public sketchbooks can be seen by anyone; private ones only by you.</>,
           <><b>Activity:</b> who you follow, which sketchbooks you like and save, who you block, your notifications and any reports you file. Follows and likes are visible to others; saved sketchbooks, blocks and reports are private.</>,
           <><b>Usage:</b> if analytics is enabled, Google Analytics for Firebase records anonymous usage such as pages viewed, device type and approximate location, using cookies or similar storage.</>,

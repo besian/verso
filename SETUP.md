@@ -119,3 +119,18 @@ Claude (Haiku 5.5) and returns the text. Signed-in users only, 60 conversions pe
 1. console.anthropic.com → API keys → create one → Vercel env var `ANTHROPIC_API_KEY`.
 2. It also uses `FIREBASE_SERVICE_ACCOUNT` (already set for the branded emails).
 3. Redeploy. Optional: set a monthly spend limit in the Anthropic console (Settings → Limits).
+
+## Messages
+
+Direct messages live in `chats/{a}_{b}` (and `chats/…/messages`), with a daily limit on new conversations in
+`chatLimits/{uid}`. All of it is enforced by `firestore.rules`, so **publish the rules** after pulling this:
+
+    npm run deploy:rules
+
+- Someone who follows you can message you directly; anyone else's first message is a **request** you accept or decline.
+- Blocked people can't message you; suspended accounts can't send; 20 new conversations a day per person.
+- Reported messages appear on the Moderation page with the message text (moderators can't read conversations).
+
+**UK Online Safety Act:** private messaging makes Fletora a user-to-user service. Keep a short written risk
+assessment (what could go wrong in messages, e.g. harassment, spam, contact with under-18s; and what's in place:
+requests, blocking, reporting, rate limits, suspension), review it yearly, and act on reports promptly.

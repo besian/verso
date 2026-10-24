@@ -69,5 +69,7 @@ export const GRID_WIDTH: Record<ShapeKey, number> = { pocket: 64, portrait: 78, 
 export interface Account {
   uid: string;
   name: string; handle: string; email: string; bio: string; loc: string; web: string;
+  /** Optional ways to reach the artist, shown on their profile: an Instagram handle and a public contact email. */
+  ig?: string; mail?: string;
   accent: string; av: string | null; joined: number;
 }
