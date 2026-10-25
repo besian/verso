@@ -443,7 +443,7 @@ export function CardModal({ v }: { v: V }) {
   const save = async () => {
     const r = ref.current; if (!r?.stripe || busy) return;
     setBusy(true); setErr('');
-    const res = await r.stripe.confirmSetup({ elements: r.elements, redirect: 'if_required', confirmParams: { return_url: location.origin + '/settings' } });
+    const res = await r.stripe.confirmSetup({ elements: r.elements, redirect: 'if_required', confirmParams: { return_url: location.origin + '/billing' } });
     if (res.error) { setErr(res.error.message || 'That card didn’t work.'); setBusy(false); return; }
     try { await v.cardSaved(res.setupIntent.id); } catch { setErr('Saved with Stripe, but couldn’t switch Plus to it. Try again.'); setBusy(false); }
   };

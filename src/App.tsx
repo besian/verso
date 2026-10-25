@@ -23,12 +23,12 @@ import type { Paper } from './paper';
 import type { Wear } from './wear';
 import { INK, MARK, PAPER, STONE } from './theme';
 import Stage from './views/Stage';
-import { AuthPage, Explore, HomeScreen, Profile, Settings } from './views/Screens';
+import { AuthPage, BillingPage, Explore, HomeScreen, Profile, Settings } from './views/Screens';
 import { Admin, AuthAction, Legal, NotFound } from './views/Pages';
 import { Messages } from './views/Messages';
 import { ArchiveModal, CardModal, CollectionModal, Editor, EditProfile, EmbedModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
 
-export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound' | 'action' | 'messages';
+export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound' | 'action' | 'messages' | 'billing';
 /** A report with what it points at, for the moderation page. */
 type AdminItem = Report & { targetName: string; ownerName: string; ownerHandle: string; hidden: boolean; banned: boolean; gone: boolean };
 type AnyBook = Book | OtherBook;
@@ -405,7 +405,7 @@ export default class App extends Component<object, State> {
     if (prev.managing && !s.managing && this.mgHold) this.revertEdits();
     this.syncWatches();
     // Settings shows the plan, card and receipts; they're fetched again whenever the plan changes.
-    if (s.mode === 'settings' && s.bill && (prev.mode !== 'settings' || prev.bill !== s.bill)) this.loadBilling();
+    if ((s.mode === 'settings' || s.mode === 'billing') && s.bill && (prev.mode !== s.mode || prev.bill !== s.bill)) this.loadBilling();
     // The first route is applied once we know who's signed in; after that the URL follows the screen.
     if (s.authReady && !this.routed) { this.routed = true; this.applyRoute(); }
     else if (this.routed) {
@@ -542,6 +542,7 @@ export default class App extends Component<object, State> {
       }
       case 'auth': return s.suMode === 'signin' ? '/signin' : s.suMode === 'reset' ? '/reset' : '/join';
       case 'settings': return '/settings';
+      case 'billing': return '/billing';
       case 'messages': return s.chatOpen ? '/messages/' + s.chatOpen : '/messages';
       default: return '/';
     }
@@ -549,7 +550,7 @@ export default class App extends Component<object, State> {
   titleFor(): string {
     const s = this.state, mode = s.mode || 'home', o = s.other as OtherBook | null;
     const t = mode === 'other' && o ? `${o.name} by ${o.artist}` : mode === 'mine' ? s.books[s.active]?.name : mode === 'explore' ? 'Explore'
-      : mode === 'profile' ? (s.profileOf ? (s.pf?.profile?.name || s.profileOf.name) : s.acct?.name) : mode === 'settings' ? 'Account settings' : mode === 'messages' ? 'Messages' : mode === 'auth' ? (s.suMode === 'join' ? 'Join' : 'Sign in')
+      : mode === 'profile' ? (s.profileOf ? (s.pf?.profile?.name || s.profileOf.name) : s.acct?.name) : mode === 'settings' ? 'Account settings' : mode === 'billing' ? 'Billing' : mode === 'messages' ? 'Messages' : mode === 'auth' ? (s.suMode === 'join' ? 'Join' : 'Sign in')
       : mode === 'legal' ? (s.legal === 'terms' ? 'Terms' : 'Privacy') : mode === 'admin' ? 'Moderation' : mode === 'notfound' ? 'Not found' : '';
     return t ? `${t} · fletora.` : 'fletora. — A place for the unfinished';
   }
@@ -586,6 +587,7 @@ export default class App extends Component<object, State> {
         if (q.get('plus') === 'welcome') { this.toast('Welcome to Fletora Plus'); this.confirmPlus(q.get('session_id')); }
         return this.openSettings();
       }
+      if (a === 'billing') return s.acct ? this.openBilling() : this.openAuth('signin');
       if (a === 'plus') { if (!s.acct) return this.openAuth('join'); this.openSettings(); return this.openPlus(); }
       if (a === 'messages') return s.acct ? this.openMessages(b || null) : this.openAuth('signin');
       if (a === 'sketchbooks') {
@@ -646,6 +648,7 @@ export default class App extends Component<object, State> {
   myChats() { const s = this.state, me = s.acct?.uid || '', bl = s.blocked || []; return (s.chats || []).filter(c => !bl.includes(this.chatOther(c).uid) && !(c.status === 'declined' && c.by !== me)); }
   chatUnread(c: Chat) { const me = this.state.acct?.uid || ''; return c.lastFrom !== me && c.lastAt > (c.read[me] || 0); }
 
+  openBilling = () => { cancelAnimationFrame(this.raf); this.setState({ mode: 'billing', other: null, focus: false, fz: 0, managing: false, draft: null, acErr: '', acInfo: '' }); };
   openSettings = () => { cancelAnimationFrame(this.raf); this.setState({ mode: 'settings', other: null, focus: false, fz: 0, managing: false, draft: null, acErr: '', acInfo: '' }); };
   closeAuth = () => {
     // Coming from an emailed link (e.g. after resetting a password), carry on to the sketchbooks rather than back to the link page.
@@ -1478,6 +1481,7 @@ export default class App extends Component<object, State> {
     };
     return {
       isSettings: s.mode === 'settings', openSettings: this.openSettings, closeSettings: () => this.openProfile(null),
+      isBilling: s.mode === 'billing', openBilling: this.openBilling,
       acEmail: a?.email || '', acVerified: !!s.verified, acErr: s.acErr || '', acInfo: s.acInfo || '', acBusy: s.acBusy || '',
       acF: { email: f.email || '', pwEmail: f.pwEmail || '', pwOld: f.pwOld || '', pwNew: f.pwNew || '', delHandle: f.delHandle || '', pwDel: f.pwDel || '' },
       onAc: { email: set('email'), pwEmail: set('pwEmail'), pwOld: set('pwOld'), pwNew: set('pwNew'), delHandle: set('delHandle'), pwDel: set('pwDel') },
@@ -2176,6 +2180,7 @@ export default class App extends Component<object, State> {
         {v.isExplore && <Explore v={v} />}
         {v.isProfile && <Profile v={v} />}
         {v.isSettings && <Settings v={v} />}
+        {v.isBilling && <BillingPage v={v} />}
         {v.isLegal && <Legal v={v} />}
         {v.isNotFound && <NotFound v={v} />}
         {v.isAction && <AuthAction v={v} />}
@@ -2194,8 +2199,8 @@ export default class App extends Component<object, State> {
         {v.managing && <Manager v={v} />}
         {v.editing && <Editor v={v} />}
         {v.plOpen && <PlusModal v={v} />}
-        {v.isSettings && v.bdAsk && <PlanConfirm v={v} />}
-        {v.isSettings && v.cardSecret && <CardModal v={v} />}
+        {v.isBilling && v.bdAsk && <PlanConfirm v={v} />}
+        {v.isBilling && v.cardSecret && <CardModal v={v} />}
         <input ref={this.fileRef} type="file" accept="image/*" multiple onChange={v.onFiles} style={{ display: 'none' }} />
         {/* Phones: opens the camera straight away. */}
         <input ref={this.camRef} type="file" accept="image/*" capture="environment" onChange={v.onFiles} style={{ display: 'none' }} />

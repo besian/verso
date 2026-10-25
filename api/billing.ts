@@ -77,7 +77,7 @@ export async function POST(req: Request) {
     }
     if (body.action === 'portal') {
       if (!bill.customer) return json(404, { error: 'no-customer' });
-      const s = await stripe('POST', 'billing_portal/sessions', { customer: bill.customer, return_url: `${here}/settings` });
+      const s = await stripe('POST', 'billing_portal/sessions', { customer: bill.customer, return_url: `${here}/billing` });
       return json(200, { url: s.url });
     }
     // ---------- Fletora's billing page ----------
