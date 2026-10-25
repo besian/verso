@@ -479,8 +479,9 @@ export function PlanConfirm({ v }: { v: V }) {
   );
 }
 
-/** Phones: the checkout as a page of its own that the browser scrolls. iPhones don't pass a scroll from inside
- *  Stripe's form (an iframe) on to a scrolling box around it, only to the page, so the page scrolls while it's open. */
+/** Stripe's checkout as a page of its own that the browser scrolls. Browsers (iPhones, and Safari on computers)
+ *  don't pass a scroll from inside Stripe's form (an iframe) on to a scrolling box around it, only to the page, so
+ *  the page scrolls while it's open. */
 function CheckoutPage({ v }: { v: V }) {
   useEffect(() => {
     const els = [document.documentElement, document.body], was = els.map(e => [e.style.overflow, e.style.height]);
@@ -488,8 +489,10 @@ function CheckoutPage({ v }: { v: V }) {
     return () => els.forEach((e, i) => { [e.style.overflow, e.style.height] = was[i]; });
   }, []);
   return createPortal(
-    <div role="dialog" aria-label="Checkout" style={{ position: 'absolute', top: 0, left: 0, right: 0, minHeight: '100%', zIndex: 1000, background: PAPER, color: INK, fontFamily: SANS, boxSizing: 'border-box', padding: '14px 12px calc(32px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {v.plUi === 'elements' ? <FletoraCheckout v={v} /> : <EmbeddedCheckout v={v} />}
+    <div role="dialog" aria-label="Checkout" style={{ position: 'absolute', top: 0, left: 0, right: 0, minHeight: '100%', zIndex: 1000, background: PAPER, color: INK, fontFamily: SANS, boxSizing: 'border-box', padding: v.notMob ? '32px 24px 64px' : '14px 12px calc(32px + env(safe-area-inset-bottom))' }}>
+      <div style={{ maxWidth: v.plUi === 'elements' ? 520 : 680, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {v.plUi === 'elements' ? <FletoraCheckout v={v} /> : <EmbeddedCheckout v={v} />}
+      </div>
     </div>, document.body);
 }
 
@@ -500,7 +503,8 @@ export function PlusModal({ v }: { v: V }) {
       <PlusThanks v={v} />
     </Modal>
   );
-  if (v.plSecret && !v.notMob) return <CheckoutPage v={v} />;
+  // Stripe's whole form is a tall iframe: always a page of its own. Our own form stays in the sheet on computers.
+  if (v.plSecret && (!v.notMob || v.plUi !== 'elements')) return <CheckoutPage v={v} />;
   if (v.plSecret) return (
     // Clicking outside doesn't close it mid-payment; Back does.
     <Modal onClose={() => {}} pad={v.notMob ? (v.plUi === 'elements' ? v.mModalPad : 24) : 12} maxWidth={v.plUi === 'elements' ? 520 : 640} gap={v.plUi === 'elements' ? 16 : 14} z={40} shadow="0 30px 60px rgba(10,10,30,.35)">
