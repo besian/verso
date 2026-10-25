@@ -343,6 +343,7 @@ export function Profile({ v }: { v: V }) {
           <MoreMenu open={v.pfMoreOpen} onToggle={v.pfMore} align="right" items={[
             { label: 'View as public', onClick: v.togglePreview },
             ...(v.pfAdmin ? [{ label: 'Moderation', onClick: v.openAdmin }] : []),
+            { label: 'Contact us', onClick: v.openContact },
             { label: 'Sign out', onClick: v.signOut, danger: true },
           ]} />
         </>
