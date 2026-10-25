@@ -21,7 +21,7 @@ function Page({ v, kicker, title, children }: { v: V; kicker: string; title: Rea
   return (
     <div style={screen}>
       {/* Same spacing as every page; long text keeps a comfortable reading width from the same left edge. */}
-      <div style={{ ...pagePad(mob, 64), display: 'flex', flexDirection: 'column', gap: 28, maxWidth: 860 }}>
+      <div style={{ ...pagePad(mob, 64), display: 'flex', flexDirection: 'column', gap: 28, maxWidth: 860, minHeight: '100%', paddingBottom: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <span style={label(MARK)}>{kicker}</span>
           <h1 style={{ margin: 0, ...serif(mob ? 44 : 64, 1, '-.02em') }}>{title}</h1>
@@ -223,7 +223,7 @@ function ContactPage({ v }: { v: V }) {
   return (
     <div style={screen}>
       {/* Full width: on wide screens the help beside the form splits into columns rather than leaving space empty. */}
-      <div style={{ ...pagePad(mob, 64), display: 'flex', flexDirection: 'column', gap: mob ? 28 : 40, minHeight: '100%' }}>
+      <div style={{ ...pagePad(mob, 64), display: 'flex', flexDirection: 'column', gap: mob ? 28 : 40, minHeight: '100%', paddingBottom: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 760 }}>
           <span style={label(MARK)}>Contact</span>
           <h1 style={{ margin: 0, ...serif(mob ? 48 : 76, .95, '-.025em') }}>Get in <em style={{ color: MARK }}>touch.</em></h1>

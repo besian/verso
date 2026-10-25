@@ -379,7 +379,7 @@ export function Profile({ v }: { v: V }) {
   );
   return (
     <div style={screen()}>
-      <div style={{ ...pagePad(mob, 56), display: 'flex', flexDirection: 'column', gap: mob ? 24 : 32 }}>
+      <div style={{ ...pagePad(mob, 56), display: 'flex', flexDirection: 'column', gap: mob ? 24 : 32, minHeight: '100%', paddingBottom: 20 }}>
         {header}
 
         <section style={{ display: 'flex', flexDirection: 'column', gap: mob ? 20 : 28 }}>
@@ -458,7 +458,7 @@ export function AuthPage({ v }: { v: V }) {
   const mob = !v.notMob;
   return (
     <div style={screen()}>
-      <div style={{ ...pagePad(mob), display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,360px),1fr))', gap: mob ? '40px' : '48px 96px', alignItems: 'start' }}>
+      <div style={{ ...pagePad(mob), display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,360px),1fr))', gap: mob ? '40px' : '48px 96px', alignItems: 'start', minHeight: '100%', paddingBottom: 20 }}>
         <section style={{ display: 'flex', flexDirection: 'column', gap: 24, minWidth: 0 }}>
           <div style={{ display: 'flex', gap: 14, alignItems: 'center', ...label() }}><span style={{ color: MARK }}>{v.suKicker}</span><span style={{ width: 40, height: 1, background: STONE }} /><span>fletora.</span></div>
           <h1 style={{ margin: 0, ...serif(mob ? 56 : 96, .94, '-.025em'), textWrap: 'balance' } as CSSProperties}>{AUTH_HEAD[v.suMode]}</h1>
@@ -488,7 +488,7 @@ export function AuthPage({ v }: { v: V }) {
             <button type="button" onClick={v.closeAuth} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'rgba(var(--ink-rgb),.75)', font: `500 13px ${SANS}`, cursor: 'pointer' }}>Not now</button>
           </div>
         </form>
-        <div style={{ gridColumn: '1 / -1' }}><SiteFooter v={v} /></div>
+        <div style={{ gridColumn: '1 / -1', alignSelf: 'end' }}><SiteFooter v={v} /></div>
       </div>
     </div>
   );
@@ -526,7 +526,7 @@ export function Settings({ v }: { v: V }) {
   const f = v.acF, on = v.onAc, mob = !v.notMob;
   return (
     <div style={screen()}>
-      <div style={{ ...pagePad(mob), display: 'flex', flexDirection: 'column', gap: 32 }}>
+      <div style={{ ...pagePad(mob), display: 'flex', flexDirection: 'column', gap: 32, minHeight: '100%', paddingBottom: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button onClick={v.closeSettings} className={'tap ' + hoverText} style={{ alignSelf: 'flex-start', padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(INK) }}>← Your profile</button>
           <h1 style={{ margin: 0, ...serif(mob ? 44 : 64, 1, '-.02em') }}>Account <em>settings</em></h1>
@@ -613,7 +613,7 @@ export function BillingPage({ v }: { v: V }) {
     </div>
   );
   if (!v.acPlus || !v.bdShow) return (
-    <div style={screen()}><div style={{ ...pagePad(mob), display: 'flex', flexDirection: 'column', gap: 32 }}>
+    <div style={screen()}><div style={{ ...pagePad(mob), display: 'flex', flexDirection: 'column', gap: 32, minHeight: '100%', paddingBottom: 20 }}>
       {head}
       <SettingsSection title="Plan" note={v.acGift ? 'A gift from Fletora. There’s nothing to pay and no card on file.' : undefined}>
         <span style={{ fontSize: 14, lineHeight: 1.5 }}>{v.acGift ? v.acGiftLine : v.acPlan}</span>
@@ -624,7 +624,7 @@ export function BillingPage({ v }: { v: V }) {
   );
   return (
     <div style={screen()}>
-      <div style={{ ...pagePad(mob), display: 'flex', flexDirection: 'column', gap: 32 }}>
+      <div style={{ ...pagePad(mob), display: 'flex', flexDirection: 'column', gap: 32, minHeight: '100%', paddingBottom: 20 }}>
         {head}
         {!v.bdReady ? (v.bdErr ? (
           // Couldn't load the details: say what we know, and offer Stripe's page instead.
