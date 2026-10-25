@@ -69,6 +69,8 @@ export interface OtherBook {
   notes?: Record<string, PageNote>; mediums?: string[]; tags?: string[];
   /** Labelled Mature: drawn nudity or sexual content. */
   mature?: boolean; collabIds?: string[];
+  /** Pictures across two pages: left half → right half. */
+  spreads?: Record<string, string>;
   /** Set for sketchbooks in From the archive: the historical artist and where the pages come from. */
   arch?: ArchiveEntry;
 }

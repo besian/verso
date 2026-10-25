@@ -61,7 +61,8 @@ export function pageWear(seed: string, outer: 'l' | 'r', w: number): Wear {
   layers.push(`radial-gradient(ellipse 85% 80% at ${outer === 'r' ? '42%' : '58%'} 50%, transparent 55%, rgba(150,116,58,${(0.14 + r() * 0.08).toFixed(3)}) 100%)`);
   layers.push(GRAIN);
   // Dog-ear on the top outer corner (the bottom corners carry the page numbers).
-  const ear = r() < 0.32 ? { corner: ('t' + outer) as Corner, size: Math.round(w * (0.11 + r() * 0.05)) } : null;
+  // About one page in twelve.
+  const ear = r() < 0.08 ? { corner: ('t' + outer) as Corner, size: Math.round(w * (0.11 + r() * 0.05)) } : null;
   return { paper: PAPERS[Math.floor(r() * PAPERS.length)], overlay: layers.join(','), ear };
 }
 

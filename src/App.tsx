@@ -96,7 +96,8 @@ interface State {
   /** Top of the book area on screen (it sits below the title), used to centre a zoomed page on the whole screen. */
   st?: number;
   switching?: boolean; car?: number; swT?: number;
-  focus?: boolean; fz?: number; fside?: 'L' | 'R'; fsx?: number; ctrlShow?: boolean; menuOpen?: boolean;
+  /** Focus view: which page is centred, the left or right one, or 'S' for a picture across both (centred on the fold). */
+  focus?: boolean; fz?: number; fside?: 'L' | 'R' | 'S'; fsx?: number; ctrlShow?: boolean; menuOpen?: boolean;
   edit?: EditState | null; edTool?: string; edAdjTool?: string; edPeek?: boolean;
   /** Messages: your conversations, the open one (or a new one with chatNew), its messages and the reply being written. */
   /** From the archive (Explore), and the moderator's add/edit form for it. */
@@ -166,6 +167,7 @@ const toOther = (b: BookDoc, idx: number): OtherBook => ({
   images: b.pages, pages: Math.max(CONFIG.minPages, b.pageCount + (b.pageCount % 2)), initials: ini(b.ownerName), coverImg: b.cover,
   ownerId: b.ownerId, handle: b.ownerHandle, updatedAt: b.updatedAt, thumbs: api.thumbMap(b),
   notes: api.noteMap(b), mediums: b.mediums, tags: b.tags, mature: b.mature, collabIds: b.collabs.map(m => m.uid),
+  spreads: Object.fromEntries(b.pages.flatMap((u, i) => b.spreads[i] && b.pages[i + 1] ? [[u, b.pages[i + 1]]] : [])),
 });
 /** "Ana", "Ana & Ben", "Ana, Ben & Cleo", "Ana, Ben & 3 others". */
 const names = (l: { name: string; handle: string }[] = []) => {
@@ -1040,8 +1042,12 @@ export default class App extends Component<object, State> {
   }
   /** Whether the left / right page of the spread at p has a drawing. */
   spreadImages(p: number) { const N = this.nLeaves(); return { l: p >= 1 && this.face(p - 1, 1).idx >= 0, r: p <= N - 2 && this.face(p, 0).idx >= 0 }; }
-  /** Which page of the spread at p to centre in focus view: the left one when it has a drawing (or, arriving backwards, the right one when it does). */
-  autoSide(p: number, from: 'L' | 'R' = 'L'): 'L' | 'R' {
+  /** Whether the opening at p (left page: image 2p−3, right page: 2p−2) shows one picture across both pages. */
+  isSpreadAt(p: number) { const im = this.state.images, l = im[2 * p - 3], r = im[2 * p - 2]; return p >= 2 && !!l && !!r && (this.curBook() as Book)?.spreads?.[l] === r; }
+  /** Which page of the spread at p to centre in focus view: both (the fold) for a picture across two pages; otherwise
+   *  the left one when it has a drawing (or, arriving backwards, the right one when it does). */
+  autoSide(p: number, from: 'L' | 'R' = 'L'): 'L' | 'R' | 'S' {
+    if (this.isSpreadAt(p)) return 'S';
     if (p >= this.nLeaves() - 1) return 'L';
     const { l, r } = this.spreadImages(p);
     return from === 'L' ? (l ? 'L' : 'R') : (r || !l ? 'R' : 'L');
@@ -1049,8 +1055,9 @@ export default class App extends Component<object, State> {
   /** Focus view steps page by page: across the spread when the other page has a drawing, otherwise to the next spread. */
   focusGo(dir: number) {
     const p = Math.round(this.target), N = this.nLeaves(), side = this.state.fside || 'R', { l, r } = this.spreadImages(p);
-    if (dir > 0 && side === 'L' && r) return this.focusOn(p, 'R');
-    if (dir < 0 && side === 'R' && l) return this.focusOn(p, 'L');
+    // A picture across both pages is seen whole, so the next step goes to the next opening.
+    if (dir > 0 && side === 'L' && r && !this.isSpreadAt(p)) return this.focusOn(p, 'R');
+    if (dir < 0 && side === 'R' && l && !this.isSpreadAt(p)) return this.focusOn(p, 'L');
     const np = Math.max(1, Math.min(N - 1, p + dir)); if (np === p) return;
     this.focusOn(np, this.autoSide(np, dir > 0 ? 'L' : 'R'));
   }
@@ -1061,15 +1068,18 @@ export default class App extends Component<object, State> {
     const phone = sw < 640, open = phone && !flat && (b === undefined || b === this.curBook()) ? clamp01(Math.min(s.p, this.nLeaves() - s.p)) : 0;
     const across = phone ? PHONE_CLOSED + (PHONE_OPEN - PHONE_CLOSED) * open : 0.29;
     const Hn = Math.max(phone ? 60 : 120, Math.min(sh * (phone ? 0.78 : 0.7) * shp.s, sw * across / aspect, 560 * shp.s) || 360) * s.zoom;
-    const Hf = Math.max(200, Math.min(s.vh * 0.8, s.vw * 0.86 / aspect));
+    // Focus: one page fills the screen, or both pages for a picture across two.
+    const Hf = Math.max(200, Math.min(s.vh * 0.8, s.vw * 0.86 / (aspect * (s.fside === 'S' && (b === undefined || b === this.curBook()) ? 2 : 1))));
     const H = Hn + (Hf - Hn) * fz; return { H: Math.round(H), W: Math.round(H * aspect) };
   }
 
   // ---------- focus (zoomed single page) ----------
-  focusOn(p: number, side: 'L' | 'R') {
+  focusOn(p: number, side: 'L' | 'R' | 'S') {
     if (this.state.switching) return;
+    if (this.isSpreadAt(p)) side = 'S';
     this.setState({ fside: side }); cancelAnimationFrame(this.sraf);
-    const from = this.state.fsx || 0, to = side === 'L' ? 1 : 0; let t0 = 0;
+    // 1 centres the left page, 0 the right one, ½ the fold between them.
+    const from = this.state.fsx || 0, to = side === 'L' ? 1 : side === 'S' ? 0.5 : 0; let t0 = 0;
     const tick = (now: number) => { t0 = t0 || now; const t = Math.min(1, (now - t0) / FOCUS_SHIFT_MS), e = 1 - Math.pow(1 - t, 3); this.frameState({ fsx: from + (to - from) * e }); if (t < 1) this.sraf = requestAnimationFrame(tick); };
     if (this.state.focus) this.sraf = requestAnimationFrame(tick); else this.setState({ fsx: to });
     if (Math.abs(this.state.p - p) > 0.01) { this.turnTo(p); this.animate(); }
