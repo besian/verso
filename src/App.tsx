@@ -1424,9 +1424,13 @@ export default class App extends Component<object, State> {
       closeAuth: this.closeAuth,
       // Moderators: give Plus.
       gfOpen: !!s.giftFor && !!s.admin, gfName: s.giftFor?.name || '', gfBusy: !!s.giftBusy,
-      gfNow: (() => { const g = s.giftFor?.gift; if (!g?.on) return ''; if (!g.gift) return 'They pay for Plus.';
-        return g.forever ? 'They have Plus from Fletora, for good.' : `They have Plus from Fletora until ${new Date(g.until).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}.`; })(),
-      gfPaid: !!s.giftFor?.gift?.on && !s.giftFor.gift.gift, gfHas: !!s.giftFor?.gift?.on && !!s.giftFor.gift.gift,
+      gfNow: (() => {
+        const g = s.giftFor?.gift; if (!g?.on) return ''; if (g.paid) return 'They pay for Plus, so it can’t be changed here.';
+        const end = g.forever || g.until > Date.UTC(2099, 0) ? 'for good' : `until ${new Date(g.until).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+        return g.gift ? `They have Plus from Fletora, ${end}.` : `They have Plus, switched on in the Firebase console, ${end}. Choose a length to replace it, or remove it.`;
+      })(),
+      // Paid Plus can't be changed; anything else (a gift, or Plus set by hand) can be replaced or removed.
+      gfPaid: !!s.giftFor?.gift?.on && !!s.giftFor.gift.paid, gfHas: !!s.giftFor?.gift?.on && !s.giftFor.gift.paid,
       gfClose: () => this.setState({ giftFor: null }),
       gfGive: async (months: number) => {
         const g = s.giftFor; if (!g || s.giftBusy) return;

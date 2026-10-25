@@ -18,7 +18,8 @@ export async function syncSubscription(db: Firestore, subId: string, uidHint = '
   const item = sub.items?.data?.[0], end = (sub.current_period_end ?? item?.current_period_end ?? 0) * 1000;
   const on = LIVE.includes(sub.status);
   await Promise.all([
-    db.collection('plus').doc(uid).set({ on, until: on ? end + GRACE_MS : 0 }),
+    // `paid` marks Plus that comes from a subscription (moderators can't change it; see the gift action).
+    db.collection('plus').doc(uid).set({ on, until: on ? end + GRACE_MS : 0, paid: on }),
     db.collection('billing').doc(uid).set({
       customer, sub: sub.id, status: sub.status, interval: item?.price?.recurring?.interval || '', periodEnd: end,
       renews: on && !sub.cancel_at_period_end, at: Date.now(),

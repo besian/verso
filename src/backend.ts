@@ -706,8 +706,9 @@ export interface Billing { status: string; interval: string; periodEnd: number; 
 const untilMs = (u: unknown): number => typeof u === 'number' ? u : typeof u === 'string' ? Number(u) || 0 : (u as { toMillis?: () => number } | null)?.toMillis?.() ?? 0;
 export const plusOn = (d: DocumentData | null) => !!d && d.on === true && untilMs(d.until) > Date.now();
 /** Someone's Plus: whether it's on, and if it was given by Fletora (a gift) rather than paid for, until when. */
-export interface PlusInfo { on: boolean; gift: boolean; until: number; forever: boolean }
-export const plusInfo = (d: DocumentData | null): PlusInfo => ({ on: plusOn(d), gift: !!d?.gift, until: untilMs(d?.until), forever: !!d?.forever });
+/** `paid`: from a subscription. `gift`: given by a moderator. Neither: switched on by hand in the Firebase console. */
+export interface PlusInfo { on: boolean; gift: boolean; paid: boolean; until: number; forever: boolean }
+export const plusInfo = (d: DocumentData | null): PlusInfo => ({ on: plusOn(d), gift: !!d?.gift, paid: !!d?.paid, until: untilMs(d?.until), forever: !!d?.forever });
 export async function getPlus(uid: string): Promise<PlusInfo> {
   try { return plusInfo((await getDoc(doc(need().db, 'plus', uid))).data() || null); } catch { return plusInfo(null); }
 }

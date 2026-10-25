@@ -146,8 +146,9 @@ export async function POST(req: Request) {
       if (!/^[A-Za-z0-9]{10,40}$/.test(target)) return json(400, { error: 'bad-request' });
       const [plus, paid] = await Promise.all([db.collection('plus').doc(target).get(), db.collection('billing').doc(target).get()]);
       if (paid.data()?.renews || ['active', 'trialing', 'past_due'].includes(paid.data()?.status)) return json(409, { error: 'paid' });
+      // Removing works for a gift and for Plus switched on by hand in the console (neither has a subscription).
       if (body.remove) {
-        if (plus.data()?.gift) await plus.ref.set({ on: false, until: 0 });
+        if (plus.exists) await plus.ref.set({ on: false, until: 0 });
         return json(200, { ok: true });
       }
       const months = Math.max(0, Math.min(120, Math.floor(Number(body.months) || 0)));
