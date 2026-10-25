@@ -118,7 +118,17 @@ service cloud.firestore {
       }
     }
 
+    // Written only by the upload check (api/image): sketchbooks it has labelled Mature, and its daily counts.
+    // Moderators remove a marker when they take the label off.
+    match /mature/{bookId} {
+      allow read, delete: if isAdmin();
+    }
+    match /checkLog/{id} {
+      allow read, write: if false;
+    }
+
     // Reports: one per person per sketchbook or artist (id <reporter>_<target>), read and cleared by moderators.
+    // The upload check adds its own (id check_…, kind 'image' for pictures it held back).
     match /reports/{id} {
       allow create: if signedIn()
         && id == request.auth.uid + '_' + request.resource.data.targetId
@@ -256,7 +266,7 @@ service cloud.firestore {
       function valid(d) {
         return d.keys().hasOnly(['ownerId', 'ownerName', 'ownerHandle', 'name', 'color', 'shape', 'cover', 'pages', 'pageCount', 'createdAt', 'updatedAt', 'isPublic', 'linkOnly', 'thumbs', 'coverThumb',
             'captions', 'dates', 'mediums', 'tags', 'labels', 'hidden', 'collab', 'collabName', 'collabHandle', 'invite', 'inviteName', 'inviteHandle',
-            'collabs', 'invites', 'people'])
+            'collabs', 'invites', 'people', 'mature', 'matureLock'])
           && (!('isPublic' in d) || d.isPublic is bool)
           && (!('thumbs' in d) || (d.thumbs is list && d.thumbs.size() <= 1000))
           && (!('captions' in d) || (d.captions is list && d.captions.size() <= 1000))
@@ -281,6 +291,17 @@ service cloud.firestore {
         let on = d.get('linkOnly', false);
         return on is bool && (on == false || (d.get('isPublic', true) == false && d.get('hidden', false) == false
           && ((resource != null && resource.data.get('linkOnly', false) == true) || plus(d.ownerId))));
+      }
+      // Mature (drawn nudity or sexual content): the owner can label a book themselves. Once the upload check has
+      // labelled it (matureLock on the book, or a marker in mature/ for a book not saved yet), it stays labelled;
+      // only moderators take it off.
+      // Checked on the owner's saves only: people drawing in a book can't touch these fields (collabEdits).
+      function matureOk() {
+        let m = request.resource.data.get('mature', false);
+        let lock = request.resource.data.get('matureLock', false);
+        return m is bool && lock is bool && (lock == false || m == true)
+          && (lock == true || resource == null || resource.data.get('matureLock', false) == false)
+          && (m == true || !exists(/databases/$(database)/documents/mature/$(bookId)));
       }
       // Only moderators set `hidden`; a hidden book stays private until they restore it.
       function keepsHidden() {
@@ -340,13 +361,13 @@ service cloud.firestore {
       allow list: if resource.data.isPublic == true || (signedIn() && resource.data.ownerId == request.auth.uid)
         || (signedIn() && resource.data.collab == request.auth.uid) || (signedIn() && resource.data.invite == request.auth.uid)
         || (signedIn() && request.auth.uid in resource.data.collabs) || (signedIn() && request.auth.uid in resource.data.invites) || isAdmin();
-      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid && valid(request.resource.data)
+      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid && valid(request.resource.data) && matureOk()
         && request.resource.data.get('hidden', false) == false && now('collab') == null && now('invite') == null
         && newCollabs().size() == 0 && newInvites().size() == 0;
       allow update: if (signedIn() && resource.data.ownerId == request.auth.uid
-          && request.resource.data.ownerId == resource.data.ownerId && valid(request.resource.data) && keepsHidden() && ownerShares())
+          && request.resource.data.ownerId == resource.data.ownerId && valid(request.resource.data) && keepsHidden() && ownerShares() && matureOk())
         || (signedIn() && (collabEdits() || inviteeAnswers() || collabLeaves()))
-        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPublic', 'hidden', 'linkOnly']));
+        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPublic', 'hidden', 'linkOnly', 'mature', 'matureLock']));
       allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
 
       // One like per person per book; anyone can see who liked it.

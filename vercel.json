@@ -1,4 +1,5 @@
 {
+  "functions": { "api/image.ts": { "maxDuration": 60 } },
   "rewrites": [
     {
       "source": "/:path(@.*)",

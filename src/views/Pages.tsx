@@ -50,22 +50,24 @@ function Privacy() {
           <><b>Your account:</b> your email address and a password, held by Firebase Authentication (Google). Your password is never visible to us, and your email is never shown on the site.</>,
           <><b>Your profile:</b> name, handle, bio, location, website, social links, a contact email (if you add one) and photo. These are public.</>,
           <><b>Your sketchbooks:</b> page images, drawings and typed text you add, covers, captions, dates, mediums and tags. Public sketchbooks can be seen by anyone. Link-only sketchbooks (Plus) don’t appear in Explore or on your profile, but anyone with the link can open them. Private ones can be seen only by you and the people you’ve shared that sketchbook with.</>,
+          <><b>Upload checks:</b> every picture you upload (pages, covers, profile pictures) is checked automatically before anyone else can see it, for photos with nudity or sexual content and for anything that sexualises children. We keep the result only as a Mature label on the sketchbook, or, for a picture that’s held back, the picture and a one-line description in private storage that only our moderators can open (see How long we keep it).</>,
           <><b>Shared sketchbooks:</b> when you share a sketchbook (with one person, or up to five with Plus), everyone in it can see its pages and the names and handles of the others in it, and can add, caption and change pages. Pages someone adds stay in the sketchbook if they leave or are removed.</>,
           <><b>Messages:</b> the messages you send and receive, so the two people in a conversation can read them. Nobody else can, including us, unless a message is reported: then its text is sent to our moderators with the report. If you delete your account, messages you sent stay in the other person’s conversation.</>,
           <><b>Activity:</b> who you follow, which sketchbooks you like and save, who you block, your notifications, the reports you file, and a daily count of new conversations you start (to prevent spam). Follows and likes are visible to others; saved sketchbooks, blocks and reports are private.</>,
           <><b>Stats:</b> how many times each sketchbook is viewed and saved, and which part of the site views came from (Explore, a profile, a shared link…). These are counts only, not who viewed it, and only the sketchbook’s owner can see them.</>,
           <><b>Fletora Plus:</b> if you subscribe, Stripe collects your payment details and billing address; we never see your full card number. We keep whether you have Plus, your plan, when it renews and your Stripe customer reference, and show you your payments, the card each used and receipts from Stripe. Whether an account has Plus is public (it shows a Plus mark). Plus may also be given free by Fletora, which we record the same way.</>,
-          <><b>On your device:</b> small settings such as light or dark theme, page sounds and which tips you’ve seen, kept in your browser’s storage. Google Analytics for Firebase records anonymous usage (pages viewed, device type, approximate location) only if you choose Allow when asked; you can change that any time in Account settings → Your data, and choosing No removes its cookies.</>,
+          <><b>On your device:</b> small settings such as light or dark theme, page sounds, whether you’ve chosen to see Mature work and which tips you’ve seen, kept in your browser’s storage. Google Analytics for Firebase records anonymous usage (pages viewed, device type, approximate location) only if you choose Allow when asked; you can change that any time in Account settings → Your data, and choosing No removes its cookies.</>,
         ]} />
       </Sec>
       <Sec title="Why we use it">
-        <P>To run your account and show your work, and to provide Plus if you subscribe (our agreement with you); to keep fletora. safe, prevent spam and act on reports (our legitimate interest in a safe community); and anonymous analytics to improve the site, only if you’ve agreed to it (your consent, which you can withdraw).</P>
+        <P>To run your account and show your work, and to provide Plus if you subscribe (our agreement with you); to keep fletora. safe, check uploads, prevent spam and act on reports (our legitimate interest in a safe community, and our legal duties under the Online Safety Act); and anonymous analytics to improve the site, only if you’ve agreed to it (your consent, which you can withdraw).</P>
       </Sec>
       <Sec title="Who processes it">
-        <P>Data is stored with Google Firebase (Authentication, Cloud Firestore and Cloud Storage), and the site is served by Vercel. Account emails (confirming your address, resetting your password) are sent through Resend, which receives your email address for that purpose; replies to them reach our inbox on Google Workspace. When you use Write to convert handwriting, an image of just that handwriting is sent to Anthropic’s Claude to read it; it isn’t used to train their models. When you download a sketchbook as a PDF, the PDF is made in your browser; its page images may pass through our server on Vercel on the way, and aren’t kept there. Payments for Plus are handled by Stripe, which sells the subscription to you as merchant of record and processes your payment details under its own privacy policy. These services may store data outside the UK, including in the United States, under their own terms, privacy policies and data protection safeguards. We don’t sell your data or use it for advertising.</P>
+        <P>Data is stored with Google Firebase (Authentication, Cloud Firestore and Cloud Storage), and the site is served by Vercel. Account emails (confirming your address, resetting your password) are sent through Resend, which receives your email address for that purpose; replies to them reach our inbox on Google Workspace. Every picture you upload is sent to Anthropic’s Claude to be checked before it’s published, and when you use Write to convert handwriting, an image of just that handwriting is sent to Claude to read it; Anthropic doesn’t use either to train its models. When you download a sketchbook as a PDF, the PDF is made in your browser; its page images may pass through our server on Vercel on the way, and aren’t kept there. Payments for Plus are handled by Stripe, which sells the subscription to you as merchant of record and processes your payment details under its own privacy policy. These services may store data outside the UK, including in the United States, under their own terms, privacy policies and data protection safeguards. We don’t sell your data or use it for advertising.</P>
       </Sec>
       <Sec title="How long we keep it">
         <P>For as long as you have an account. When you delete your account, your profile, handle, follows, followers, saved list, blocks, notifications, every sketchbook with its images and stats, your Plus and billing records, and the counts we keep to prevent abuse (new conversations a day, handwriting conversions, emails sent) are removed straight away, and any subscription is cancelled. You leave sketchbooks others shared with you; pages you added there stay in them. Messages you sent stay in the other person’s conversation. Copies our providers keep for a short time (such as backups) are deleted under their own retention rules.</P>
+        <P>A picture the upload check holds back is kept privately until a moderator has looked at it, then deleted; a photo the check refuses is deleted straight away. If a picture may show child sexual abuse, we report it to the Internet Watch Foundation or the National Crime Agency and keep it, and the account details that go with it, for as long as they or the law require, even if the account is deleted.</P>
         <P>Reports are kept until a moderator has dealt with them, then deleted; for serious cases we keep a short note of what was reported and what we did, without the content itself. Stripe keeps records of payments for as long as tax law requires.</P>
       </Sec>
       <Sec title="Your choices and rights">
@@ -107,16 +109,22 @@ function Terms() {
         <Ul items={[
           'Uploading work that isn’t yours, or that you don’t have the right to share.',
           'Harassment, hate, threats or content that targets someone, in sketchbooks, profiles or messages.',
-          'Sexual content involving minors, sexual messages to anyone who hasn’t asked for them, or any illegal content.',
+          'Anything that sexualises children, drawn or not. This includes drawn, painted or computer-made images, and we report it to the police or the Internet Watch Foundation.',
+          'Photos (or photo-real images) with nudity or sexual content. Drawings with nudity or sexual content of adults are allowed, labelled Mature (see below).',
+          'Sexual messages to anyone who hasn’t asked for them, or any illegal content.',
           'Spam, scams, impersonation, or using messages to advertise or contact people in bulk.',
           'Automated use of the site, or trying to break, overload or get around its security.',
         ]} />
+      </Sec>
+      <Sec title="Mature work">
+        <P>Figure drawing and art with nudity are welcome. Sketchbooks with drawn nudity or sexual content of adults must be labelled Mature, from the sketchbook’s Pages screen. Mature sketchbooks are kept out of Explore and other people’s profiles, and only open for signed-in people who say they’re 18 or over and choose to see them in Account settings. Profile pictures can’t show nudity.</P>
+        <P>Every upload is checked automatically before it’s published. Photos with nudity or sexual content are refused, drawings the check finds with nudity or sexual content are labelled Mature for you (only moderators can take that label off), and anything it can’t judge is held back for a moderator. The check can get things wrong; if it has, <Contact />.</P>
       </Sec>
       <Sec title="Messages">
         <P>Messages from people who don’t follow you arrive as requests you can accept, decline or ignore. You can block anyone, and report any message; a reported message is shared with our moderators so they can review it.</P>
       </Sec>
       <Sec title="Moderation">
-        <P>Anyone can report a sketchbook, artist or message. Reports that a child may be at risk come to us straight away and are looked at first; where the law requires it we pass them to the police or the Internet Watch Foundation. We may hide content, suspend accounts or remove them when these terms are broken, sometimes without notice. If you think we got it wrong, <Contact /> and we’ll take another look.</P>
+        <P>Anyone can report a sketchbook, artist or message. Reports that a child may be at risk, and uploads the automatic check stops for that reason, come to us straight away and are looked at first; where the law requires it we pass them to the police or the Internet Watch Foundation. We may hide content, suspend accounts or remove them when these terms are broken, sometimes without notice. If you think we got it wrong, <Contact /> and we’ll take another look.</P>
       </Sec>
       <Sec title="From the archive">
         <P>Sketchbooks in From the archive are historical works in the public domain, shown with credit to the artist and the museum or library they come from. They’re there for inspiration; the source’s own terms apply to its images.</P>
@@ -205,7 +213,7 @@ export function Admin({ v }: { v: V }) {
       </div>
       <Notice err={v.adErr} />
       {v.adLoading && <div style={{ fontSize: 14, color: MUTED }}>Loading reports…</div>}
-      {!v.adLoading && !v.adItems.length && <div style={{ fontSize: 15, color: MUTED }}>Nothing to review. Reports people send show up here.</div>}
+      {!v.adLoading && !v.adItems.length && <div style={{ fontSize: 15, color: MUTED }}>Nothing to review. Reports people send, and pictures the upload check holds back, show up here.</div>}
       {v.adItems.map((r: V) => (
         <article key={r.key} style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 16, borderTop: `1px solid ${INK}` }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', ...label() }}>
@@ -216,9 +224,13 @@ export function Admin({ v }: { v: V }) {
             {r.isBook && r.owner && <button onClick={r.openOwner} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: MUTED, font: `500 14px ${SANS}`, cursor: 'pointer' }}>by {r.owner}</button>}
             {r.hidden && <span style={label(MARK, 10)}>Hidden</span>}
             {r.banned && <span style={label(MARK, 10)}>Suspended</span>}
+            {r.mature && <span style={label(MUTED, 10)}>Mature</span>}
           </div>
-          {r.note && <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: INK, whiteSpace: 'pre-wrap' }}>“{r.note}”</p>}
+          {r.note && <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: INK, whiteSpace: 'pre-wrap' }}>{r.auto ? <><span style={{ color: MUTED }}>The check saw:</span> {r.note}</> : <>“{r.note}”</>}</p>}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', opacity: r.busy ? 0.6 : 1 }}>
+            {r.file && <button onClick={r.viewFile} disabled={!!r.busy} style={smallBtn(false, false)}>View picture</button>}
+            {r.file && <button onClick={r.deleteFile} disabled={!!r.busy} style={smallBtn(true, false)}>Delete picture</button>}
+            {r.isBook && !r.gone && r.mature && <button onClick={r.clearMature} disabled={!!r.busy} style={smallBtn(false, false)}>Remove Mature label</button>}
             {r.isBook && !r.gone && <button onClick={r.hide} disabled={!!r.busy} style={smallBtn(false, false)}>{r.hidden ? 'Restore sketchbook' : 'Hide sketchbook'}</button>}
             {r.owner && <button onClick={r.ban} disabled={!!r.busy} style={smallBtn(true, false)}>{r.banned ? 'Lift suspension' : 'Suspend artist'}</button>}
             <button onClick={r.dismiss} disabled={!!r.busy} className={hover('background:rgba(var(--ink-rgb),.08)')} style={{ ...smallBtn(), border: 'none' }}>Dismiss report</button>

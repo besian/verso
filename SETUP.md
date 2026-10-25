@@ -88,16 +88,22 @@ redeploy is needed after changing them.
 | `users/{uid}/following/{uid}` | one doc per artist followed | that user |
 | `handles/{handle}` | `{ uid }`, keeps handles unique | the user claiming it |
 | `books/{id}` | owner, name, colour, shape, cover URL, page URLs in order, captions + dates per page, mediums, tags (`labels` for filtering), `hidden` | the owner (`hidden`: moderators) |
+| `books/{id}` `mature`, `matureLock` | Mature label (drawn nudity or sexual content); `matureLock` when the upload check set it | owner (`mature` until locked); moderators clear |
+| `mature/{bookId}` | the upload check labelled this book Mature; its saves must keep the label | `api/image` only; moderators delete |
+| `checkLog/{uid}_{day}` | upload checks per person per day (400) | `api/image` only |
 | `books/{id}` `collabs`, `invites`, `people` | people who can add pages and invitations waiting (1 person, or 5 with Plus), with their names; older books keep a single `collab`/`invite` until their sharing next changes | owner invites/removes; invitees accept/decline; people in it edit pages or leave |
 | `users/{uid}/followers/{uid}` | one doc per follower (its size is the follower count) | the follower |
 | `users/{uid}/notifications/{id}` | likes, follows, goals; ids fixed per person and action | the sender |
 | `reports/{reporter}_{target}` | reason and note | the reporter; read by moderators |
+| `reports/check_{id}` | pictures the upload check held back (`kind: 'image'`, `file` in quarantine) or a Mature label to check | `api/image` only; read by moderators |
 | `admins/{uid}` | marks a moderator | console only |
 | `banned/{uid}` | suspended artists | moderators |
 | `plus/{uid}` | `{ on, until }`: Fletora Plus (public, for the Plus mark and the rules) | `api/stripe-webhook` only |
 | `billing/{uid}` | Stripe customer, subscription, plan, renewal date (read by that user) | `api/stripe-webhook` only |
 | `stats/{bookId}` | view counts by source (explore, profile, home, link, embed) and saves (read by the owner) | anyone, one view at a time |
-| Storage `users/{uid}/…` | page images, covers, avatars (images under 10 MB) | that user |
+| Storage `pending/{uid}/…` | uploads waiting for the check (images under 10 MB; not readable) | that user |
+| Storage `users/{uid}/…` | page images, covers, avatars, thumbnails (public) | `api/image` only (the user can delete) |
+| Storage `quarantine/{uid}/…` | pictures held back by the check | `api/image` only (moderators view through it) |
 
 Everything is publicly readable so Explore and artist profiles work signed out. Email
 addresses stay in Firebase Auth and are never written to Firestore.
@@ -124,6 +130,33 @@ Claude (Haiku 5.5) and returns the text. Signed-in users only, 20 conversions pe
 1. console.anthropic.com → API keys → create one → Vercel env var `ANTHROPIC_API_KEY`.
 2. It also uses `FIREBASE_SERVICE_ACCOUNT` (already set for the branded emails).
 3. Redeploy. Optional: set a monthly spend limit in the Anthropic console (Settings → Limits).
+
+## Upload checks (Claude)
+
+Every picture goes through `api/image.ts` before it's public. The app uploads it to Storage `pending/{uid}/`,
+which nobody can read, and the server sends it to Claude (Opus 5.5) to check, then:
+
+| Claude finds | What happens |
+| --- | --- |
+| nothing of concern | published to `users/{uid}/`, with a thumbnail made on the server |
+| a drawing with nudity or sexual content (adults) | published, and the sketchbook is labelled Mature for good (moderators can clear it); if Claude wasn't sure, a report asks a moderator to check the label |
+| a photo, photo-real image or collage with nudity or sexual content | refused and deleted |
+| anything that sexualises someone who looks under 18, drawn or not | refused, moved to `quarantine/`, the sketchbook hidden, a report made and `SAFETY_EMAIL` emailed at once |
+| non-sexual nudity of someone who looks under 18, or Claude declines to look | held back in `quarantine/` with a report for a moderator |
+| nudity in a profile picture | refused |
+
+If Claude can't be reached, nothing is published: the app keeps the page and tries again on the next save.
+Moderators see held pictures on the Moderation page (**View picture** gives a 5-minute link; **Delete picture**).
+Mature sketchbooks are left out of Explore, label pages, the home feed and other people's profiles unless the
+viewer is signed in and has turned on **Show Mature sketchbooks** (Account settings), and opening one asks first.
+
+1. Uses `ANTHROPIC_API_KEY`, `FIREBASE_SERVICE_ACCOUNT` and `RESEND_API_KEY` (already set).
+2. Publish the new `firestore.rules` **and** `storage.rules` (Firebase console → Storage → Rules). Until the Storage
+   rules are published, the old ones still let the app write straight to `users/`.
+3. Optional: `FIREBASE_STORAGE_BUCKET` if the bucket isn't `VITE_FIREBASE_STORAGE_BUCKET`.
+4. Optional: in Google Cloud console → Cloud Storage → your bucket → Lifecycle, add a rule to delete objects with
+   prefix `pending/` older than 1 day (leftovers from uploads that were interrupted).
+5. Cost: about a cent per picture checked. Set a monthly spend limit in the Anthropic console.
 
 ## Messages
 

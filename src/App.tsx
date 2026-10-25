@@ -31,7 +31,7 @@ import { ArchiveModal, AskModal, CardModal, ConsentBar, CollectionModal, Editor,
 
 export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound' | 'action' | 'messages' | 'billing';
 /** A report with what it points at, for the moderation page. */
-type AdminItem = Report & { targetName: string; ownerName: string; ownerHandle: string; hidden: boolean; banned: boolean; gone: boolean };
+type AdminItem = Report & { targetName: string; ownerName: string; ownerHandle: string; hidden: boolean; banned: boolean; gone: boolean; mature: boolean };
 type AnyBook = Book | OtherBook;
 /** Whose profile is open; name shows while the profile loads. */
 type Who = { name: string; uid?: string; handle?: string };
@@ -66,10 +66,12 @@ interface State {
   plus?: boolean; bill?: Billing | null; myGift?: api.PlusInfo | null;
   /** Analytics consent ('yes' / 'no', or null when not asked yet; only asked when analytics is set up). */
   analytics?: 'yes' | 'no' | null;
+  /** Shows Mature sketchbooks (Settings; signed in and 18 or over). */
+  showMature?: boolean;
   /** Making a PDF of the open sketchbook: how far along ('3/40'). */
   pdfBusy?: string;
   /** A question asked in Fletora's own dialog before something that can't easily be undone. */
-  ask?: { title: string; text: string; yes: string; danger?: boolean; run: () => void } | null;
+  ask?: { title: string; text: string; yes: string; danger?: boolean; notice?: boolean; run: () => void } | null;
   /** Moderators giving someone Plus: who, and while it's being saved. */
   giftFor?: { uid: string; name: string; gift: api.PlusInfo | null } | null; giftBusy?: boolean; plusFor?: string | null; plusPlan?: 'month' | 'year'; plusBusy?: boolean; plusErr?: string;
   /** Checkout on our page: its session's client secret, whether it's our own form with Stripe's card fields
@@ -158,7 +160,7 @@ const toOther = (b: BookDoc, idx: number): OtherBook => ({
   id: b.id, idx, shape: b.shape, likes: b.pageCount, artist: names([{ name: b.ownerName, handle: b.ownerHandle }, ...b.collabs]), name: b.name, color: b.color,
   images: b.pages, pages: Math.max(CONFIG.minPages, b.pageCount + (b.pageCount % 2)), initials: ini(b.ownerName), coverImg: b.cover,
   ownerId: b.ownerId, handle: b.ownerHandle, updatedAt: b.updatedAt, thumbs: api.thumbMap(b),
-  notes: api.noteMap(b), mediums: b.mediums, tags: b.tags,
+  notes: api.noteMap(b), mediums: b.mediums, tags: b.tags, mature: b.mature, collabIds: b.collabs.map(m => m.uid),
 });
 /** "Ana", "Ana & Ben", "Ana, Ben & Cleo", "Ana, Ben & 3 others". */
 const names = (l: { name: string; handle: string }[] = []) => {
@@ -173,7 +175,7 @@ export default class App extends Component<object, State> {
   state: State = {
     acct: null, follows: [],
     books: [localBook()], active: 0, managing: false, images: [], p: 0, zoom: 1,
-    vw: window.innerWidth || 1200, vh: window.innerHeight || 800, soundOn: sound.soundOn(), dark: themeMode.isDark(), analytics: store.loadAnalytics(),
+    vw: window.innerWidth || 1200, vh: window.innerHeight || 800, soundOn: sound.soundOn(), dark: themeMode.isDark(), analytics: store.loadAnalytics(), showMature: false,
   };
 
   // Animation and gesture bookkeeping (not rendered directly).
@@ -238,6 +240,10 @@ export default class App extends Component<object, State> {
   }
   /** Loads (or clears) everything that belongs to the signed-in user. */
   async loadUser(u: AuthUser | null, acct?: Account) {
+    // Mature work is for signed-in people who chose it on this device.
+    const mt = !!u && store.loadMature();
+    api.setShowMature(mt);
+    if (mt !== !!this.state.showMature) this.setState({ showMature: mt }, () => this.loadCommunity());
     if (!u) {
       this.synced.clear(); this.dirty.clear();
       return this.setState({ acct: null, follows: [], saved: [], blocked: [], followFeed: [], followPeople: [], books: [localBook()], active: 0, images: [], p: 0, authReady: true, admin: false, plus: undefined, bill: null });
@@ -505,7 +511,13 @@ export default class App extends Component<object, State> {
   openOtherBook(b: OtherBook, from?: ViewSource) {
     cancelAnimationFrame(this.raf); this.target = 0;
     // One view per sketchbook per visit for its owner's stats, with where it was opened from.
-    const s = this.state;
+    const s = this.state, uid = s.acct?.uid;
+    // Mature sketchbooks open for people who've chosen to see them (signed in, 18 or over), and their own artists.
+    if (b.mature && !s.showMature && !s.admin && b.ownerId !== uid && !(uid && b.collabIds?.includes(uid))) {
+      return uid
+        ? this.ask({ title: 'Mature sketchbook', text: 'This sketchbook has drawings with nudity or sexual content. Only open it if you’re 18 or over. You can change this any time in Account settings.', yes: 'I’m 18 or over, show it', run: () => this.setMature(true, () => this.openOtherBook(b, from)) })
+        : this.ask({ title: 'Mature sketchbook', text: 'This sketchbook has drawings with nudity or sexual content. Sign in to choose whether to see Mature work.', yes: 'Sign in', run: () => this.openAuth('signin') });
+    }
     if (b.ownerId !== s.acct?.uid && !this.viewed.has(b.id)) {
       this.viewed.add(b.id);
       api.countView(b.id, from || (this.applying ? 'link' : s.mode === 'explore' ? 'explore' : s.mode === 'profile' ? 'profile' : s.mode === 'home' ? 'home' : 'link'));
@@ -513,6 +525,7 @@ export default class App extends Component<object, State> {
     this.setState({ mode: 'other', other: b, images: b.images, p: 0, focus: false, fz: 0 });
   }
   viewed = new Set<string>();
+  setMature(on: boolean, then?: () => void) { store.saveMature(on); api.setShowMature(on); this.setState({ showMature: on }, () => { this.loadCommunity(); then?.(); }); }
   pendingCheckout: string | null = null;
   confirmPlus(session: string | null) {
     if (!session || !session.startsWith('cs_')) return;
@@ -704,7 +717,7 @@ export default class App extends Component<object, State> {
   }
   enqueue(id: string, job: () => Promise<void>) {
     this.busy.set(id, (this.busy.get(id) || 0) + 1);
-    const next = (this.syncQ.get(id) || Promise.resolve()).then(job).catch(e => console.error('sync failed', e))
+    const next = (this.syncQ.get(id) || Promise.resolve()).then(job).catch(e => { console.error('sync failed', e); if (String((e as { code?: string })?.code).startsWith('image/')) this.toast(api.errMsg(e)); })
       .finally(() => this.busy.set(id, (this.busy.get(id) || 1) - 1));
     this.syncQ.set(id, next);
   }
@@ -799,15 +812,24 @@ export default class App extends Component<object, State> {
     if (id === this.mgHold) return;
     const pending = bookUrls(b).filter(isData);
     if (pending.length) {
-      const m = await api.uploadImages(acct.uid, id, pending);
+      const { done: m, refused, mature, error } = await api.uploadImages(acct.uid, id, pending);
       m.forEach(({ full }, du) => { const bu = this.blobs.get(du); if (bu) this.blobs.set(full, bu); });
-      const swap = (u: string) => m.get(u)?.full || u, thumbs: Record<string, string> = {};
+      // Pictures the upload check refused come out of the book.
+      const swap = (u: string) => m.get(u)?.full || u, keep = (u: string) => !refused.has(u), thumbs: Record<string, string> = {};
       m.forEach(({ full, thumb }) => { thumbs[full] = thumb; });
       await new Promise<void>(done => this.setState(s => ({
-        books: s.books.map(x => x.id === id ? { ...x, images: x.images.map(swap), coverImg: x.coverImg && swap(x.coverImg), thumbs: { ...x.thumbs, ...thumbs },
-          notes: x.notes && Object.fromEntries(Object.entries(x.notes).map(([u, n]) => [swap(u), n])) } : x),
-        images: s.books[s.active]?.id === id ? s.images.map(swap) : s.images,
+        books: s.books.map(x => x.id === id ? { ...x, images: x.images.filter(keep).map(swap), coverImg: x.coverImg && keep(x.coverImg) ? swap(x.coverImg) : null, thumbs: { ...x.thumbs, ...thumbs },
+          notes: x.notes && Object.fromEntries(Object.entries(x.notes).map(([u, n]) => [swap(u), n])), ...(mature ? { mature: true, matureLock: true } : {}) } : x),
+        images: s.books[s.active]?.id === id ? s.images.filter(keep).map(swap) : s.images,
       }), done));
+      if (refused.size) {
+        const why = [...refused.values()], n = refused.size;
+        this.ask({ title: n === 1 ? 'A page wasn’t added' : `${n} pages weren’t added`, yes: 'OK', notice: true, run: () => {},
+          text: why.includes('photo') ? 'Photos with nudity or sexual content can’t be posted on Fletora. Drawings with nudity are welcome, labelled Mature.'
+            : 'The automatic check couldn’t clear it, so a moderator will look at it. If it was a mistake, they’ll be in touch.' });
+      } else if (mature && !this.findBook(id)?.mature) this.toast('Labelled Mature: drawn nudity or sexual content');
+      if (mature) this.persist(this.state.books);
+      if (error) throw error;
       b = this.findBook(id); if (!b) return;
       if (bookUrls(b).some(isData)) return; // newer images arrived meanwhile; their own sync follows
     }
@@ -1469,6 +1491,9 @@ export default class App extends Component<object, State> {
       // Analytics consent: a small bar until they choose, and a setting under Your data.
       anOffered: api.analyticsOffered, anOn: s.analytics === 'yes', anAsk: api.analyticsOffered && !s.analytics && !s.embed,
       anChoose: (yes: boolean) => { store.saveAnalytics(yes ? 'yes' : 'no'); api.analyticsConsent(yes); this.setState({ analytics: yes ? 'yes' : 'no' }); },
+      mtOn: !!s.showMature,
+      mtToggle: () => s.showMature ? this.setMature(false)
+        : this.ask({ title: 'Show Mature work?', text: 'Mature sketchbooks have drawings with nudity or sexual content. Turn this on only if you’re 18 or over.', yes: 'I’m 18 or over', run: () => this.setMature(true) }),
       anToggle: () => { const yes = s.analytics !== 'yes'; store.saveAnalytics(yes ? 'yes' : 'no'); api.analyticsConsent(yes); this.setState({ analytics: yes ? 'yes' : 'no' }); },
       // Fletora's own confirm dialog.
       askQ: s.ask || null, askNo: () => this.setState({ ask: null }), askYes: () => { const q = s.ask; this.setState({ ask: null }); q?.run(); },
@@ -1707,13 +1732,15 @@ export default class App extends Component<object, State> {
       const [rs, banned] = await Promise.all([api.reports(), api.bannedUsers()]);
       const books = new Map<string, BookDoc | null>(), people = new Map<string, Awaited<ReturnType<typeof api.getProfile>>>();
       await Promise.all([
-        ...[...new Set(rs.filter(r => r.kind === 'book').map(r => r.targetId))].map(async id => { books.set(id, await api.getBook(id)); }),
+        ...[...new Set(rs.filter(r => r.kind === 'book' || (r.kind === 'image' && r.targetId !== r.ownerId)).map(r => r.targetId))].map(async id => { books.set(id, await api.getBook(id)); }),
         ...[...new Set(rs.map(r => r.ownerId).filter(Boolean))].map(async id => { people.set(id, await api.getProfile(id).catch(() => null)); }),
       ]);
       const adReports = rs.map((r): AdminItem => {
-        const b = books.get(r.targetId), pr = people.get(r.ownerId);
-        return { ...r, targetName: r.kind === 'book' ? b?.name || 'Deleted sketchbook' : r.kind === 'message' ? `A message from ${pr?.name || 'a deleted account'}` : pr?.name || 'Deleted account', ownerName: pr?.name || '', ownerHandle: pr?.handle || '',
-          hidden: !!b?.hidden, banned: banned.includes(r.ownerId), gone: r.kind === 'book' ? !b : !pr };
+        const b = books.get(r.targetId), pr = people.get(r.ownerId), forBook = r.kind === 'image' && r.targetId !== r.ownerId;
+        const targetName = r.kind === 'book' ? b?.name || 'Deleted sketchbook' : r.kind === 'message' ? `A message from ${pr?.name || 'a deleted account'}`
+          : r.kind === 'image' ? (forBook ? `A page for “${b?.name || 'a sketchbook not saved yet'}”` : 'A profile picture') : pr?.name || 'Deleted account';
+        return { ...r, targetName, ownerName: pr?.name || '', ownerHandle: pr?.handle || '',
+          hidden: !!b?.hidden, mature: !!b?.mature, banned: banned.includes(r.ownerId), gone: r.kind === 'book' || forBook ? !b : !pr };
       });
       this.setState({ adReports, banned });
     } catch (e) { console.error(e); this.setState({ adReports: [], adErr: api.errMsg(e) }); }
@@ -1732,9 +1759,9 @@ export default class App extends Component<object, State> {
       isAdminPage: s.mode === 'admin', adAllowed: !!s.admin, adLoading: !list, adErr: s.adErr || '', adReload: () => this.loadReports(),
       adCount: list ? `${list.length} open ${list.length === 1 ? 'report' : 'reports'}` : '',
       adItems: (list || []).map(r => ({
-        key: r.id, kind: r.kind === 'book' ? 'Sketchbook' : r.kind === 'message' ? 'Message' : 'Artist', name: r.targetName, owner: r.ownerName ? `${r.ownerName} · @${r.ownerHandle}` : '',
-        reason: r.reason, note: r.note, when: ago(r.at), hidden: r.hidden, banned: r.banned, gone: r.gone, isBook: r.kind === 'book', busy: s.adBusy?.startsWith(r.id) ? s.adBusy : '',
-        open: () => r.kind === 'book' ? this.openBookById(r.targetId) : this.openProfile({ uid: r.ownerId, name: r.ownerName, handle: r.ownerHandle }),
+        key: r.id, kind: r.kind === 'book' ? 'Sketchbook' : r.kind === 'message' ? 'Message' : r.kind === 'image' ? 'Upload' : 'Artist', name: r.targetName, owner: r.ownerName ? `${r.ownerName} · @${r.ownerHandle}` : '',
+        reason: r.reason, note: r.note, when: ago(r.at), hidden: r.hidden, banned: r.banned, gone: r.gone, isBook: r.kind === 'book' || (r.kind === 'image' && r.targetId !== r.ownerId), busy: s.adBusy?.startsWith(r.id) ? s.adBusy : '',
+        open: () => r.kind === 'book' || (r.kind === 'image' && r.targetId !== r.ownerId) ? this.openBookById(r.targetId) : this.openProfile({ uid: r.ownerId, name: r.ownerName, handle: r.ownerHandle }),
         openOwner: () => this.openProfile({ uid: r.ownerId, name: r.ownerName, handle: r.ownerHandle }),
         hide: () => act(r.id + ':hide', () => api.setHidden(r.targetId, !r.hidden), l => l.map(x => x.targetId === r.targetId ? { ...x, hidden: !r.hidden } : x), r.hidden ? 'Sketchbook restored' : 'Sketchbook hidden'),
         ban: () => {
@@ -1743,6 +1770,15 @@ export default class App extends Component<object, State> {
           if (r.banned) return go();
           this.ask({ title: `Suspend ${r.ownerName || 'this artist'}?`, text: 'Their public sketchbooks will be hidden and they won’t be able to publish or notify anyone until you lift it.', yes: 'Suspend', danger: true, run: go });
         },
+        auto: r.by === 'check', file: !!r.file, mature: r.mature,
+        viewFile: () => {
+          // Opened before the link arrives, so the browser doesn't block it as a pop-up.
+          const w = window.open('', '_blank');
+          api.heldPicture(r.id).then(u => { if (w) w.location.href = u; }, e => { w?.close(); this.setState({ adErr: api.errMsg(e) }); });
+        },
+        deleteFile: () => this.ask({ title: 'Delete this picture?', text: 'It’s deleted for good. If it may show child sexual abuse, report it to the IWF or the NCA first and keep a record.', yes: 'Delete', danger: true,
+          run: () => act(r.id + ':file', () => api.deleteHeldPicture(r.id), l => l.map(x => x.id === r.id ? { ...x, file: undefined } : x), 'Picture deleted') }),
+        clearMature: () => act(r.id + ':mature', () => api.clearMature(r.targetId), l => l.map(x => x.targetId === r.targetId ? { ...x, mature: false } : x), 'Mature label removed'),
         dismiss: () => act(r.id + ':dismiss', () => api.dismissReport(r.id), l => l.filter(x => x.id !== r.id), 'Report dismissed'),
       })),
     };
@@ -2040,7 +2076,8 @@ export default class App extends Component<object, State> {
       bookOp: sw ? 0 : 1, titleName: other ? other.name : (books[Math.round(car)] || book).name,
       titleOp: ((sw ? 1 - Math.sin(Math.PI * (s.swT || 0)) * 0.85 : 1) * (1 - fz)).toFixed(3),
       bookName: book.name,
-      bookMeta: (other ? `by ${(other as OtherBook).artist} · ${(other as OtherBook).pages} pages` : books.length > 1 ? `${images.length} ${images.length === 1 ? 'page' : 'pages'} · ${active + 1} of ${books.length}` : `${images.length} ${images.length === 1 ? 'page' : 'pages'}`) + (!other && (book as Book).linkOnly ? ' · Link only' : !other && (book as Book).isPublic === false ? ' · Private' : '')
+      otherMature: !!(other as OtherBook | null)?.mature,
+      bookMeta: (other ? `by ${(other as OtherBook).artist} · ${(other as OtherBook).pages} pages` : books.length > 1 ? `${images.length} ${images.length === 1 ? 'page' : 'pages'} · ${active + 1} of ${books.length}` : `${images.length} ${images.length === 1 ? 'page' : 'pages'}`) + (!other && (book as Book).linkOnly ? ' · Link only' : !other && (book as Book).isPublic === false ? ' · Private' : '') + ((other ? (other as OtherBook).mature : (book as Book).mature || (book as Book).matureLock) ? ' · Mature' : '')
         + (!other && (book as Book).role === 'collab' ? ` · ${(book as Book).owner?.name}’s, shared with you` : !other && (book as Book).collabs?.length ? ` · with ${names((book as Book).collabs)}` : ''),
       multi: !other && books.length > 1, prevBook: () => this.switchBook(active - 1), nextBook: () => this.switchBook(active + 1),
       prevOp: active > 0 ? 1 : 0.3, nextOp: active < books.length - 1 ? 1 : 0.3,
@@ -2114,6 +2151,9 @@ export default class App extends Component<object, State> {
         if (k === 'link' && !s.plus) return this.openPlus('link');
         this.updateBook({ isPublic: k === 'public', linkOnly: k === 'link' });
       },
+      // Mature: the owner labels it, or the upload check did (and then only moderators can take it off).
+      mtShow: !other && (book as Book).role !== 'collab', mtBook: !!(book as Book).mature || !!(book as Book).matureLock, mtLock: !!(book as Book).matureLock,
+      mtBookToggle: () => { const b = book as Book; if (!b.matureLock) this.updateBook({ mature: !b.mature }); },
       ...(() => {
         // Stats and pinning (Plus), for the owner of a saved sketchbook.
         const b = book as Book, st = s.stats?.id === b.id ? s.stats.s : null, a = s.acct, likes = s.counts?.['b:' + b.id] || 0;

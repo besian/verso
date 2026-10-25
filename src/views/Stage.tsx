@@ -150,7 +150,7 @@ function Title({ v }: { v: V }) {
           {v.isOther && v.bkArch
             ? <>by {v.artist}{v.bkArch.years ? ` · ${v.bkArch.years}` : ''} · {v.otherPages} pages</>
             : v.isOther
-            ? <>by <button onClick={v.openArtist} title="View profile" className={'tap ' + hover(`color:${MARK};border-color:${MARK}`)} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: INK, cursor: 'pointer' }}>{v.artist}</button>{v.bkVerified && <Verified size={13} />} · {v.otherPages} pages</>
+            ? <>by <button onClick={v.openArtist} title="View profile" className={'tap ' + hover(`color:${MARK};border-color:${MARK}`)} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: INK, cursor: 'pointer' }}>{v.artist}</button>{v.bkVerified && <Verified size={13} />} · {v.otherPages} pages{v.otherMature && ' · Mature'}</>
             : v.bookMeta}
         </div>
         {(v.bkMediums || v.bkTags.length > 0) && (

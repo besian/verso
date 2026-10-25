@@ -1,11 +1,17 @@
 rules_version = '2';
 
-// Everyone can view images; each user can only write under users/{their uid}/.
+// Everyone can view published images. Only the server publishes them (api/image, after the upload check):
+// people upload to pending/{their uid}/, which nobody else can read, and the server moves what passes to
+// users/{uid}/. Held-back pictures go to quarantine/, which only the server can reach.
 service firebase.storage {
   match /b/{bucket}/o {
     match /users/{uid}/{allPaths=**} {
       allow read: if true;
-      allow create, update: if request.auth != null && request.auth.uid == uid
+      allow create, update: if false;
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+    match /pending/{uid}/{file} {
+      allow create: if request.auth != null && request.auth.uid == uid
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
       allow delete: if request.auth != null && request.auth.uid == uid;

@@ -165,13 +165,12 @@ export async function POST(req: Request) {
       // sketchbooks. Runs before the app deletes the rest (it needs their sketchbooks to find the stats).
       if (bill.sub && ['active', 'trialing', 'past_due', 'incomplete'].includes(bill.status || 'active'))
         await stripe('DELETE', `subscriptions/${bill.sub}`).catch(e => { if ((e as { status?: number }).status !== 404) throw e; });
-      const [books, ink] = await Promise.all([
-        db.collection('books').where('ownerId', '==', uid).get(),
-        db.collection('inkLog').where(FieldPath.documentId(), '>=', uid + '_').where(FieldPath.documentId(), '<', uid + '_\uf8ff').get(),
-      ]);
+      const byUid = (c: string) => db.collection(c).where(FieldPath.documentId(), '>=', uid + '_').where(FieldPath.documentId(), '<', uid + '_\uf8ff').get();
+      const [books, ink, checks] = await Promise.all([db.collection('books').where('ownerId', '==', uid).get(), byUid('inkLog'), byUid('checkLog')]);
       const refs = [billing, db.collection('plus').doc(uid), db.collection('chatLimits').doc(uid), db.collection('userCounts').doc(uid),
         ...(email ? [db.collection('mailLog').doc(createHash('sha256').update(email.toLowerCase()).digest('hex'))] : []),
-        ...ink.docs.map(d => d.ref), ...books.docs.flatMap(b => [db.collection('stats').doc(b.id), db.collection('bookCounts').doc(b.id)])];
+        ...ink.docs.map(d => d.ref), ...checks.docs.map(d => d.ref),
+        ...books.docs.flatMap(b => [db.collection('stats').doc(b.id), db.collection('bookCounts').doc(b.id), db.collection('mature').doc(b.id)])];
       for (let i = 0; i < refs.length; i += 400) { const batch = db.batch(); refs.slice(i, i + 400).forEach(r => batch.delete(r)); await batch.commit(); }
       return json(200, { ok: true });
     }

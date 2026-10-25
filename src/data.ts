@@ -34,6 +34,8 @@ export interface Book {
   isPublic?: boolean;
   /** Plus: not public, but anyone with its link can open it. */
   linkOnly?: boolean;
+  /** Labelled Mature (drawn nudity or sexual content); `matureLock` when the upload check did it. */
+  mature?: boolean; matureLock?: boolean;
   /** Full image URL → thumbnail URL. */
   thumbs?: Record<string, string>;
   /** Page image URL → caption and date written in its margin. */
@@ -63,6 +65,8 @@ export interface OtherBook {
   color: string; images: string[]; pages: number; initials: string; coverImg?: string | null;
   ownerId?: string; handle?: string; updatedAt?: number; thumbs?: Record<string, string>;
   notes?: Record<string, PageNote>; mediums?: string[]; tags?: string[];
+  /** Labelled Mature: drawn nudity or sexual content. */
+  mature?: boolean; collabIds?: string[];
   /** Set for sketchbooks in From the archive: the historical artist and where the pages come from. */
   arch?: ArchiveEntry;
 }

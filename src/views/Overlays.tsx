@@ -236,6 +236,14 @@ export function Manager({ v }: { v: V }) {
                       ))}
                     </div>
                   </Row>
+                  {v.mtShow && (
+                    <Row label="Mature" note={v.mtLock ? 'Labelled by the upload check because a drawing shows nudity or sexual content. Write to us if you think that’s wrong.' : 'Label it if it has drawn nudity or sexual content. Mature sketchbooks are kept out of Explore and lists for people who haven’t chosen to see them.'}>
+                      <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 14, cursor: v.mtLock ? 'not-allowed' : 'pointer', opacity: v.mtLock ? 0.7 : 1 }}>
+                        <input type="checkbox" checked={v.mtBook} disabled={v.mtLock} onChange={v.mtBookToggle} style={{ width: 18, height: 18, accentColor: MARK }} />
+                        Mature sketchbook
+                      </label>
+                    </Row>
+                  )}
                   {v.stOwn && <StatsRow v={v} />}
                   {v.stOwn && (
                     <Row label="Pin to your profile" note={v.pinOn ? 'It’s the first sketchbook people see on your profile.' : 'Show this sketchbook first on your profile.'}>
@@ -521,7 +529,7 @@ export function AskModal({ v }: { v: V }) {
       <span role="heading" aria-level={2} style={{ ...heading, fontSize: 30, lineHeight: 1.1 }}>{q.title}</span>
       <span style={{ fontSize: 15, lineHeight: 1.55 }}>{q.text}</span>
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-        <button onClick={v.askNo} autoFocus className={hoverTint} style={{ ...ghostBtn, height: 44, padding: '0 18px', fontSize: 14 }}>Cancel</button>
+        {!q.notice && <button onClick={v.askNo} autoFocus className={hoverTint} style={{ ...ghostBtn, height: 44, padding: '0 18px', fontSize: 14 }}>Cancel</button>}
         <button onClick={v.askYes} style={{ height: 44, padding: '0 20px', border: 'none', borderRadius: 2, background: q.danger ? MARK : INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer' }}>{q.yes}</button>
       </div>
     </Modal>

@@ -11,3 +11,6 @@ export function saveTheme(t: Theme) { try { localStorage.setItem('sb-theme', t);
 /** Analytics consent: 'yes', 'no', or null when not asked yet. */
 export function loadAnalytics(): 'yes' | 'no' | null { try { const v = localStorage.getItem('sb-analytics'); return v === 'yes' || v === 'no' ? v : null; } catch { return null; } }
 export function saveAnalytics(v: 'yes' | 'no') { try { localStorage.setItem('sb-analytics', v); } catch { /* storage unavailable */ } }
+/** Whether this browser shows Mature sketchbooks (chosen in Settings, 18 and over). */
+export function loadMature(): boolean { try { return localStorage.getItem('sb-mature') === 'yes'; } catch { return false; } }
+export function saveMature(on: boolean) { try { if (on) localStorage.setItem('sb-mature', 'yes'); else localStorage.removeItem('sb-mature'); } catch { /* storage unavailable */ } }

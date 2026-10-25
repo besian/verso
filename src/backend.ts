@@ -106,6 +106,12 @@ export function errMsg(e: unknown): string {
     'billing/no-subscription': 'There’s no subscription on this account.',
     'billing/paid': 'They pay for Plus, so it can’t be given or taken away here.',
     'billing/not-allowed': 'Only moderators can do that.',
+    'image/refused-photo': 'Photos with nudity or sexual content can’t be posted on Fletora. Drawings can.',
+    'image/refused-avatar': 'Profile pictures can’t show nudity. Choose another picture.',
+    'image/refused-hold': 'That picture is waiting for a moderator to look at it, so it wasn’t added.',
+    'image/check-unavailable': 'Couldn’t check your pictures just now. Try again in a moment.',
+    'image/limit': 'That’s a lot of uploads for one day. Try again tomorrow.',
+    'image/not-yours': 'You can’t add pages to that sketchbook.',
   };
   return msgs[code] || 'Something went wrong. Please try again.';
 }
@@ -190,7 +196,11 @@ const slugHandle = (v: string) => v.toLowerCase().replace(/[^a-z0-9._]+/g, '').s
 export async function saveProfile(acct: Account, next: PublicProfile): Promise<Account> {
   const { db: d } = need();
   let av = next.av;
-  if (av?.startsWith('data:')) av = await upload(`users/${acct.uid}/avatar-${Date.now()}.jpg`, av);
+  if (av?.startsWith('data:')) {
+    const r = await upload(acct.uid, av, 'avatar');
+    if (!r.ok) throw Object.assign(new Error('refused'), { code: 'image/refused-' + r.outcome });
+    av = r.url;
+  }
   // The pinned sketchbook isn't on the edit form, so it's carried over.
   const p = { ...next, av, ...(acct.pin ? { pin: acct.pin } : {}) };
   await writeProfile(acct.uid, p, acct.handle);
@@ -215,6 +225,9 @@ export interface BookDoc {
   isPublic: boolean; legacy: boolean;
   /** Plus: private, but opens for anyone with the link. */
   linkOnly: boolean;
+  /** Mature: nudity or sexual content (drawn). Hidden from Explore and lists unless the viewer chooses to see it.
+   *  `matureLock` is set when the upload check found it, and only moderators can take it off. */
+  mature: boolean; matureLock: boolean;
   /** Small (≈480px) versions: `thumbs[i]` belongs to `pages[i]` ('' when missing). */
   thumbs: string[]; coverThumb: string | null;
   /** Margin notes per page, aligned with `pages` like thumbs. */
@@ -237,7 +250,7 @@ const sharing = (d: DocumentData) => {
 const bookDoc = (id: string, d: DocumentData): BookDoc => ({
   id, ownerId: d.ownerId, ownerName: d.ownerName || '', ownerHandle: d.ownerHandle || '', name: d.name || 'sketchbook',
   color: d.color || '#b8243a', shape: d.shape || 'portrait', cover: d.cover || null, pages: d.pages || [], pageCount: d.pageCount || 0,
-  createdAt: d.createdAt || 0, updatedAt: d.updatedAt || 0, isPublic: d.isPublic !== false, legacy: d.isPublic === undefined, linkOnly: d.linkOnly === true,
+  createdAt: d.createdAt || 0, updatedAt: d.updatedAt || 0, isPublic: d.isPublic !== false, legacy: d.isPublic === undefined, linkOnly: d.linkOnly === true, mature: d.mature === true, matureLock: d.matureLock === true,
   thumbs: d.thumbs || [], coverThumb: d.coverThumb || null,
   captions: d.captions || [], dates: d.dates || [], mediums: d.mediums || [], tags: d.tags || [], hidden: d.hidden === true,
   ...sharing(d),
@@ -256,10 +269,15 @@ export const noteMap = (b: BookDoc): Record<string, PageNote> => {
 };
 /** A book as the signed-in user's own: they own it, or draw in it with its owner. */
 export const toBook = (b: BookDoc, me?: string): Book => ({
-  id: b.id, name: b.name, color: b.color, shape: b.shape, coverImg: b.cover, images: b.pages, createdAt: b.createdAt, isPublic: b.isPublic, linkOnly: b.linkOnly,
+  id: b.id, name: b.name, color: b.color, shape: b.shape, coverImg: b.cover, images: b.pages, createdAt: b.createdAt, isPublic: b.isPublic, linkOnly: b.linkOnly, mature: b.mature, matureLock: b.matureLock,
   thumbs: thumbMap(b), notes: noteMap(b), mediums: b.mediums, tags: b.tags, hidden: b.hidden,
   role: me && b.ownerId !== me ? 'collab' : 'owner', owner: { uid: b.ownerId, name: b.ownerName, handle: b.ownerHandle }, collabs: b.collabs, invites: b.invites,
 });
+
+/** Mature sketchbooks stay out of Explore and other people's lists unless the viewer has chosen to see them. */
+let showMature = false;
+export function setShowMature(on: boolean) { showMature = on; }
+const shown = (b: BookDoc) => showMature || !b.mature;
 
 export function newBookId(): string { return doc(collection(need().db, 'books')).id; }
 
@@ -271,7 +289,7 @@ export async function userBooks(uid: string, publicOnly = false): Promise<BookDo
     getDocs(query(c, where('collabs', 'array-contains', uid), ...pub)).catch(() => null), getDocs(query(c, where('collab', '==', uid), ...pub)).catch(() => null)]);
   const seen = new Set<string>();
   return [...own.docs, ...(shared?.docs || []), ...(older?.docs || [])].filter(x => !seen.has(x.id) && !!seen.add(x.id))
-    .map(x => bookDoc(x.id, x.data())).sort((a, b) => a.createdAt - b.createdAt);
+    .map(x => bookDoc(x.id, x.data())).filter(b => !publicOnly || shown(b)).sort((a, b) => a.createdAt - b.createdAt);
 }
 
 export type Cursor = QueryDocumentSnapshot | null;
@@ -287,7 +305,7 @@ export async function communityPage(sort: 'trending' | 'new', after: Cursor): Pr
   if (!indexMissing) {
     try {
       const s = await getDocs(query(c, where('isPublic', '==', true), orderBy(sort === 'new' ? 'updatedAt' : 'pageCount', 'desc'), ...(after ? [startAfter(after)] : []), limit(PAGE_SIZE)));
-      return { books: s.docs.map(x => bookDoc(x.id, x.data())).filter(b => b.pageCount > 0), next: s.docs.length === PAGE_SIZE ? s.docs[s.docs.length - 1] : null };
+      return { books: s.docs.map(x => bookDoc(x.id, x.data())).filter(b => b.pageCount > 0 && shown(b)), next: s.docs.length === PAGE_SIZE ? s.docs[s.docs.length - 1] : null };
     } catch (e) {
       if ((e as { code?: string }).code !== 'failed-precondition') throw e;
       console.warn('Explore is unpaged until the Firestore indexes in firestore.indexes.json are created.', e);
@@ -296,7 +314,7 @@ export async function communityPage(sort: 'trending' | 'new', after: Cursor): Pr
   }
   if (after) return { books: [], next: null };
   const s = await getDocs(query(c, where('isPublic', '==', true), limit(300)));
-  const all = s.docs.map(x => bookDoc(x.id, x.data())).filter(b => b.pageCount > 0);
+  const all = s.docs.map(x => bookDoc(x.id, x.data())).filter(b => b.pageCount > 0 && shown(b));
   return { books: all.sort((a, b) => sort === 'new' ? b.updatedAt - a.updatedAt : b.pageCount - a.pageCount), next: null };
 }
 
@@ -304,39 +322,33 @@ export async function communityPage(sort: 'trending' | 'new', after: Cursor): Pr
 export async function labelBooks(lbl: string): Promise<BookDoc[]> {
   if (!db) return [];
   const s = await getDocs(query(collection(db, 'books'), where('isPublic', '==', true), where('labels', 'array-contains', lbl), limit(120)));
-  return s.docs.map(x => bookDoc(x.id, x.data())).filter(b => b.pageCount > 0).sort((a, b) => b.updatedAt - a.updatedAt);
+  return s.docs.map(x => bookDoc(x.id, x.data())).filter(b => b.pageCount > 0 && shown(b)).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-/** Uploads data URLs for a book's pages/cover, each with a small thumbnail; returns data URL → URLs. */
-export async function uploadImages(uid: string, bookId: string, dataUrls: string[]): Promise<Map<string, { full: string; thumb: string }>> {
-  const out = new Map<string, { full: string; thumb: string }>();
-  await Promise.all([...new Set(dataUrls)].map(async du => {
-    const id = crypto.randomUUID(), base = `users/${uid}/books/${bookId}/${id}`;
-    const [full, thumb] = await Promise.all([upload(`${base}.jpg`, du), makeThumb(du).then(t => upload(`${base}_t.jpg`, t))]);
-    out.set(du, { full, thumb });
+/** What the upload check decided about a picture that wasn't let through: a photo with nudity or sexual content,
+ *  a profile picture with nudity, or held back for a moderator. */
+export type Refusal = 'photo' | 'avatar' | 'hold';
+export interface Uploads { done: Map<string, { full: string; thumb: string }>; refused: Map<string, Refusal>; mature: boolean; error?: unknown }
+
+/** Uploads data URLs for a book's pages/cover. Each is checked on the server before it goes public (api/image),
+ *  which also makes its thumbnail. Pictures the check refuses come back in `refused`; `mature` is true when one
+ *  of them labels the book Mature. */
+export async function uploadImages(uid: string, bookId: string, dataUrls: string[]): Promise<Uploads> {
+  const out: Uploads = { done: new Map(), refused: new Map(), mature: false };
+  // Each one on its own: one that can't be checked right now (`error`) doesn't hold up the rest.
+  const all = await Promise.allSettled([...new Set(dataUrls)].map(async du => {
+    const r = await upload(uid, du, 'page', bookId);
+    if (!r.ok) { out.refused.set(du, r.outcome as Refusal); return; }
+    out.done.set(du, { full: r.url, thumb: r.thumb });
+    if (r.outcome === 'mature') out.mature = true;
   }));
+  out.error = all.find((x): x is PromiseRejectedResult => x.status === 'rejected')?.reason;
   return out;
 }
 
-/** Makes and uploads a thumbnail for an already-stored image (used to backfill older pages). */
-export async function thumbFor(uid: string, bookId: string, url: string): Promise<string> {
-  const blob = await (await fetch(url)).blob();
-  const du = await new Promise<string>(res => { const fr = new FileReader(); fr.onload = () => res(fr.result as string); fr.readAsDataURL(blob); });
-  return upload(`users/${uid}/books/${bookId}/${crypto.randomUUID()}_t.jpg`, await makeThumb(du));
-}
-
-/** Downscales an image to at most `maxH` px tall as a JPEG data URL. */
-function makeThumb(dataUrl: string, maxH = 480): Promise<string> {
-  return new Promise((res, rej) => {
-    const im = new Image();
-    im.onload = () => {
-      const k = Math.min(1, maxH / im.naturalHeight), c = document.createElement('canvas');
-      c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
-      const ctx = c.getContext('2d')!; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(im, 0, 0, c.width, c.height);
-      res(c.toDataURL('image/jpeg', 0.8));
-    };
-    im.onerror = rej; im.src = dataUrl;
-  });
+/** Makes a thumbnail for an already-stored image (used to backfill older pages). */
+export async function thumbFor(_uid: string, bookId: string, url: string): Promise<string> {
+  return (await imageApi<{ thumb: string }>({ action: 'thumb', url, book: bookId })).thumb;
 }
 
 export async function writeBook(owner: Account, b: Book) {
@@ -354,6 +366,8 @@ export async function writeBook(owner: Account, b: Book) {
     captions: pages.map(u => (n[u]?.c || '').slice(0, 140)), dates: pages.map(u => n[u]?.d || ''),
     // `labels` lets Explore filter by medium or tag with a single array-contains query.
     mediums, tags, labels: [...mediums.map(m => 'm:' + mediumKey(m)), ...tags.map(x => 't:' + x)], hidden: !!b.hidden,
+    // Once the upload check has labelled it, it stays Mature (matureLock); otherwise the owner chooses.
+    mature: !!b.mature || !!b.matureLock, ...(b.matureLock ? { matureLock: true } : {}),
   }, { merge: true });
 }
 
@@ -486,15 +500,22 @@ export async function deleteBook(id: string, files: string[]) {
 
 // ---------- storage ----------
 
-async function upload(path: string, dataUrl: string): Promise<string> {
+async function imageApi<T>(body: object): Promise<T> {
+  const token = await idToken();
+  const r = await fetch('/api/image', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(j.error || 'upload-failed'), { code: 'image/' + (j.error || 'failed') });
+  return j as T;
+}
+
+/** Uploads a picture privately (pending/), then has the server check it and publish it under users/ (only the
+ *  server can write there; see storage.rules). */
+async function upload(uid: string, dataUrl: string, kind: 'page' | 'avatar', book = ''): Promise<{ ok: boolean; outcome: string; url: string; thumb: string }> {
   const { storage: st } = need();
   const blob = await (await fetch(dataUrl)).blob();
-  const r = ref(st, path);
-  const res = await uploadBytes(r, blob, { contentType: blob.type || 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' });
-  // storage.rules make users/** publicly readable, so a token-free URL works and saves a
-  // getDownloadURL round trip per image.
-  const host = env.VITE_FIREBASE_EMULATORS === '1' ? 'http://127.0.0.1:9199' : 'https://firebasestorage.googleapis.com';
-  return `${host}/v0/b/${res.metadata.bucket}/o/${encodeURIComponent(res.metadata.fullPath)}?alt=media`;
+  const path = `pending/${uid}/${crypto.randomUUID()}.jpg`;
+  await uploadBytes(ref(st, path), blob, { contentType: blob.type || 'image/jpeg' });
+  return imageApi({ action: 'check', path, kind, book });
 }
 
 /** Best-effort removal of files that are no longer referenced. */
@@ -709,7 +730,9 @@ export async function setPin(uid: string, bookId: string) { await updateDoc(doc(
 
 // ---------- moderation ----------
 
-export interface Report { id: string; by: string; kind: 'book' | 'user' | 'message'; targetId: string; ownerId: string; reason: string; note: string; at: number }
+/** `kind: 'image'` and `by: 'check'` are the upload check's: a picture it held back (stored at `file` until a
+ *  moderator deletes it), for a sketchbook (targetId) or a profile picture (targetId is the owner). */
+export interface Report { id: string; by: string; kind: 'book' | 'user' | 'message' | 'image'; targetId: string; ownerId: string; reason: string; note: string; at: number; file?: string }
 
 export async function isAdmin(uid: string): Promise<boolean> {
   try { return (await getDoc(doc(need().db, 'admins', uid))).exists(); } catch { return false; }
@@ -719,6 +742,15 @@ export async function reports(): Promise<Report[]> {
   return s.docs.map(d => ({ ...(d.data() as Omit<Report, 'id'>), id: d.id }));
 }
 export async function dismissReport(id: string) { await deleteDoc(doc(need().db, 'reports', id)); }
+/** A held-back picture: a link that works for five minutes, or deleting it for good. */
+export async function heldPicture(report: string) { return (await imageApi<{ url: string }>({ action: 'view', report })).url; }
+export async function deleteHeldPicture(report: string) { await imageApi({ action: 'delete', report }); }
+/** Takes the Mature label off a sketchbook, including one the upload check put on. */
+export async function clearMature(bookId: string) {
+  const { db: d } = need();
+  await deleteDoc(doc(d, 'mature', bookId));
+  await updateDoc(doc(d, 'books', bookId), { mature: false, matureLock: false });
+}
 export async function bannedUsers(): Promise<string[]> {
   if (!db) return [];
   try { return (await getDocs(collection(db, 'banned'))).docs.map(d => d.id); } catch { return []; }
@@ -774,7 +806,7 @@ export async function booksBy(uids: string[]): Promise<BookDoc[]> {
   if (!db || !uids.length) return [];
   const chunks: string[][] = []; for (let i = 0; i < uids.length; i += 30) chunks.push(uids.slice(i, i + 30));
   const all = await Promise.all(chunks.map(c => getDocs(query(collection(db!, 'books'), where('ownerId', 'in', c), where('isPublic', '==', true)))));
-  return all.flatMap(s => s.docs.map(x => bookDoc(x.id, x.data()))).filter(b => b.pageCount > 0).sort((a, b) => b.updatedAt - a.updatedAt);
+  return all.flatMap(s => s.docs.map(x => bookDoc(x.id, x.data()))).filter(b => b.pageCount > 0 && shown(b)).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 /** Opens the share sheet where there is one, otherwise copies the link. Returns what happened. */

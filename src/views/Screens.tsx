@@ -570,6 +570,12 @@ export function Settings({ v }: { v: V }) {
             : v.inIOS ? <span style={{ fontSize: 14, lineHeight: 1.5, color: INK }}>In Safari, tap <b style={{ fontWeight: 600 }}>Share</b> (the square with an arrow), then <b style={{ fontWeight: 600 }}>Add to Home Screen</b>.</span>
             : <span style={{ fontSize: 14, lineHeight: 1.5, color: INK }}>Use your browser’s <b style={{ fontWeight: 600 }}>Install</b> option (in Chrome and Edge, the icon at the end of the address bar). On Android, open the browser menu and choose <b style={{ fontWeight: 600 }}>Install app</b>.</span>}
         </SettingsSection>
+        <SettingsSection title="Mature work" note="Sketchbooks with drawn nudity or sexual content are labelled Mature and kept out of Explore and other people’s profiles unless you choose to see them. 18 and over only.">
+          <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 14, cursor: 'pointer' }}>
+            <input type="checkbox" checked={v.mtOn} onChange={v.mtToggle} style={{ width: 18, height: 18, accentColor: MARK }} />
+            Show Mature sketchbooks
+          </label>
+        </SettingsSection>
         <SettingsSection title="Your data" note="What we store about you and how it’s used. Download a copy of everything we hold about your account at any time.">
           <button onClick={v.exportData} disabled={v.acBusy === 'export'} style={{ ...formBtn(), opacity: v.acBusy === 'export' ? 0.6 : 1 }}>{v.acBusy === 'export' ? 'Gathering…' : 'Download my data'}</button>
           {v.anOffered && (
