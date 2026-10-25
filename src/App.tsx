@@ -728,7 +728,8 @@ export default class App extends Component<object, State> {
       console.error('sync failed', e);
       // Said out loud: a save that silently fails loses the sketchbook on the next visit.
       const code = String((e as { code?: string })?.code || '');
-      this.toast(code.startsWith('image/') ? api.errMsg(e) : `Couldn’t save “${this.findBook(id)?.name || 'your sketchbook'}”. Check your connection and try again.`);
+      const name = this.findBook(id)?.name || 'your sketchbook';
+      this.toast(code.startsWith('image/') ? api.errMsg(e) : code === 'permission-denied' ? `Couldn’t save “${name}”: it was refused. Try again, or contact us if it keeps happening.` : `Couldn’t save “${name}”. Check your connection and try again.`);
     })
       .finally(() => this.busy.set(id, (this.busy.get(id) || 1) - 1));
     this.syncQ.set(id, next);

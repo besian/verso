@@ -369,19 +369,19 @@ export async function writeBook(owner: Account, b: Book) {
   const pages = b.images.filter(u => !u.startsWith('data:')), cover = b.coverImg && !b.coverImg.startsWith('data:') ? b.coverImg : null, t = b.thumbs || {}, n = b.notes || {};
   const mediums = (b.mediums || []).slice(0, 4), tags = (b.tags || []).slice(0, 8);
   // Merged so sharing fields (collab, invite), which change on their own, are left alone.
-  await setDoc(doc(d, 'books', String(b.id)), {
+  await withoutPairsIfRefused(b, pages, pairs => setDoc(doc(d, 'books', String(b.id)), {
     ownerId: owner.uid, ownerName: owner.name, ownerHandle: owner.handle,
     name: b.name, color: b.color, shape: b.shape || 'portrait', cover,
     pages, pageCount: pages.length, createdAt: b.createdAt || Date.now(), updatedAt: Date.now(), isPublic: !b.hidden && b.isPublic !== false,
     linkOnly: !b.hidden && b.isPublic === false && !!b.linkOnly,
     thumbs: pages.map(u => t[u] || ''), coverThumb: (cover && t[cover]) || null,
-    captions: pages.map(u => (n[u]?.c || '').slice(0, 140)), dates: pages.map(u => n[u]?.d || ''), ...pairLists(b, pages),
+    captions: pages.map(u => (n[u]?.c || '').slice(0, 140)), dates: pages.map(u => n[u]?.d || ''), ...pairs,
     // `labels` lets Explore filter by medium or tag with a single array-contains query.
     mediums, tags, labels: [...mediums.map(m => 'm:' + mediumKey(m)), ...tags.map(x => 't:' + x)], hidden: !!b.hidden,
     // Once the upload check has labelled it, it stays Mature (matureLock); otherwise the owner chooses. Written
     // only when set, so books without the label save the same as before it existed.
     ...(b.mature || b.matureLock ? { mature: true } : { mature: deleteField() }), ...(b.matureLock ? { matureLock: true } : {}),
-  }, { merge: true });
+  }, { merge: true }));
 }
 
 /** Spreads and their blank fillers as lists aligned with the pages; left out (removed) for a book with none, so
@@ -392,13 +392,25 @@ function pairLists(b: Book, pages: string[]) {
   return spreads.some(Boolean) || fillers.some(Boolean) ? { spreads, fillers } : { spreads: deleteField(), fillers: deleteField() };
 }
 
+/** Saves with the spreads; if the database's published rules don't know about spreads yet and refuse it, saves the
+ *  pages without them (they still sit side by side; only the link between the halves isn't stored), so nothing is lost. */
+async function withoutPairsIfRefused(b: Book, pages: string[], write: (pairs: ReturnType<typeof pairLists>) => Promise<void>) {
+  const pairs = pairLists(b, pages);
+  try { await write(pairs); }
+  catch (e) {
+    if ((e as { code?: string }).code !== 'permission-denied' || !Array.isArray(pairs.spreads)) throw e;
+    console.warn('Saved without spreads: publish the latest firestore.rules', e);
+    await write({ spreads: deleteField(), fillers: deleteField() });
+  }
+}
+
 /** What someone drawing in another person's sketchbook can change: its pages and their notes. */
 async function writePages(b: Book) {
   const pages = b.images.filter(u => !u.startsWith('data:')), t = b.thumbs || {}, n = b.notes || {};
-  await updateDoc(doc(need().db, 'books', b.id), {
+  await withoutPairsIfRefused(b, pages, pairs => updateDoc(doc(need().db, 'books', b.id), {
     pages, pageCount: pages.length, thumbs: pages.map(u => t[u] || ''),
-    captions: pages.map(u => (n[u]?.c || '').slice(0, 140)), dates: pages.map(u => n[u]?.d || ''), ...pairLists(b, pages), updatedAt: Date.now(),
-  });
+    captions: pages.map(u => (n[u]?.c || '').slice(0, 140)), dates: pages.map(u => n[u]?.d || ''), ...pairs, updatedAt: Date.now(),
+  }));
 }
 
 // ---------- shared sketchbooks ----------
