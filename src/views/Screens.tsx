@@ -27,13 +27,32 @@ function Kicker() {
 
 /** Home page for everyone, sized to the window so it never scrolls: headline and actions,
  *  then a shelf of community sketchbooks along the bottom. */
-/** "fletora." in the headline, written in with an ink underline (see .ink-word in global.css). */
+/** "fletora." in the headline, written letter by letter: the pen traces each letter, then the ink fills it, and a
+ *  loose underline is sketched beneath (see .ink-word in global.css). The HTML word underneath keeps the layout and
+ *  is what screen readers read; the drawing is an SVG laid exactly over it once the font has loaded. */
+const INK_WORD = 'fletora.';
 function InkWord() {
+  const ref = useRef<HTMLElement>(null), base = useRef<HTMLSpanElement>(null);
+  const [m, setM] = useState<{ w: number; h: number; y: number } | null>(null);
+  useEffect(() => {
+    const measure = () => { const e = ref.current, b = base.current; if (e && b) setM({ w: e.offsetWidth, h: e.offsetHeight, y: b.offsetTop }); };
+    measure();
+    document.fonts?.ready.then(measure);
+    addEventListener('resize', measure);
+    return () => removeEventListener('resize', measure);
+  }, []);
   return (
-    <em className="ink-word" style={{ color: MARK }}>
-      <span className="ink-text">fletora</span><span className="ink-dot">.</span>
+    <em ref={ref} className={'ink-word' + (m ? ' ink-on' : '')} style={{ color: MARK }}>
+      <span className="ink-ghost">{INK_WORD}<span ref={base} className="ink-base" /></span>
+      {m && (
+        <svg className="ink-draw" width={m.w} height={m.h} viewBox={`0 0 ${m.w} ${m.h}`} aria-hidden="true">
+          <text x="0" y={m.y}>
+            {[...INK_WORD].map((c, i) => <tspan key={i} style={{ animationDelay: `${0.35 + i * 0.22}s, ${0.35 + i * 0.22 + 0.3}s` }}>{c}</tspan>)}
+          </text>
+        </svg>
+      )}
       <svg className="ink-line" viewBox="0 0 300 20" preserveAspectRatio="none" aria-hidden="true">
-        <path d="M4 13 C 60 7, 120 16, 180 9 S 262 6, 296 11" pathLength={1} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+        <path d="M4 13 C 60 7, 120 16, 180 9 S 262 6, 296 11" pathLength={1} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       </svg>
     </em>
   );
