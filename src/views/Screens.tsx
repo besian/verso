@@ -454,43 +454,75 @@ const AUTH_HEAD: Record<string, ReactNode> = {
 };
 const quietLink = (color = INK): CSSProperties => ({ padding: 0, border: 'none', borderBottom: `1px solid ${color}`, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' });
 
-/** Sign in, create an account, or request a password reset, as a full page. */
+/** What the sign-in panel lists, by mode. */
+const AUTH_POINTS: Record<string, string[]> = {
+  join: ['A home for every sketchbook: public, private or shared with a friend.', 'Leaf through other artists’ pages, unfinished ones and all.', 'Free to start. Plus when you need more room.'],
+  signin: ['Your sketchbooks, just as you left them.', 'New pages from the artists you follow.', 'Messages and invitations waiting for you.'],
+  reset: [],
+};
+/** A few closed sketchbooks fanned out at the foot of the sign-in panel. */
+const AUTH_BOOKS: [string, string, number, number][] = [['#2f4a7a', 'Lisbon, spring', -9, 0], ['#d9a42b', 'Life room', 4, 1], ['#b8243a', 'sketchbook', -2, 2], ['#3f7a5a', 'Studies', 8, 3]];
+
+/** Sign in, create an account, or request a password reset. Wide screens: a panel with what fletora. offers on the
+ *  left, the form centred on the right, filling the screen. Phones: stacked. */
 export function AuthPage({ v }: { v: V }) {
-  const mob = !v.notMob;
+  const mob = !v.notMob, points = AUTH_POINTS[v.suMode] || [];
+  const panel = (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: mob ? 16 : 26, minWidth: 0, ...(mob ? {} : { padding: '52px 52px 0', background: 'rgba(var(--ink-rgb),.045)', borderRadius: 2, overflow: 'hidden', alignSelf: 'stretch' }) }}>
+      <div style={{ display: 'flex', gap: 14, alignItems: 'center', ...label() }}><span style={{ color: MARK }}>{v.suKicker}</span><span style={{ width: 40, height: 1, background: STONE }} /><span>fletora.</span></div>
+      <h1 style={{ margin: 0, font: `400 ${mob ? '52px' : 'clamp(64px, 6.4vw, 104px)'}/.94 ${SERIF}`, letterSpacing: '-.025em', textWrap: 'balance' } as CSSProperties}>{AUTH_HEAD[v.suMode]}</h1>
+      <p style={{ margin: 0, maxWidth: 440, fontSize: mob ? 16 : 17, lineHeight: 1.55, color: MUTED, textWrap: 'pretty' } as CSSProperties}>{v.suSub}</p>
+      {!mob && points.length > 0 && (
+        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 440 }}>
+          {points.map(t => <li key={t} style={{ display: 'flex', gap: 12, alignItems: 'baseline', fontSize: 15, lineHeight: 1.5 }}><span aria-hidden="true" style={{ color: MARK, ...serif(18, 1) }}>✓</span>{t}</li>)}
+        </ul>
+      )}
+      {!mob && (
+        // Decoration: a little stack of sketchbooks resting at the bottom of the panel.
+        <div aria-hidden="true" style={{ position: 'relative', flex: 1, minHeight: 190, marginTop: 8 }}>
+          {AUTH_BOOKS.map(([c, name, rot, k]) => (
+            <div key={name} style={{ position: 'absolute', bottom: -34, left: 4 + k * 104, width: 140, height: 194, transform: `rotate(${rot}deg)`, transformOrigin: '50% 100%' }}>
+              <ClosedBook size="sm" bg={c} board={c} label={name} labelStyle={{ padding: '6px 8px', font: `400 14px/1.1 ${SERIF}` }} />
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
   return (
     <div style={screen()}>
-      <div style={{ ...pagePad(mob), display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,360px),1fr))', gap: mob ? '40px' : '48px 96px', alignItems: 'start', minHeight: '100%', paddingBottom: 20 }}>
-        <section style={{ display: 'flex', flexDirection: 'column', gap: 24, minWidth: 0 }}>
-          <div style={{ display: 'flex', gap: 14, alignItems: 'center', ...label() }}><span style={{ color: MARK }}>{v.suKicker}</span><span style={{ width: 40, height: 1, background: STONE }} /><span>fletora.</span></div>
-          <h1 style={{ margin: 0, ...serif(mob ? 56 : 96, .94, '-.025em'), textWrap: 'balance' } as CSSProperties}>{AUTH_HEAD[v.suMode]}</h1>
-          <p style={{ margin: 0, maxWidth: 400, fontSize: 17, lineHeight: 1.55, color: MUTED, textWrap: 'pretty' } as CSSProperties}>{v.suSub}</p>
-        </section>
-        <form onSubmit={v.suSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 420, width: '100%', paddingTop: 20, borderTop: `1px solid ${INK}`, justifySelf: mob ? 'stretch' : 'end' }}>
-          {!v.suReset && <GoogleButton v={v} />}
-          {v.suJoin && (
-            <>
-              <TextField label="Name" value={v.suName} onChange={v.onSuName} placeholder="Your name" autoComplete="name" />
-              <HandleField value={v.suHandle} onChange={v.onSuHandle} placeholder="handle" />
-            </>
-          )}
-          <TextField label="Email" value={v.suEmail} onChange={v.onSuEmail} type="email" placeholder="you@example.com" autoComplete="email" />
-          {!v.suReset && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <TextField label="Password" value={v.suPw} onChange={v.onSuPw} type="password" placeholder="At least 6 characters" autoComplete={v.suJoin ? 'new-password' : 'current-password'} />
-              {!v.suJoin && <button type="button" onClick={v.suToReset} className={'tap ' + hover(`color:${MARK}`)} style={{ alignSelf: 'flex-end', padding: 0, border: 'none', background: 'none', color: 'rgba(var(--ink-rgb),.75)', font: `500 13px ${SANS}`, cursor: 'pointer' }}>Forgot password?</button>}
+      <div style={{ ...pagePad(mob), display: 'flex', flexDirection: 'column', gap: mob ? 28 : 32, minHeight: '100%', paddingBottom: 20, ...(mob ? {} : { paddingTop: 92 }) }}>
+        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: mob ? 'minmax(0,1fr)' : 'minmax(0,1.05fr) minmax(0,1fr)', gap: mob ? 28 : 'clamp(40px, 6vw, 110px)', alignItems: 'center' }}>
+          {panel}
+          <div style={{ display: 'flex', justifyContent: 'center', padding: mob ? 0 : '32px 0' }}>
+          <form onSubmit={v.suSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 420, width: '100%' }}>
+            {!v.suReset && <GoogleButton v={v} />}
+            {v.suJoin && (
+              <>
+                <TextField label="Name" value={v.suName} onChange={v.onSuName} placeholder="Your name" autoComplete="name" />
+                <HandleField value={v.suHandle} onChange={v.onSuHandle} placeholder="handle" />
+              </>
+            )}
+            <TextField label="Email" value={v.suEmail} onChange={v.onSuEmail} type="email" placeholder="you@example.com" autoComplete="email" />
+            {!v.suReset && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <TextField label="Password" value={v.suPw} onChange={v.onSuPw} type="password" placeholder="At least 6 characters" autoComplete={v.suJoin ? 'new-password' : 'current-password'} />
+                {!v.suJoin && <button type="button" onClick={v.suToReset} className={'tap ' + hover(`color:${MARK}`)} style={{ alignSelf: 'flex-end', padding: 0, border: 'none', background: 'none', color: 'rgba(var(--ink-rgb),.75)', font: `500 13px ${SANS}`, cursor: 'pointer' }}>Forgot password?</button>}
+              </div>
+            )}
+            <Notice err={v.suErr} info={v.suInfo} />
+            {!v.suReset && <div style={{ fontSize: 12, lineHeight: 1.5, color: MUTED }}>By {v.suJoin ? 'creating an account' : 'continuing'} you agree to the <button type="button" onClick={v.openTerms} className={hoverLine} style={{ ...quietLink('rgba(var(--ink-rgb),.4)'), font: `500 12px ${SANS}` }}>Terms</button> and <button type="button" onClick={v.openPrivacy} className={hoverLine} style={{ ...quietLink('rgba(var(--ink-rgb),.4)'), font: `500 12px ${SANS}` }}>Privacy policy</button>. Your email is only used to sign in and is never shown.</div>}
+            <button type="submit" disabled={v.suBusy} className={v.suBusy ? undefined : hover(`background:${MARK}`)} style={{ height: 50, marginTop: 4, border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 15px ${SANS}`, cursor: v.suBusy ? 'progress' : 'pointer', opacity: v.suBusy ? 0.6 : v.suOk ? 1 : 0.55, transition: 'background .25s' }}>{v.suBusy ? 'One moment…' : v.suBtn}</button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontSize: 13, color: MUTED }}>
+              {v.suReset
+                ? <button type="button" onClick={v.suToSignin} className={'tap ' + hoverLine} style={quietLink()}>← Back to sign in</button>
+                : <span>{v.suSwitchQ} <button type="button" onClick={v.suSwitch} className={'tap ' + hoverLine} style={quietLink()}>{v.suSwitchLbl}</button></span>}
+              <button type="button" onClick={v.closeAuth} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'rgba(var(--ink-rgb),.75)', font: `500 13px ${SANS}`, cursor: 'pointer' }}>Not now</button>
             </div>
-          )}
-          <Notice err={v.suErr} info={v.suInfo} />
-          {!v.suReset && <div style={{ fontSize: 12, lineHeight: 1.5, color: MUTED }}>By {v.suJoin ? 'creating an account' : 'continuing'} you agree to the <button type="button" onClick={v.openTerms} className={hoverLine} style={{ ...quietLink('rgba(var(--ink-rgb),.4)'), font: `500 12px ${SANS}` }}>Terms</button> and <button type="button" onClick={v.openPrivacy} className={hoverLine} style={{ ...quietLink('rgba(var(--ink-rgb),.4)'), font: `500 12px ${SANS}` }}>Privacy policy</button>. Your email is only used to sign in and is never shown.</div>}
-          <button type="submit" disabled={v.suBusy} className={v.suBusy ? undefined : hover(`background:${MARK}`)} style={{ height: 50, marginTop: 4, border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 15px ${SANS}`, cursor: v.suBusy ? 'progress' : 'pointer', opacity: v.suBusy ? 0.6 : v.suOk ? 1 : 0.55, transition: 'background .25s' }}>{v.suBusy ? 'One moment…' : v.suBtn}</button>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontSize: 13, color: MUTED }}>
-            {v.suReset
-              ? <button type="button" onClick={v.suToSignin} className={'tap ' + hoverLine} style={quietLink()}>← Back to sign in</button>
-              : <span>{v.suSwitchQ} <button type="button" onClick={v.suSwitch} className={'tap ' + hoverLine} style={quietLink()}>{v.suSwitchLbl}</button></span>}
-            <button type="button" onClick={v.closeAuth} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'rgba(var(--ink-rgb),.75)', font: `500 13px ${SANS}`, cursor: 'pointer' }}>Not now</button>
+          </form>
           </div>
-        </form>
-        <div style={{ gridColumn: '1 / -1', alignSelf: 'end' }}><SiteFooter v={v} /></div>
+        </div>
+        <SiteFooter v={v} />
       </div>
     </div>
   );
