@@ -1,12 +1,13 @@
 // Reads handwriting drawn in the page editor and returns it as plain text, using Claude.
-// Signed-in users only, and a limited number of conversions per hour each.
+// Signed-in users only, with a monthly allowance each (more with Fletora Plus).
 // Needs ANTHROPIC_API_KEY and FIREBASE_SERVICE_ACCOUNT in Vercel.
 import Anthropic from '@anthropic-ai/sdk';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 
-const PER_HOUR = 60;
+// Conversions a month; must match INK_FREE / INK_PLUS in src/plus.ts.
+const PER_MONTH = 20, PER_MONTH_PLUS = 500;
 const json = (status: number, body: object) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
 function admin() {
@@ -33,10 +34,11 @@ export async function POST(req: Request) {
   const image = typeof body.image === 'string' ? body.image : '';
   if (!image || image.length > 4_000_000 || !/^[A-Za-z0-9+/=]+$/.test(image)) return json(400, { error: 'bad-image' });
 
-  // Count this hour's conversions for the user.
-  const ref = db.collection('inkLog').doc(`${uid}_${new Date().toISOString().slice(0, 13)}`);
-  const n = ((await ref.get()).get('n') as number | undefined) || 0;
-  if (n >= PER_HOUR) return json(429, { error: 'limit' });
+  // Count this month's conversions for the user.
+  const ref = db.collection('inkLog').doc(`${uid}_${new Date().toISOString().slice(0, 7)}`);
+  const [log, plus] = await Promise.all([ref.get(), db.collection('plus').doc(uid).get()]);
+  const n = (log.get('n') as number | undefined) || 0, isPlus = plus.get('on') === true && (plus.get('until') || 0) > Date.now();
+  if (n >= (isPlus ? PER_MONTH_PLUS : PER_MONTH)) return json(429, { error: isPlus ? 'limit' : 'limit-free' });
   await ref.set({ n: FieldValue.increment(1) }, { merge: true });
 
   const client = new Anthropic();

@@ -10,6 +10,11 @@ service cloud.firestore {
     // Moderators: an admins/{uid} document added by hand in the Firebase console.
     function isAdmin() { return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
     function suspended() { return signedIn() && exists(/databases/$(database)/documents/banned/$(request.auth.uid)); }
+    // Fletora Plus: plus/{uid}, written only by api/stripe-webhook. `until` already includes a few days' grace.
+    function plus(uid) {
+      let p = /databases/$(database)/documents/plus/$(uid);
+      return exists(p) && get(p).data.get('on', false) == true && get(p).data.get('until', 0) > request.time.toMillis();
+    }
 
     // Social links on a profile: known platforms only, one handle (≤ 100 characters) each.
     function sv(s, k) { return !(k in s) || str(s[k], 100); }
@@ -24,7 +29,7 @@ service cloud.firestore {
       allow read: if true;
       // The handle must be reserved by this user in the same write (see handles below).
       allow create, update: if isUser(uid)
-        && request.resource.data.keys().hasOnly(['name', 'handle', 'bio', 'loc', 'web', 'ig', 'mail', 'socials', 'accent', 'av', 'joined'])
+        && request.resource.data.keys().hasOnly(['name', 'handle', 'bio', 'loc', 'web', 'ig', 'mail', 'socials', 'accent', 'av', 'joined', 'pin'])
         && str(request.resource.data.name, 80)
         && str(request.resource.data.bio, 160)
         && str(request.resource.data.loc, 80)
@@ -32,6 +37,9 @@ service cloud.firestore {
         && (!('ig' in request.resource.data) || str(request.resource.data.ig, 40))
         && (!('mail' in request.resource.data) || str(request.resource.data.mail, 120))
         && (!('socials' in request.resource.data) || socialsOk(request.resource.data.socials))
+        // A pinned sketchbook (Plus): choosing or changing it needs Plus; keeping or clearing it doesn't.
+        && (!('pin' in request.resource.data) || (str(request.resource.data.pin, 40) && (request.resource.data.pin == ''
+          || (resource != null && resource.data.get('pin', '') == request.resource.data.pin) || plus(uid))))
         && getAfter(/databases/$(database)/documents/handles/$(request.resource.data.handle)).data.uid == uid;
       // Account deletion removes the profile along with everything else.
       allow delete: if isUser(uid);
@@ -191,6 +199,37 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Plus status is public (the Plus mark); the plan details in billing are the owner's alone. Only the
+    // server writes either.
+    match /plus/{uid} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /billing/{uid} {
+      allow read: if isUser(uid);
+      allow write: if false;
+    }
+
+    // Stats for a sketchbook, read by its owner (Plus shows them). Anyone may count a view, one at a time and
+    // with where it came from; saves move by one only in the same write as the saver's own saved entry.
+    match /stats/{bookId} {
+      function was(k) { return resource == null ? 0 : resource.data.get(k, 0); }
+      function step(k, d) { return request.resource.data.get(k, 0) == was(k) + d; }
+      function changed() { return request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys(); }
+      function src(k) { return step(k, 0) || step(k, 1); }
+      function viewed() {
+        return changed().size() == 2 && step('views', 1) && step('saves', 0)
+          && src('explore') && src('profile') && src('home') && src('link') && src('embed');
+      }
+      function saved() {
+        let p = /databases/$(database)/documents/users/$(request.auth.uid)/saved/$(bookId);
+        return signedIn() && changed().hasOnly(['saves']) && request.resource.data.get('saves', 0) >= 0
+          && ((step('saves', 1) && added(p)) || (step('saves', -1) && removed(p)));
+      }
+      allow read: if signedIn() && (get(/databases/$(database)/documents/books/$(bookId)).data.ownerId == request.auth.uid || isAdmin());
+      allow create, update: if request.resource.data.keys().hasOnly(['views', 'explore', 'profile', 'home', 'link', 'embed', 'saves']) && (viewed() || saved());
+    }
+
     // Staff pick: the sketchbook moderators feature on the home page.
     match /picks/{id} {
       allow read: if true;
@@ -210,7 +249,7 @@ service cloud.firestore {
 
     match /books/{bookId} {
       function valid(d) {
-        return d.keys().hasOnly(['ownerId', 'ownerName', 'ownerHandle', 'name', 'color', 'shape', 'cover', 'pages', 'pageCount', 'createdAt', 'updatedAt', 'isPublic', 'thumbs', 'coverThumb',
+        return d.keys().hasOnly(['ownerId', 'ownerName', 'ownerHandle', 'name', 'color', 'shape', 'cover', 'pages', 'pageCount', 'createdAt', 'updatedAt', 'isPublic', 'linkOnly', 'thumbs', 'coverThumb',
             'captions', 'dates', 'mediums', 'tags', 'labels', 'hidden', 'collab', 'collabName', 'collabHandle', 'invite', 'inviteName', 'inviteHandle'])
           && (!('isPublic' in d) || d.isPublic is bool)
           && (!('thumbs' in d) || (d.thumbs is list && d.thumbs.size() <= 1000))
@@ -221,14 +260,26 @@ service cloud.firestore {
           && (!('labels' in d) || (d.labels is list && d.labels.size() <= 12))
           && str(d.name, 120)
           && d.shape in ['pocket', 'portrait', 'square', 'landscape', 'panorama']
-          && d.pages is list && d.pages.size() <= 1000 && d.pageCount == d.pages.size()
+          && d.pages is list && d.pageCount == d.pages.size() && pagesOk(d)
+          && linkOk(d)
           // Suspended artists can only keep private sketchbooks.
-          && (d.get('isPublic', true) == false || !suspended());
+          && ((d.get('isPublic', true) == false && d.get('linkOnly', false) == false) || !suspended());
+      }
+      // Free sketchbooks hold 60 pages, Plus ones 300 (the owner's plan counts). A book already over the limit
+      // can still be reordered and trimmed, just not grow.
+      function pagesOk(d) {
+        return d.pages.size() <= (plus(d.ownerId) ? 300 : 60) || (resource != null && d.pages.size() <= resource.data.get('pages', []).size());
+      }
+      // Link-only (Plus): not public, not hidden by moderators; turning it on needs Plus.
+      function linkOk(d) {
+        let on = d.get('linkOnly', false);
+        return on is bool && (on == false || (d.get('isPublic', true) == false && d.get('hidden', false) == false
+          && ((resource != null && resource.data.get('linkOnly', false) == true) || plus(d.ownerId))));
       }
       // Only moderators set `hidden`; a hidden book stays private until they restore it.
       function keepsHidden() {
         let was = resource.data.get('hidden', false);
-        return request.resource.data.get('hidden', false) == was && (was == false || request.resource.data.isPublic == false);
+        return request.resource.data.get('hidden', false) == was && (was == false || (request.resource.data.isPublic == false && request.resource.data.get('linkOnly', false) == false));
       }
       // Sharing: one other person (`collab`) can add pages; the owner invites them (`invite`) and they accept.
       function was(k) { return resource.data.get(k, null); }
@@ -253,14 +304,21 @@ service cloud.firestore {
       function collabLeaves() { return was('collab') == me() && changes().hasOnly(['collab', 'collabName', 'collabHandle']) && now('collab') == null; }
 
       // Private books are readable only by their owner, the person they're shared with or invited to (and moderators).
-      allow read: if resource.data.get('isPublic', true) == true || (signedIn() && resource.data.ownerId == request.auth.uid)
+      // A link-only book opens for anyone with its address, but never shows up in a list (Explore, profiles).
+      function readable() {
+        return resource.data.get('isPublic', true) == true || (signedIn() && resource.data.ownerId == request.auth.uid)
+          || (signedIn() && resource.data.get('collab', null) == request.auth.uid) || (signedIn() && resource.data.get('invite', null) == request.auth.uid) || isAdmin();
+      }
+      allow get: if readable() || (resource.data.get('linkOnly', false) == true && resource.data.get('hidden', false) == false);
+      // Lists read isPublic directly: a default (get('isPublic', true)) lets a query match private books.
+      allow list: if resource.data.isPublic == true || (signedIn() && resource.data.ownerId == request.auth.uid)
         || (signedIn() && resource.data.collab == request.auth.uid) || (signedIn() && resource.data.invite == request.auth.uid) || isAdmin();
       allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid && valid(request.resource.data)
         && request.resource.data.get('hidden', false) == false && now('collab') == null && now('invite') == null;
       allow update: if (signedIn() && resource.data.ownerId == request.auth.uid
           && request.resource.data.ownerId == resource.data.ownerId && valid(request.resource.data) && keepsHidden() && ownerShares())
         || (signedIn() && (collabEdits() || inviteeAnswers() || collabLeaves()))
-        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPublic', 'hidden']));
+        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPublic', 'hidden', 'linkOnly']));
       allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
 
       // One like per person per book; anyone can see who liked it.

@@ -94,6 +94,9 @@ redeploy is needed after changing them.
 | `reports/{reporter}_{target}` | reason and note | the reporter; read by moderators |
 | `admins/{uid}` | marks a moderator | console only |
 | `banned/{uid}` | suspended artists | moderators |
+| `plus/{uid}` | `{ on, until }`: Fletora Plus (public, for the Plus mark and the rules) | `api/stripe-webhook` only |
+| `billing/{uid}` | Stripe customer, subscription, plan, renewal date (read by that user) | `api/stripe-webhook` only |
+| `stats/{bookId}` | view counts by source (explore, profile, home, link, embed) and saves (read by the owner) | anyone, one view at a time |
 | Storage `users/{uid}/…` | page images, covers, avatars (images under 10 MB) | that user |
 
 Everything is publicly readable so Explore and artist profiles work signed out. Email
@@ -116,7 +119,7 @@ the app falls back to Firebase's plain emails.
 ## Handwriting to text (Claude)
 
 The page editor's **Write** mode sends the handwriting to `api/handwriting.ts`, which reads it with
-Claude (Haiku 5.5) and returns the text. Signed-in users only, 60 conversions per person per hour.
+Claude (Haiku 5.5) and returns the text. Signed-in users only, 20 conversions per person a month (500 with Plus).
 
 1. console.anthropic.com → API keys → create one → Vercel env var `ANTHROPIC_API_KEY`.
 2. It also uses `FIREBASE_SERVICE_ACCOUNT` (already set for the branded emails).
@@ -136,3 +139,32 @@ Direct messages live in `chats/{a}_{b}` (and `chats/…/messages`), with a daily
 **UK Online Safety Act:** private messaging makes Fletora a user-to-user service. Keep a short written risk
 assessment (what could go wrong in messages, e.g. harassment, spam, contact with under-18s; and what's in place:
 requests, blocking, reporting, rate limits, suspension), review it yearly, and act on reports promptly.
+
+## Fletora Plus (Stripe)
+
+Plus is a subscription (£7 a month or £60 a year) sold through Stripe **Managed Payments**: Stripe is the
+merchant of record, so it charges VAT/sales tax, handles fraud and disputes, and sends receipts.
+What's free and what's Plus is in `src/plus.ts` (keep its prices in step with Stripe).
+
+- `api/billing.ts`: starts a checkout, opens the billing portal (change plan, card, cancel), and cancels the
+  subscription when someone deletes their account.
+- `api/stripe-webhook.ts`: the only place Plus is switched on or off. It writes `plus/{uid}` and `billing/{uid}`,
+  and makes link-only sketchbooks private again when Plus ends.
+
+Setup (do it all in the **sandbox** first, then repeat in the live account):
+
+1. Product catalogue → Add product → name it exactly **Fletora Plus**, with two recurring prices: £7.00 monthly
+   and £60.00 yearly. Under each price's tax settings choose **Inclusive** (UK prices are shown with VAT).
+2. Developers → API keys → Secret key → Vercel env var `STRIPE_SECRET_KEY`.
+3. Developers → Webhooks → Add endpoint → `https://fletora.studio/api/stripe-webhook`, with the events
+   `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`,
+   `customer.subscription.deleted`. Copy its signing secret → Vercel env var `STRIPE_WEBHOOK_SECRET`.
+4. Settings → Billing → Customer portal → turn on cancelling and switching between the two prices, then Save.
+5. Redeploy, and publish the rules (`npm run deploy:rules`): page limits, link-only sketchbooks, stats and
+   the pinned sketchbook are enforced there.
+6. Test with card `4242 4242 4242 4242`, any future date and any CVC.
+
+Going live: switch Stripe to the live account, create the same product and prices (Stripe can copy them from the
+sandbox), add the live webhook, and replace the two Vercel env vars with the live key and live signing secret.
+Optional: `STRIPE_PRODUCT_NAME` if the product is named something other than "Fletora Plus".
+

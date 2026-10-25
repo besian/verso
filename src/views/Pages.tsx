@@ -3,13 +3,14 @@ import type { V } from '../App';
 import { hover } from '../pseudo';
 import { INK, MARK, MUTED, PAPER, SANS, label, pagePad, serif } from '../theme';
 import { Notice, TextField } from './Overlays';
+import { BOOKS_FREE, INK_FREE, PAGES_FREE, PRICE } from '../plus';
 
 const screen: CSSProperties = { position: 'absolute', inset: '0 0 var(--tabbar, 0px) 0', zIndex: 4, background: PAPER, overflowX: 'hidden', overflowY: 'auto' };
 const hoverText = hover(`color:${MARK}`);
 const hoverLine = hover(`color:${MARK};border-color:${MARK}`);
 const underline = (fs = 14): CSSProperties => ({ padding: '4px 0', border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', color: INK, font: `500 ${fs}px ${SANS}`, cursor: 'pointer' });
 const contact = import.meta.env.VITE_CONTACT_EMAIL;
-const UPDATED = '24 October 2026';
+const UPDATED = '25 October 2026';
 
 function Page({ v, kicker, title, children }: { v: V; kicker: string; title: ReactNode; children: ReactNode }) {
   const mob = !v.notMob;
@@ -51,17 +52,19 @@ function Privacy() {
           <><b>Your sketchbooks:</b> page images, drawings and typed text you add, covers, captions, dates, mediums and tags. Public sketchbooks can be seen by anyone; private ones only by you and anyone you’ve shared that sketchbook with.</>,
           <><b>Messages:</b> the messages you send and receive, so the two people in a conversation can read them. Nobody else can, including us, unless a message is reported: then its text is sent to our moderators with the report. If you delete your account, messages you sent stay in the other person’s conversation.</>,
           <><b>Activity:</b> who you follow, which sketchbooks you like and save, who you block, your notifications, the reports you file, and a daily count of new conversations you start (to prevent spam). Follows and likes are visible to others; saved sketchbooks, blocks and reports are private.</>,
+          <><b>Stats:</b> how many times each sketchbook is viewed and saved, and which part of the site views came from (Explore, a profile, a shared link…). These are counts only, not who viewed it, and only the sketchbook’s owner can see them.</>,
+          <><b>Fletora Plus:</b> if you subscribe, Stripe collects your payment details and billing address; we never see your full card number. We keep whether you have Plus, your plan, when it renews and your Stripe customer reference. Whether an account has Plus is public (it shows a Plus mark).</>,
           <><b>On your device:</b> small settings such as light or dark theme, page sounds and which tips you’ve seen, kept in your browser’s storage. If analytics is turned on, Google Analytics for Firebase also records anonymous usage such as pages viewed, device type and approximate location.</>,
         ]} />
       </Sec>
       <Sec title="Why we use it">
-        <P>To run your account and show your work (our agreement with you when you sign up); to keep fletora. safe, prevent spam and act on reports (our legitimate interest in a safe community); and, only if it’s turned on, anonymous analytics to improve the site.</P>
+        <P>To run your account and show your work, and to provide Plus if you subscribe (our agreement with you); to keep fletora. safe, prevent spam and act on reports (our legitimate interest in a safe community); and, only if it’s turned on, anonymous analytics to improve the site.</P>
       </Sec>
       <Sec title="Who processes it">
-        <P>Data is stored with Google Firebase (Authentication, Cloud Firestore and Cloud Storage), and the site is served by Vercel. Account emails (confirming your address, resetting your password) are sent through Resend, which receives your email address for that purpose; replies to them reach our inbox on Google Workspace. When you use Write to convert handwriting, an image of just that handwriting is sent to Anthropic’s Claude to read it; it isn’t used to train their models. These services may store data outside the UK, including in the United States, under their own terms, privacy policies and data protection safeguards. We don’t sell your data or use it for advertising.</P>
+        <P>Data is stored with Google Firebase (Authentication, Cloud Firestore and Cloud Storage), and the site is served by Vercel. Account emails (confirming your address, resetting your password) are sent through Resend, which receives your email address for that purpose; replies to them reach our inbox on Google Workspace. When you use Write to convert handwriting, an image of just that handwriting is sent to Anthropic’s Claude to read it; it isn’t used to train their models. Payments for Plus are handled by Stripe, which sells the subscription to you as merchant of record and processes your payment details under its own privacy policy. These services may store data outside the UK, including in the United States, under their own terms, privacy policies and data protection safeguards. We don’t sell your data or use it for advertising.</P>
       </Sec>
       <Sec title="How long we keep it">
-        <P>For as long as you have an account. When you delete your account, your profile, handle, follows, saved list, notifications and every sketchbook with its images are removed straight away; any copies our providers keep for a short time are deleted under their own retention rules. Reports are kept until they’re dealt with.</P>
+        <P>For as long as you have an account. When you delete your account, your profile, handle, follows, saved list, notifications and every sketchbook with its images are removed straight away; any copies our providers keep for a short time are deleted under their own retention rules. Reports are kept until they’re dealt with. Stripe keeps records of payments for as long as tax law requires.</P>
       </Sec>
       <Sec title="Your choices and rights">
         <Ul items={[
@@ -112,6 +115,17 @@ function Terms() {
       </Sec>
       <Sec title="The service">
         <P>fletora. is provided as is, without warranties. Converting handwriting is automatic and can get words wrong, so check it before saving. We may change or stop features, and we aren’t liable for lost content or indirect losses to the extent the law allows. Keep your own copies of your work.</P>
+      </Sec>
+      <Sec title="Fletora Plus">
+        <P>Plus is an optional subscription that adds features to your account, at {PRICE.month} a month or {PRICE.year} a year. It’s sold to you by Stripe as merchant of record: Stripe takes the payment, charges any VAT or sales tax that applies, and sends your receipts, and its terms apply to the purchase.</P>
+        <Ul items={[
+          'Plus renews automatically at the end of each month or year until you cancel. Cancel anytime from Account settings → Manage billing; you keep Plus until the end of the period you’ve paid for and aren’t charged again.',
+          <>If you’re in the UK or EU, you can cancel within 14 days of first subscribing for a refund, less a fair amount for the days you’ve already had Plus. To ask, <Contact />.</>,
+          'If a payment fails, Plus stays on for a few days while it’s retried, then ends.',
+          `When Plus ends, nothing you’ve made is deleted. Link-only sketchbooks become private, stats and your pinned sketchbook are hidden again, and the free plan’s limits apply to anything new (${BOOKS_FREE} sketchbooks, ${PAGES_FREE} pages each, ${INK_FREE} handwriting conversions a month).`,
+          'If the price changes, we’ll tell you at least 30 days before it applies to you, so you can cancel first.',
+          'Deleting your account cancels Plus straight away.',
+        ]} />
       </Sec>
       <Sec title="Leaving">
         <P>You can delete your account at any time from Account settings. We may close accounts that break these terms.</P>

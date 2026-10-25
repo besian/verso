@@ -1,5 +1,6 @@
 // Handwriting → typed text on a page. Strokes and text boxes live in frame fractions (0–1 of the
 // editor frame's width and height), so the preview and the saved 1600px page line up exactly.
+import { INK_FREE } from './plus';
 
 /** One pen stroke: x0, y0, x1, y1, … as fractions of the frame. */
 export type Stroke = number[];
@@ -79,7 +80,9 @@ export function textFromInk(strokes: Stroke[], text: string): PageText {
 export async function readInk(png: string, token: string): Promise<string> {
   const r = await fetch('/api/handwriting', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token }, body: JSON.stringify({ image: png }) }).catch(() => null);
   const body = r && await r.json().catch(() => null) as { text?: string; error?: string } | null;
-  if (!r || !r.ok || !body) throw new Error(body?.error === 'not-configured' ? 'Handwriting isn’t set up yet.' : r?.status === 401 ? 'Sign in to convert handwriting.' : r?.status === 429 ? 'That’s a lot of conversions, try again a bit later.' : 'Couldn’t read that, try again.');
+  // The free plan's monthly allowance is used up: the editor offers Plus (code 'ink-limit').
+  if (body?.error === 'limit-free') throw Object.assign(new Error(`You’ve used this month’s ${INK_FREE} conversions.`), { code: 'ink-limit' });
+  if (!r || !r.ok || !body) throw new Error(body?.error === 'not-configured' ? 'Handwriting isn’t set up yet.' : r?.status === 401 ? 'Sign in to convert handwriting.' : r?.status === 429 ? 'You’ve used this month’s conversions. They start again next month.' : 'Couldn’t read that, try again.');
   if (!body.text?.trim()) throw new Error('Couldn’t make out any words, try writing a little larger.');
   return body.text.trim();
 }

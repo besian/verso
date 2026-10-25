@@ -76,6 +76,11 @@ export function errMsg(e: unknown): string {
     'auth/invalid-action-code': 'This link has expired or has already been used.',
     'auth/expired-action-code': 'This link has expired. Ask for a new one below.',
     'verify-wait': 'We just sent one. Firebase allows one email a minute, so try again shortly.',
+    'billing/not-configured': 'Payments aren’t set up yet.',
+    'billing/no-price': 'Payments aren’t set up yet.',
+    'billing/already-plus': 'You already have Plus.',
+    'billing/stripe-failed': 'Couldn’t reach the payment page. Try again in a moment.',
+    'billing/failed': 'Couldn’t reach the payment page. Check your connection.',
   };
   return msgs[code] || 'Something went wrong. Please try again.';
 }
@@ -117,7 +122,7 @@ type PublicProfile = Omit<Account, 'uid' | 'email'>;
 
 const profileOf = (d: DocumentData): PublicProfile => ({
   name: d.name || '', handle: d.handle || '', bio: d.bio || '', loc: d.loc || '', web: d.web || '', ig: d.ig || '', mail: d.mail || '', socials: { ...(d.ig ? { instagram: d.ig } : {}), ...(d.socials || {}) },
-  accent: d.accent || '#C9C3B4', av: d.av || null, joined: d.joined || Date.now(),
+  accent: d.accent || '#C9C3B4', av: d.av || null, joined: d.joined || Date.now(), ...(d.pin ? { pin: d.pin } : {}),
 });
 
 export async function getProfile(uid: string): Promise<PublicProfile | null> {
@@ -161,7 +166,8 @@ export async function saveProfile(acct: Account, next: PublicProfile): Promise<A
   const { db: d } = need();
   let av = next.av;
   if (av?.startsWith('data:')) av = await upload(`users/${acct.uid}/avatar-${Date.now()}.jpg`, av);
-  const p = { ...next, av };
+  // The pinned sketchbook isn't on the edit form, so it's carried over.
+  const p = { ...next, av, ...(acct.pin ? { pin: acct.pin } : {}) };
   await writeProfile(acct.uid, p, acct.handle);
   if (acct.av && acct.av !== av) removeFiles([acct.av]);
   if (p.name !== acct.name || p.handle !== acct.handle) {
@@ -182,6 +188,8 @@ export interface BookDoc {
   createdAt: number; updatedAt: number;
   /** Private books are visible only to their owner. Books saved before this field existed count as public. */
   isPublic: boolean; legacy: boolean;
+  /** Plus: private, but opens for anyone with the link. */
+  linkOnly: boolean;
   /** Small (≈480px) versions: `thumbs[i]` belongs to `pages[i]` ('' when missing). */
   thumbs: string[]; coverThumb: string | null;
   /** Margin notes per page, aligned with `pages` like thumbs. */
@@ -195,7 +203,7 @@ const member = (d: DocumentData, k: 'collab' | 'invite'): Member | null => d[k] 
 const bookDoc = (id: string, d: DocumentData): BookDoc => ({
   id, ownerId: d.ownerId, ownerName: d.ownerName || '', ownerHandle: d.ownerHandle || '', name: d.name || 'sketchbook',
   color: d.color || '#b8243a', shape: d.shape || 'portrait', cover: d.cover || null, pages: d.pages || [], pageCount: d.pageCount || 0,
-  createdAt: d.createdAt || 0, updatedAt: d.updatedAt || 0, isPublic: d.isPublic !== false, legacy: d.isPublic === undefined,
+  createdAt: d.createdAt || 0, updatedAt: d.updatedAt || 0, isPublic: d.isPublic !== false, legacy: d.isPublic === undefined, linkOnly: d.linkOnly === true,
   thumbs: d.thumbs || [], coverThumb: d.coverThumb || null,
   captions: d.captions || [], dates: d.dates || [], mediums: d.mediums || [], tags: d.tags || [], hidden: d.hidden === true,
   collab: member(d, 'collab'), invite: member(d, 'invite'),
@@ -214,7 +222,7 @@ export const noteMap = (b: BookDoc): Record<string, PageNote> => {
 };
 /** A book as the signed-in user's own: they own it, or draw in it with its owner. */
 export const toBook = (b: BookDoc, me?: string): Book => ({
-  id: b.id, name: b.name, color: b.color, shape: b.shape, coverImg: b.cover, images: b.pages, createdAt: b.createdAt, isPublic: b.isPublic,
+  id: b.id, name: b.name, color: b.color, shape: b.shape, coverImg: b.cover, images: b.pages, createdAt: b.createdAt, isPublic: b.isPublic, linkOnly: b.linkOnly,
   thumbs: thumbMap(b), notes: noteMap(b), mediums: b.mediums, tags: b.tags, hidden: b.hidden,
   role: me && b.ownerId !== me ? 'collab' : 'owner', owner: { uid: b.ownerId, name: b.ownerName, handle: b.ownerHandle }, collab: b.collab, invite: b.invite,
 });
@@ -304,6 +312,7 @@ export async function writeBook(owner: Account, b: Book) {
     ownerId: owner.uid, ownerName: owner.name, ownerHandle: owner.handle,
     name: b.name, color: b.color, shape: b.shape || 'portrait', cover,
     pages, pageCount: pages.length, createdAt: b.createdAt || Date.now(), updatedAt: Date.now(), isPublic: !b.hidden && b.isPublic !== false,
+    linkOnly: !b.hidden && b.isPublic === false && !!b.linkOnly,
     thumbs: pages.map(u => t[u] || ''), coverThumb: (cover && t[cover]) || null,
     captions: pages.map(u => (n[u]?.c || '').slice(0, 140)), dates: pages.map(u => n[u]?.d || ''),
     // `labels` lets Explore filter by medium or tag with a single array-contains query.
@@ -537,9 +546,13 @@ export async function savedBooks(uid: string): Promise<Saved[]> {
   const s = await getDocs(collection(need().db, 'users', uid, 'saved'));
   return s.docs.map(d => ({ ...(d.data() as Omit<Saved, 'id'>), id: d.id })).sort((a, b) => b.at - a.at);
 }
+/** Saves or unsaves a sketchbook, counting it in the book's stats in the same write. */
 export async function setSaved(uid: string, b: Saved, on: boolean) {
-  const r = doc(need().db, 'users', uid, 'saved', b.id);
-  if (on) { const { id: _id, ...rest } = b; await setDoc(r, rest); } else await deleteDoc(r);
+  const { db: d } = need(), r = doc(d, 'users', uid, 'saved', b.id), batch = writeBatch(d);
+  if (on) { const { id: _id, ...rest } = b; batch.set(r, rest); } else batch.delete(r);
+  batch.set(doc(d, 'stats', b.id), { saves: increment(on ? 1 : -1) }, { merge: true });
+  // Saved before stats existed, an unsave would take the count below zero; then just remove the entry.
+  await batch.commit().catch(e => { if (on || (e as { code?: string }).code !== 'permission-denied') throw e; return deleteDoc(r); });
 }
 
 /** Moves a saved sketchbook into a collection ('' takes it out of one). */
@@ -570,6 +583,41 @@ export async function report(by: string, r: { kind: 'book' | 'user' | 'message';
       .catch(() => {}); // the report is saved either way and still shows on the admin page
   }
 }
+
+// ---------- Fletora Plus ----------
+
+/** Plan details from billing/{uid} (written by the server when Stripe reports a change). */
+export interface Billing { status: string; interval: string; periodEnd: number; renews: boolean }
+/** Whether a plus/{uid} document means Plus is on now. */
+export const plusOn = (d: DocumentData | null) => !!d && d.on === true && (d.until || 0) > Date.now();
+export async function isPlus(uid: string): Promise<boolean> {
+  try { return plusOn((await getDoc(doc(need().db, 'plus', uid))).data() || null); } catch { return false; }
+}
+
+/** Calls api/billing; returns the Stripe page to go to (checkout or the billing portal). */
+async function billing(action: 'checkout' | 'portal' | 'close', plan?: 'month' | 'year'): Promise<string> {
+  const u = need().auth.currentUser; if (!u) throw Object.assign(new Error('signed out'), { code: 'auth/no-current-user' });
+  const r = await fetch('/api/billing', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + await u.getIdToken() }, body: JSON.stringify({ action, plan }) }).catch(() => null);
+  const body = r && await r.json().catch(() => null) as { url?: string; error?: string } | null;
+  if (!r || !r.ok) throw Object.assign(new Error(body?.error || 'billing'), { code: 'billing/' + (body?.error || 'failed') });
+  return body?.url || '';
+}
+export const checkout = (plan: 'month' | 'year') => billing('checkout', plan);
+export const billingPortal = () => billing('portal');
+
+/** Where a view came from, for the owner's stats. */
+export type ViewSource = 'explore' | 'profile' | 'home' | 'link' | 'embed';
+export function countView(bookId: string, from: ViewSource) {
+  if (!db) return;
+  setDoc(doc(db, 'stats', bookId), { views: increment(1), [from]: increment(1) }, { merge: true }).catch(() => {});
+}
+export interface Stats { views: number; saves: number; from: Record<ViewSource, number> }
+export async function bookStats(bookId: string): Promise<Stats> {
+  const d = (await getDoc(doc(need().db, 'stats', bookId))).data() || {}, n = (k: string) => Math.max(0, d[k] || 0);
+  return { views: n('views'), saves: n('saves'), from: { explore: n('explore'), profile: n('profile'), home: n('home'), link: n('link'), embed: n('embed') } };
+}
+/** Pins one of your sketchbooks first on your profile ('' unpins). */
+export async function setPin(uid: string, bookId: string) { await updateDoc(doc(need().db, 'users', uid), { pin: bookId }); }
 
 // ---------- moderation ----------
 
@@ -620,14 +668,14 @@ export async function setPick(by: string, bookId: string | null) {
 }
 
 /** Hides a sketchbook from everyone but its owner, or restores it. */
-export async function setHidden(bookId: string, on: boolean) { await updateDoc(doc(need().db, 'books', bookId), { hidden: on, isPublic: !on }); }
+export async function setHidden(bookId: string, on: boolean) { await updateDoc(doc(need().db, 'books', bookId), { hidden: on, isPublic: !on, ...(on ? { linkOnly: false } : {}) }); }
 /** Suspends an artist (their public sketchbooks are hidden) or lifts it (books hidden by moderators come back). */
 export async function setBanned(uid: string, on: boolean) {
   const { db: d } = need(), books = await getDocs(query(collection(d, 'books'), where('ownerId', '==', uid))), batch = writeBatch(d);
   if (on) batch.set(doc(d, 'banned', uid), { at: Date.now() }); else batch.delete(doc(d, 'banned', uid));
   books.forEach(b => {
     const x = b.data();
-    if (on && x.isPublic !== false) batch.update(b.ref, { hidden: true, isPublic: false });
+    if (on && (x.isPublic !== false || x.linkOnly)) batch.update(b.ref, { hidden: true, isPublic: false, linkOnly: false });
     if (!on && x.hidden === true) batch.update(b.ref, { hidden: false, isPublic: true });
   });
   await batch.commit();
@@ -722,9 +770,11 @@ async function removeFolder(path: string) {
   await Promise.all([...r.items.map(i => deleteObject(i).catch(() => {})), ...r.prefixes.map(p => removeFolder(p.fullPath))]);
 }
 
-/** Deletes everything the user owns (books, images, follows, handle, profile), then the account itself. */
-export async function deleteAccount(pw: string, acct: Account) {
+/** Deletes everything the user owns (books, images, follows, handle, profile), then the account itself.
+ *  A Plus subscription is cancelled first, so nothing is charged after the account is gone. */
+export async function deleteAccount(pw: string, acct: Account, subscribed = false) {
   const u = await reauth(pw), { db: d } = need();
+  if (subscribed) await billing('close');
   const books = await getDocs(query(collection(d, 'books'), where('ownerId', '==', acct.uid)));
   // Leave sketchbooks shared with this account, and turn down open invitations.
   const [shared, invited] = await Promise.all([getDocs(query(collection(d, 'books'), where('collab', '==', acct.uid))), getDocs(query(collection(d, 'books'), where('invite', '==', acct.uid)))]);

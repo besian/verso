@@ -16,9 +16,9 @@ const hoverTint = hover('background:rgba(var(--ink-rgb),.1)');
 const linkBtn = (color: string): CSSProperties => ({ background: 'none', border: 'none', color, font: `500 13px ${SANS}`, cursor: 'pointer', padding: 0 });
 const heading: CSSProperties = { fontSize: 38, fontFamily: SERIF, fontWeight: 400, letterSpacing: '-.01em' };
 
-function Modal({ onClose, pad, maxWidth, gap = 18, shadow, children }: { onClose: MouseEventHandler; pad: number; maxWidth: number; gap?: number; shadow?: string; children: ReactNode }) {
+function Modal({ onClose, pad, maxWidth, gap = 18, shadow, z = 20, children }: { onClose: MouseEventHandler; pad: number; maxWidth: number; gap?: number; shadow?: string; z?: number; children: ReactNode }) {
   return (
-    <div onClick={onClose} style={{ position: 'absolute', inset: 0, zIndex: 20, background: 'rgba(var(--canvas-rgb),.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, boxSizing: 'border-box' }}>
+    <div onClick={onClose} style={{ position: 'absolute', inset: 0, zIndex: z, background: 'rgba(var(--canvas-rgb),.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, boxSizing: 'border-box' }}>
       <div style={{ background: PAPER, border: `1px solid ${INK}`, padding: pad, display: 'flex', flexDirection: 'column', gap, maxWidth, width: '100%', boxSizing: 'border-box', maxHeight: '100%', overflow: 'auto', boxShadow: shadow }}>{children}</div>
     </div>
   );
@@ -223,13 +223,23 @@ export function Manager({ v }: { v: V }) {
                       <input ref={v.coverRef} type="file" accept="image/*" onChange={v.onCoverFile} style={{ display: 'none' }} />
                     </div>
                   </Row>
-                  <Row label="Who can see it" note={v.bookHidden ? <span style={{ color: MARK }}>Hidden by moderators for breaking the terms. Only you can see it.</span> : v.bookPublic ? 'Anyone can find it in Explore and on your profile.' : 'Only you can see it.'}>
+                  <Row label="Who can see it" note={v.bookHidden ? <span style={{ color: MARK }}>Hidden by moderators for breaking the terms. Only you can see it.</span> : VIS_NOTE[v.bookVis]}>
                     <div role="radiogroup" aria-label="Who can see this sketchbook" style={{ display: 'flex', gap: 2, padding: 3, border: '1px solid rgba(var(--ink-rgb),.2)', alignSelf: 'flex-start', opacity: v.bookHidden ? 0.45 : 1 }}>
-                      {([[true, 'Public'], [false, 'Private']] as const).map(([on, name]) => (
-                        <button key={name} role="radio" aria-checked={v.bookPublic === on} disabled={v.bookHidden} onClick={() => v.setPublic(on)} style={{ height: 32, padding: '0 16px', border: 'none', borderRadius: 2, background: v.bookPublic === on ? INK : 'transparent', color: v.bookPublic === on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: v.bookHidden ? 'not-allowed' : 'pointer' }}>{name}</button>
+                      {([['public', 'Public'], ['link', 'Link only'], ['private', 'Private']] as const).map(([k, name]) => (
+                        <button key={k} role="radio" aria-checked={v.bookVis === k} disabled={v.bookHidden} onClick={() => v.setVis(k)} style={{ display: 'flex', alignItems: 'center', gap: 6, height: 32, padding: '0 14px', border: 'none', borderRadius: 2, background: v.bookVis === k ? INK : 'transparent', color: v.bookVis === k ? PAPER : INK, font: `500 13px ${SANS}`, cursor: v.bookHidden ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>
+                          {name}{k === 'link' && !v.stPlus && <PlusTag on={v.bookVis === k} />}
+                        </button>
                       ))}
                     </div>
                   </Row>
+                  {v.stOwn && <StatsRow v={v} />}
+                  {v.stOwn && (
+                    <Row label="Pin to your profile" note={v.pinOn ? 'It’s the first sketchbook people see on your profile.' : 'Show this sketchbook first on your profile.'}>
+                      <button onClick={v.togglePin} className={hoverTint} style={{ ...ghostBtn, alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 14px' }}>
+                        {v.pinOn ? 'Unpin' : 'Pin this sketchbook'}{!v.stPlus && <PlusTag />}
+                      </button>
+                    </Row>
+                  )}
                   <Row label="Mediums" note="Pick up to four. People can filter Explore by medium.">
                     <div role="group" aria-label="Mediums" onWheel={wheelSideways} style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 2, maskImage: 'linear-gradient(90deg,#000 calc(100% - 32px),transparent)' } as CSSProperties}>
                       {v.mgMediums.map((m: V) => <button key={m.key} onClick={m.pick} aria-pressed={m.on} className={m.on ? undefined : hover('border-color:rgba(var(--ink-rgb),.6)')} style={chip(m.on)}>{m.label}</button>)}
@@ -256,6 +266,86 @@ export function Manager({ v }: { v: V }) {
       </div>
       {pg && <PageSheet v={v} pg={pg} />}
     </div>
+  );
+}
+
+const VIS_NOTE: Record<string, string> = {
+  public: 'Anyone can find it in Explore and on your profile.',
+  link: 'Hidden from Explore and your profile. Anyone you send the link to can open it.',
+  private: 'Only you can see it.',
+};
+
+/** A small "Plus" label on options that need Fletora Plus. */
+export function PlusTag({ on }: { on?: boolean }) {
+  return <span style={{ padding: '2px 5px', borderRadius: 2, border: `1px solid ${on ? PAPER : MARK}`, color: on ? PAPER : MARK, font: `600 9px/1 ${SANS}`, letterSpacing: '.08em', textTransform: 'uppercase' }}>Plus</span>;
+}
+
+/** Views, likes and saves, and where views came from. Without Plus, the total views and an invitation. */
+function StatsRow({ v }: { v: V }) {
+  if (!v.stReady) return <Row label="Stats"><span style={hint}>Loading…</span></Row>;
+  if (!v.stPlus) return (
+    <Row label="Stats">
+      <span style={{ fontSize: 14, lineHeight: 1.5 }}>{v.stTeaser} See likes, saves and where visitors came from with Plus.</span>
+      <button onClick={v.stUpgrade} className={hoverTint} style={{ ...ghostBtn, alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 14px' }}>See stats <PlusTag /></button>
+    </Row>
+  );
+  return (
+    <Row label="Stats" note="Views are counted once per visit and don’t include your own.">
+      <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap' }}>
+        {v.stTotals.map((t: V) => <span key={t.l} style={{ display: 'flex', flexDirection: 'column' }}><span style={{ font: `400 32px/1 ${SERIF}` }}>{t.n}</span><span style={hint}>{t.l}</span></span>)}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 420 }}>
+        {v.stFrom.map((f: V) => (
+          <div key={f.key} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 40px', alignItems: 'center', gap: 10, fontSize: 13 }}>
+            <span>{f.label}</span>
+            <span style={{ height: 6, background: 'rgba(var(--ink-rgb),.08)', borderRadius: 3, overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', width: `${Math.round(f.share * 100)}%`, background: INK, borderRadius: 3 }} /></span>
+            <span style={{ textAlign: 'right', color: 'rgba(var(--ink-rgb),.7)' }}>{f.n}</span>
+          </div>
+        ))}
+      </div>
+    </Row>
+  );
+}
+
+/** Fletora Plus: what it adds, monthly or yearly, then on to Stripe's checkout. */
+export function PlusModal({ v }: { v: V }) {
+  return (
+    <Modal onClose={e => { if (e.target === e.currentTarget) v.plClose(); }} pad={v.mModalPad} maxWidth={520} gap={20} z={40} shadow="0 30px 60px rgba(10,10,30,.35)">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <span style={{ font: `600 11px ${SANS}`, letterSpacing: '.14em', textTransform: 'uppercase', color: MARK }}>Fletora Plus</span>
+        <span style={{ ...heading, fontSize: v.notMob ? 38 : 32, lineHeight: 1.05 }}>More room for your sketchbooks.</span>
+        {v.plReason && <span style={{ fontSize: 14, color: 'rgba(var(--ink-rgb),.7)' }}>{v.plReason}</span>}
+      </div>
+      <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {v.plPerks.map((pk: V) => (
+          <li key={pk.key} style={{ display: 'flex', gap: 10, fontSize: 14, lineHeight: 1.4 }}>
+            <span aria-hidden="true" style={{ color: MARK, fontWeight: 600 }}>✓</span>
+            <span><b style={{ fontWeight: 600 }}>{pk.title}</b> <span style={{ color: 'rgba(var(--ink-rgb),.6)' }}>{pk.note}</span></span>
+          </li>
+        ))}
+      </ul>
+      {v.plHave ? (
+        <span style={{ fontSize: 14 }}>You have Plus. Thank you for supporting Fletora. Manage it in Settings.</span>
+      ) : (
+        <>
+          <div role="radiogroup" aria-label="Plan" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {v.plPlans.map((pl: V) => {
+              const on = v.plPlan === pl.key;
+              return (
+                <button key={pl.key} role="radio" aria-checked={on} onClick={() => v.plSetPlan(pl.key)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4, padding: '12px 14px', borderRadius: 2, border: `1.5px solid ${on ? INK : 'rgba(var(--ink-rgb),.2)'}`, background: on ? 'rgba(var(--ink-rgb),.05)' : 'none', color: INK, cursor: 'pointer', textAlign: 'left' }}>
+                  <span style={{ font: `500 15px ${SANS}` }}>{pl.label}</span>
+                  <span style={{ fontSize: 13, color: 'rgba(var(--ink-rgb),.65)' }}>{pl.note}</span>
+                </button>
+              );
+            })}
+          </div>
+          <Notice err={v.plErr} />
+          <button onClick={v.plBuy} disabled={v.plBusy} className={v.plBusy ? undefined : hover(`background:${INK}`)} style={{ height: 48, border: 'none', borderRadius: 2, background: MARK, color: PAPER, font: `500 15px ${SANS}`, cursor: v.plBusy ? 'progress' : 'pointer', opacity: v.plBusy ? 0.6 : 1 }}>{v.plBusy ? 'Opening checkout…' : 'Continue to payment'}</button>
+          <span style={{ fontSize: 12, lineHeight: 1.5, color: 'rgba(var(--ink-rgb),.6)' }}>Renews automatically. Cancel anytime in Settings and keep Plus until the end of the period you’ve paid for. Payments are handled by Stripe.</span>
+        </>
+      )}
+      <button onClick={v.plClose} className="tap" style={{ ...linkBtn('rgba(var(--ink-rgb),.75)'), alignSelf: 'center', padding: 4 }}>{v.plHave ? 'Close' : 'Not now'}</button>
+    </Modal>
   );
 }
 

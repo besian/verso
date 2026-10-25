@@ -32,6 +32,8 @@ export interface Book {
   createdAt?: number;
   /** Defaults to public. */
   isPublic?: boolean;
+  /** Plus: not public, but anyone with its link can open it. */
+  linkOnly?: boolean;
   /** Full image URL → thumbnail URL. */
   thumbs?: Record<string, string>;
   /** Page image URL → caption and date written in its margin. */
@@ -78,4 +80,6 @@ export interface Account {
   /** Social links: platform key (see socials.ts) → handle. */
   socials?: Record<string, string>;
   accent: string; av: string | null; joined: number;
+  /** Plus: the sketchbook shown first on the profile. */
+  pin?: string;
 }

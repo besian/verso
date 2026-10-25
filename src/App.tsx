@@ -3,7 +3,8 @@ import type { ChangeEvent, DragEvent, MouseEvent, PointerEvent, WheelEvent } fro
 import { CONFIG, GRID_WIDTH, MAX_MEDIUMS, MAX_TAGS, MEDIUMS, PALETTE, SHAPES, mediumKey, tagSlug } from './data';
 import type { Account, ArchiveEntry, Book, OtherBook, PageNote, Shape, ShapeKey } from './data';
 import * as api from './backend';
-import type { AuthUser, BookDoc, Chat, Msg, Notif, Person, Report, Saved } from './backend';
+import type { AuthUser, Billing, BookDoc, Chat, Msg, Notif, Person, Report, Saved, Stats, ViewSource } from './backend';
+import { BOOKS_FREE, PAGES_FREE, PAGES_PLUS, PERKS, PRICE, REASONS, YEAR_SAVING } from './plus';
 import * as store from './storage';
 import * as sound from './sound';
 import * as themeMode from './themeMode';
@@ -25,7 +26,7 @@ import Stage from './views/Stage';
 import { AuthPage, Explore, HomeScreen, Profile, Settings } from './views/Screens';
 import { Admin, AuthAction, Legal, NotFound } from './views/Pages';
 import { Messages } from './views/Messages';
-import { ArchiveModal, CollectionModal, Editor, EditProfile, EmbedModal, Manager, NewBookPicker, ReportModal, Toast, Welcome } from './views/Overlays';
+import { ArchiveModal, CollectionModal, Editor, EditProfile, EmbedModal, Manager, NewBookPicker, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
 
 export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound' | 'action' | 'messages';
 /** A report with what it points at, for the moderation page. */
@@ -58,7 +59,12 @@ interface State {
   acct: Account | null; follows: string[];
   books: Book[]; active: number; images: string[];
   other?: AnyBook | null; profileOf?: Who | null; pfPreview?: boolean;
-  pf?: { uid: string; profile: PublicProfile | null; books: OtherBook[] } | null;
+  pf?: { uid: string; profile: PublicProfile | null; books: OtherBook[]; plus?: boolean } | null;
+  /** Fletora Plus: whether you have it (undefined until known), your plan details, and the upgrade sheet
+   *  (open when plusFor isn't null; its value says why it opened, see REASONS). */
+  plus?: boolean; bill?: Billing | null; plusFor?: string | null; plusPlan?: 'month' | 'year'; plusBusy?: boolean; plusErr?: string;
+  /** The open sketchbook's stats on the edit screen. */
+  stats?: { id: string; s: Stats } | null;
   acErr?: string; acInfo?: string; acBusy?: string; verified?: boolean;
   ac?: { email?: string; pwEmail?: string; pwOld?: string; pwNew?: string; delHandle?: string; pwDel?: string };
   community?: OtherBook[]; people?: Person[];
@@ -210,7 +216,7 @@ export default class App extends Component<object, State> {
   async loadUser(u: AuthUser | null, acct?: Account) {
     if (!u) {
       this.synced.clear(); this.dirty.clear();
-      return this.setState({ acct: null, follows: [], saved: [], blocked: [], followFeed: [], followPeople: [], books: [localBook()], active: 0, images: [], p: 0, authReady: true, admin: false });
+      return this.setState({ acct: null, follows: [], saved: [], blocked: [], followFeed: [], followPeople: [], books: [localBook()], active: 0, images: [], p: 0, authReady: true, admin: false, plus: undefined, bill: null });
     }
     try {
       const a = acct || await api.ensureProfile(u);
@@ -386,7 +392,10 @@ export default class App extends Component<object, State> {
   componentDidUpdate(_: object, prev: State) {
     const s = this.state;
     // The edit screen works on a draft: it's saved with Save, and closing it any other way puts the book back.
-    if (!prev.managing && s.managing) { const b = s.books[s.active]; this.mgSnap = b; this.mgHold = b?.id ?? null; this.setState({ mgTab: 'pages', mgPage: null }); }
+    if (!prev.managing && s.managing) {
+      const b = s.books[s.active]; this.mgSnap = b; this.mgHold = b?.id ?? null; this.setState({ mgTab: 'pages', mgPage: null });
+      if (b && s.acct && b.role !== 'collab' && !b.id.startsWith('local')) api.bookStats(b.id).then(st => this.setState({ stats: { id: b.id, s: st } })).catch(() => {});
+    }
     if (prev.managing && !s.managing && this.mgHold) this.revertEdits();
     this.syncWatches();
     // The first route is applied once we know who's signed in; after that the URL follows the screen.
@@ -425,6 +434,12 @@ export default class App extends Component<object, State> {
     if (me) want.set('nt:' + me, () => api.watchNotifications(me, notifs => this.setState({ notifs })));
     if (me) want.set('iv:' + me, () => api.watchInvites(me, invites => this.setState({ invites })));
     if (me) want.set('ch:' + me, () => api.watchChats(me, chats => this.setState({ chats })));
+    if (me) want.set('pl:' + me, () => api.watch(['plus', me], d => {
+      const on = api.plusOn(d);
+      // Without Plus, link-only sketchbooks are private again (the server changes the stored ones).
+      this.setState(st => ({ plus: on, books: on ? st.books : st.books.map(b => b.linkOnly ? { ...b, linkOnly: false } : b) }));
+    }));
+    if (me) want.set('bl:' + me, () => api.watch(['billing', me], d => this.setState({ bill: d ? { status: d.status || '', interval: d.interval || '', periodEnd: d.periodEnd || 0, renews: !!d.renews } : null })));
     const openChat = s.mode === 'messages' && s.chatOpen && (s.chats || []).some(c => c.id === s.chatOpen) ? s.chatOpen : null;
     if (me && openChat) want.set('msg:' + openChat, () => api.watchMessages(openChat, msgs => this.setState({ msgs })));
     if (me && openChat) this.markSeen(openChat);
@@ -458,7 +473,22 @@ export default class App extends Component<object, State> {
   };
 
   // ---------- navigation ----------
-  openOtherBook(b: OtherBook) { cancelAnimationFrame(this.raf); this.target = 0; this.setState({ mode: 'other', other: b, images: b.images, p: 0, focus: false, fz: 0 }); }
+  openOtherBook(b: OtherBook, from?: ViewSource) {
+    cancelAnimationFrame(this.raf); this.target = 0;
+    // One view per sketchbook per visit for its owner's stats, with where it was opened from.
+    const s = this.state;
+    if (b.ownerId !== s.acct?.uid && !this.viewed.has(b.id)) {
+      this.viewed.add(b.id);
+      api.countView(b.id, from || (this.applying ? 'link' : s.mode === 'explore' ? 'explore' : s.mode === 'profile' ? 'profile' : s.mode === 'home' ? 'home' : 'link'));
+    }
+    this.setState({ mode: 'other', other: b, images: b.images, p: 0, focus: false, fz: 0 });
+  }
+  viewed = new Set<string>();
+  /** Opens the Fletora Plus sheet, saying why (a key of REASONS, or '' for none). */
+  openPlus = (why = '') => this.setState({ plusFor: why, plusErr: '', more: null });
+  /** Room left in the open sketchbook for new pages. Someone else's plan decides for a shared one (the rules check it). */
+  pageRoom() { const s = this.state, b = s.books[s.active]; return b?.role === 'collab' ? Infinity : (s.plus ? PAGES_PLUS : PAGES_FREE) - s.images.length; }
+  pagesFull() { if (this.state.plus) this.toast(`A sketchbook holds up to ${PAGES_PLUS} pages. Start a new one for more.`); else this.openPlus('pages'); }
   goMode(mode: Mode) {
     cancelAnimationFrame(this.raf); this.target = 0;
     if (mode === 'explore' || mode === 'home') { this.loadCommunity(); if (this.state.exLabel) this.setState({ exLabel: '', exLabelBooks: undefined }); }
@@ -524,7 +554,7 @@ export default class App extends Component<object, State> {
       if (a === 'embed' && b) {
         const d = await api.getBook(b);
         if (!d) return this.notFound('sketchbook');
-        this.setState({ embed: true }); return this.openOtherBook(toOther(d, 0));
+        this.setState({ embed: true }); return this.openOtherBook(toOther(d, 0), 'embed');
       }
       if (a === 'archive' && b) {
         const list = await api.listArchive(), hit = list.find(x => x.e.bookId === b);
@@ -533,7 +563,13 @@ export default class App extends Component<object, State> {
       }
       if (a === 'admin') return s.acct ? this.openAdmin() : this.openAuth('signin');
       if (a === 'signin' || a === 'join' || a === 'reset') { if (s.acct) return this.goMode('mine'); this.openAuth(a === 'join' ? 'join' : 'signin'); if (a === 'reset') this.setState({ suMode: 'reset' }); return; }
-      if (a === 'settings') return s.acct ? this.openSettings() : this.openAuth('signin');
+      if (a === 'settings') {
+        if (!s.acct) return this.openAuth('signin');
+        // Back from Stripe's checkout. Plus switches on as soon as Stripe tells us (usually a few seconds).
+        if (new URLSearchParams(location.search).get('plus') === 'welcome') this.toast('Welcome to Fletora Plus');
+        return this.openSettings();
+      }
+      if (a === 'plus') { if (!s.acct) return this.openAuth('join'); this.openSettings(); return this.openPlus(); }
       if (a === 'messages') return s.acct ? this.openMessages(b || null) : this.openAuth('signin');
       if (a === 'sketchbooks') {
         if (!s.acct) return this.openAuth('signin');
@@ -605,12 +641,16 @@ export default class App extends Component<object, State> {
     cancelAnimationFrame(this.raf); cancelAnimationFrame(this.exRaf); this.target = 0;
     this.setState(s => ({ mode: 'profile', profileOf: who, pf: null, pfPreview: false, other: null, acErr: '', acInfo: '', images: s.books[s.active].images, p: 0, focus: false, fz: 0, managing: false }));
     const uid = who?.uid;
-    if (uid) Promise.all([api.getProfile(uid), api.userBooks(uid, true)]).then(([profile, docs]) => {
-      if (this.state.profileOf?.uid === uid) this.setState({ pf: { uid, profile, books: docs.filter(b => b.pageCount > 0).map(toOther) } });
+    if (uid) Promise.all([api.getProfile(uid), api.userBooks(uid, true), api.isPlus(uid)]).then(([profile, docs, plus]) => {
+      if (this.state.profileOf?.uid === uid) this.setState({ pf: { uid, profile, books: docs.filter(b => b.pageCount > 0).map(toOther), plus } });
     }).catch(e => console.error(e));
   }
   whoOf(b: OtherBook): Who { return { name: b.artist, uid: b.ownerId, handle: b.handle }; }
-  openNewPick = () => this.setState({ newPick: true, pickShape: this.state.pickShape || 'portrait' });
+  openNewPick = () => {
+    const s = this.state, own = s.books.filter(b => b.role !== 'collab' && !b.id.startsWith('local')).length;
+    if (s.acct && s.plus === false && own >= BOOKS_FREE) return this.openPlus('books');
+    this.setState({ newPick: true, pickShape: s.pickShape || 'portrait' });
+  };
 
   // ---------- books ----------
   /** Queues changed books for upload + save. Signed-out books are never saved. */
@@ -729,7 +769,8 @@ export default class App extends Component<object, State> {
       b = this.findBook(id); if (!b) return;
       if (bookUrls(b).some(isData)) return; // newer images arrived meanwhile; their own sync follows
     }
-    b = { ...b, thumbs: pruneThumbs(b) };
+    // Link-only needs Plus: once it's known to have ended, the book is saved as private.
+    b = { ...b, thumbs: pruneThumbs(b), linkOnly: !!b.linkOnly && this.state.plus !== false };
     await api.writeBook(this.state.acct || acct, b);
     const now = bookUrls(b), before = this.synced.get(id) || [];
     api.removeFiles(before.filter(u => !now.includes(u)));
@@ -780,12 +821,16 @@ export default class App extends Component<object, State> {
   addFiles(files: FileList | File[]) {
     if (this.state.other || (this.state.mode || 'home') !== 'mine') return;
     const list = [...files].filter(f => f.type.startsWith('image/')).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-    Promise.all(list.map(f => new Promise<string>(r => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(f); })))
+    const room = this.pageRoom();
+    if (list.length && room <= 0) return this.pagesFull();
+    if (list.length > room) this.toast(`Only the first ${room} fit in this sketchbook`);
+    Promise.all(list.slice(0, room).map(f => new Promise<string>(r => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(f); })))
       .then(urls => { if (urls.length) this.startEdit(urls, null); });
   }
   /** A new blank page (plain, lined, grid or dotted), opened straight in Write mode. */
   addBlank(paper: Paper) {
     if (this.state.other || (this.state.mode || 'home') !== 'mine') return;
+    if (this.pageRoom() <= 0) return this.pagesFull();
     this.startEdit([paperUrl(paper, this.aspect())], null, undefined, 'pick'); this.setEd({ paper });
   }
   /** Data URLs are converted to blob URLs once so CSS backgrounds don't carry megabytes of inline data. */
@@ -1012,7 +1057,8 @@ export default class App extends Component<object, State> {
       const old = images[e.replaceIdx], notes = this.state.books[this.state.active].notes;
       if (notes?.[old]) patch = { notes: { ...notes, [url]: notes[old] } };
       images[e.replaceIdx] = url;
-    } else images.push(url);
+    } else if (this.pageRoom() <= 0) { this.setState({ edit: null }); return this.pagesFull(); }
+    else images.push(url);
     this.setImages(images, patch); this.nextEdit();
   }
   nextEdit() {
@@ -1042,7 +1088,10 @@ export default class App extends Component<object, State> {
       const b = this.padBox(e, { fw, fh }), rowY = endY + lineStep * 0.8 - b.h * 0.75;
       const box = e.pad ? (endX + b.w * 0.5 > 0.97 ? { x: 0.06, y: rowY + (e.paper === 'lined' ? RULED.step : b.h * 0.8) } : { x: endX, y: rowY }) : e.box;
       this.setState(s => s.edit ? { edit: { ...s.edit, inkBusy: false, ink: s.edit.ink.slice(ink.length), texts: [...s.edit.texts, t], sel: e.pad ? null : t.id, box } } : null);
-    } catch (err) { this.setEd({ inkBusy: false, inkErr: (err as Error).message }); }
+    } catch (err) {
+      this.setEd({ inkBusy: false, inkErr: (err as Error).message });
+      if ((err as { code?: string }).code === 'ink-limit') this.openPlus('ink');
+    }
   }
   setText(id: string, patch: Partial<PageText>) { this.setState(s => s.edit ? { edit: { ...s.edit, texts: s.edit.texts.map(t => t.id === id ? { ...t, ...patch } : t) } } : null); }
 
@@ -1097,10 +1146,13 @@ export default class App extends Component<object, State> {
 
   profileVals(): V {
     const s = this.state, vw = s.vw, mob = vw < 640, mine = !s.profileOf, pv = mine && !!s.pfPreview, a = (s.acct || {}) as Partial<Account>, follows = s.follows || [];
+    // Plus: the pinned sketchbook comes first on the profile.
+    const pin = mine ? (s.plus ? a.pin : '') : s.pf?.uid === s.profileOf?.uid && s.pf?.plus ? s.pf?.profile?.pin : '';
     const card = (b: AnyBook, bg: string, showLabel: boolean, pages: number, open: () => void) => ({
       key: b.id, name: b.name, color: b.color, bg, showLabel, a: this.shapeOf(b).a, s: this.shapeOf(b).s,
-      count: `${pages} ${pages === 1 ? 'page' : 'pages'} · ${(b as Book).role === 'collab' ? 'With ' + (b as Book).owner?.name : (b as Book).collab ? 'With ' + (b as Book).collab!.name : this.shapeOf(b).label || 'Portrait'}${(b as Book).isPublic === false ? ' · Private' : ''}`, open,
+      count: `${pin && b.id === pin ? 'Pinned · ' : ''}${pages} ${pages === 1 ? 'page' : 'pages'} · ${(b as Book).role === 'collab' ? 'With ' + (b as Book).owner?.name : (b as Book).collab ? 'With ' + (b as Book).collab!.name : this.shapeOf(b).label || 'Portrait'}${(b as Book).linkOnly ? ' · Link only' : (b as Book).isPublic === false ? ' · Private' : ''}`, open,
     });
+    const pinFirst = <T extends { key: string }>(l: T[]) => pin ? [...l.filter(x => x.key === pin), ...l.filter(x => x.key !== pin)] : l;
     let p: { name?: string; handle?: string; bio?: string; loc?: string; web?: string; ig?: string; mail?: string; socials?: Record<string, string>; accent?: string; av?: string | null; joined: string; stats: [number, string][] };
     let list: ReturnType<typeof card>[], folOn = false;
     if (mine) {
@@ -1108,7 +1160,7 @@ export default class App extends Component<object, State> {
       list = tab === 'saved'
         ? (s.saved || []).filter(x => !(s.blocked || []).includes(x.ownerId) && (!s.pfCol || (x.col || '') === s.pfCol)).map(x => ({ ...card({ id: x.id, name: x.name, color: x.color, shape: x.shape, coverImg: x.cover, images: [] } as Book, x.cover ? `url("${x.cover}") center/cover no-repeat ${x.color}` : x.color, !x.cover, 0, () => this.openBookById(x.id)), count: `by ${x.ownerName}`, col: x.col || '', moveTo: (col: string) => this.moveSaved(x.id, col) }))
         : tab === 'following' ? []
-        : s.books.map((b, j) => card(b, this.coverBg(b), !b.coverImg, b.images.length, () => { cancelAnimationFrame(this.raf); this.target = 0; this.setState({ mode: 'mine', profileOf: null, active: j, images: b.images, p: 0, other: null }); }));
+        : pinFirst(s.books.map((b, j) => card(b, this.coverBg(b), !b.coverImg, b.images.length, () => { cancelAnimationFrame(this.raf); this.target = 0; this.setState({ mode: 'mine', profileOf: null, active: j, images: b.images, p: 0, other: null }); })));
       p = {
         name: a.name, handle: a.handle, bio: a.bio, loc: a.loc, web: a.web, ig: a.ig, mail: a.mail, socials: a.socials, accent: a.accent, av: a.av,
         joined: 'Joined ' + new Date(a.joined || Date.now()).toLocaleDateString('en', { month: 'short', year: 'numeric' }),
@@ -1117,14 +1169,14 @@ export default class App extends Component<object, State> {
     } else {
       const who = s.profileOf!, pf = s.pf?.uid === who.uid ? s.pf : null, pr = pf?.profile, bks = (s.blocked || []).includes(who.uid || '') ? [] : pf?.books || [];
       folOn = !!who.uid && follows.includes(who.uid);
-      list = bks.map(b => card(b, this.coverBg(b), !b.coverImg, b.likes, () => this.openOtherBook(b)));
+      list = pinFirst(bks.map(b => card(b, this.coverBg(b), !b.coverImg, b.likes, () => this.openOtherBook(b))));
       p = { name: pr?.name || who.name, handle: pr?.handle, bio: pr?.bio, loc: pr?.loc, web: pr?.web, ig: pr?.ig, mail: pr?.mail, socials: pr?.socials, accent: pr?.accent, av: pr?.av,
         joined: pr ? 'Joined ' + new Date(pr.joined).toLocaleDateString('en', { month: 'short', year: 'numeric' }) : '',
         stats: [[bks.length, bks.length === 1 ? 'sketchbook' : 'sketchbooks'], [bks.reduce((t, b) => t + b.likes, 0), 'pages']] };
     }
     const pad = mob ? 16 : 40, web = (p.web || '').trim();
     return {
-      pfName: p.name, pfVerified: this.isTeam(s.profileOf ? s.profileOf.uid : s.acct?.uid), pfHandle: '@' + (p.handle || ''), pfHasBio: !!p.bio || (mine && !pv), pfBio: p.bio || 'Add a short bio so people know what you draw.', pfBioOp: p.bio ? 1 : 0.55,
+      pfName: p.name, pfVerified: this.isTeam(s.profileOf ? s.profileOf.uid : s.acct?.uid), pfPlus: mine ? !!s.plus : s.pf?.uid === s.profileOf?.uid && !!s.pf?.plus, pfHandle: '@' + (p.handle || ''), pfHasBio: !!p.bio || (mine && !pv), pfBio: p.bio || 'Add a short bio so people know what you draw.', pfBioOp: p.bio ? 1 : 0.55,
       pfHasLoc: !!(p.loc || '').trim(), pfLoc: p.loc, pfHasWeb: !!web, pfWeb: web.replace(/^https?:\/\//, ''), pfSocials: socialLinks({ ...(p.ig ? { instagram: p.ig } : {}), ...(p.socials || {}) }), pfMail: /^\S+@\S+\.\S+$/.test((p.mail || '').trim()) ? (p.mail || '').trim() : '', pfWebHref: /^https?:\/\//.test(web) ? web : 'https://' + web, pfJoined: p.joined,
       pfAvBg: avatarBg(p.av), pfInit: p.av ? '' : ini(p.name),
       ...(() => {
@@ -1237,6 +1289,20 @@ export default class App extends Component<object, State> {
         }
       },
       closeAuth: this.closeAuth,
+      // The Fletora Plus sheet.
+      plOpen: s.plusFor != null && !!a, plReason: (s.plusFor && REASONS[s.plusFor]) || '', plHave: !!s.plus,
+      plPerks: PERKS.map(([t, n]) => ({ key: t, title: t, note: n })),
+      plPlan: s.plusPlan || 'year', plSetPlan: (k: 'month' | 'year') => this.setState({ plusPlan: k }),
+      plPlans: ([['month', 'Monthly', `${PRICE.month} a month`], ['year', 'Yearly', `${PRICE.year} a year · save ${YEAR_SAVING}`]] as const).map(([k, l, n]) => ({ key: k, label: l, note: n })),
+      plBusy: !!s.plusBusy, plErr: s.plusErr || '',
+      plClose: () => this.setState({ plusFor: null }),
+      plBuy: async () => {
+        if (s.plusBusy) return;
+        this.setState({ plusBusy: true, plusErr: '' });
+        // Off to Stripe's checkout page; it comes back to /settings.
+        try { location.href = await api.checkout(s.plusPlan || 'year'); }
+        catch (e) { this.setState({ plusErr: api.errMsg(e), plusBusy: false }); }
+      },
       // First visit after joining: a short guide to how fletora works.
       welcomeOpen: !!s.welcome && !!a, welcomeName: (a?.name || '').split(' ')[0],
       welcomeStart: () => { this.setState({ welcome: false }); this.goMode('mine'); this.setState({ managing: true }); },
@@ -1401,7 +1467,18 @@ export default class App extends Component<object, State> {
         run('password', async () => { await api.changePassword(f.pwOld || '', f.pwNew || ''); this.setState(st => ({ ac: { ...st.ac, pwOld: '', pwNew: '' } })); return 'Your password has been changed.'; }); },
       deleteAccount: (e?: { preventDefault(): void }) => { e?.preventDefault(); if (!a) return;
         if ((f.delHandle || '').replace(/^@/, '').toLowerCase() !== a.handle) return this.setState({ acErr: `Type your handle, ${a.handle}, to confirm.` });
-        run('delete', async () => { await api.deleteAccount(f.pwDel || '', a); this.setState({ ac: {} }); this.goMode('home'); }); },
+        run('delete', async () => { await api.deleteAccount(f.pwDel || '', a, !!s.bill); this.setState({ ac: {} }); this.goMode('home'); }); },
+      // Plan: free, or Plus with its renewal (or end) date and the Stripe billing portal.
+      ...(() => {
+        const b = s.bill, end = b?.periodEnd ? new Date(b.periodEnd).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+        return {
+          acPlus: !!s.plus, acHasBilling: !!b,
+          acPlan: !s.plus ? 'You’re on the free plan.' : `Fletora Plus${b?.interval ? ` · ${b.interval === 'year' ? 'yearly' : 'monthly'}` : ''}${end ? (b?.renews ? ` · renews ${end}` : ` · ends ${end}`) : ''}.`,
+          acPastDue: b?.status === 'past_due',
+          seePlus: () => this.openPlus(),
+          manageBilling: () => run('billing', async () => { location.href = await api.billingPortal(); }),
+        };
+      })(),
     };
   }
 
@@ -1811,7 +1888,7 @@ export default class App extends Component<object, State> {
       bookOp: sw ? 0 : 1, titleName: other ? other.name : (books[Math.round(car)] || book).name,
       titleOp: ((sw ? 1 - Math.sin(Math.PI * (s.swT || 0)) * 0.85 : 1) * (1 - fz)).toFixed(3),
       bookName: book.name,
-      bookMeta: (other ? `by ${(other as OtherBook).artist} · ${(other as OtherBook).pages} pages` : books.length > 1 ? `${images.length} ${images.length === 1 ? 'page' : 'pages'} · ${active + 1} of ${books.length}` : `${images.length} ${images.length === 1 ? 'page' : 'pages'}`) + (!other && (book as Book).isPublic === false ? ' · Private' : '')
+      bookMeta: (other ? `by ${(other as OtherBook).artist} · ${(other as OtherBook).pages} pages` : books.length > 1 ? `${images.length} ${images.length === 1 ? 'page' : 'pages'} · ${active + 1} of ${books.length}` : `${images.length} ${images.length === 1 ? 'page' : 'pages'}`) + (!other && (book as Book).linkOnly ? ' · Link only' : !other && (book as Book).isPublic === false ? ' · Private' : '')
         + (!other && (book as Book).role === 'collab' ? ` · ${(book as Book).owner?.name}’s, shared with you` : !other && (book as Book).collab ? ` · with ${(book as Book).collab!.name}` : ''),
       multi: !other && books.length > 1, prevBook: () => this.switchBook(active - 1), nextBook: () => this.switchBook(active + 1),
       prevOp: active > 0 ? 1 : 0.3, nextOp: active < books.length - 1 ? 1 : 0.3,
@@ -1842,7 +1919,7 @@ export default class App extends Component<object, State> {
       mgTab: s.mgTab || 'pages', setMgTab: (t: State['mgTab']) => this.setState({ mgTab: t, mgPage: null }),
       mgPage: s.mgPage != null && s.mgPage < images.length ? s.mgPage : null, openPage: (i: number) => this.setState({ mgPage: i }), closePage: () => this.setState({ mgPage: null }),
       mgChanged: s.managing && this.mgChanged(), mgSave: () => this.saveEdits(), mgCancel: () => this.setState({ managing: false }),
-      mgSummary: `${images.length} ${images.length === 1 ? 'page' : 'pages'} · ${(book as Book).isPublic === false || (book as Book).hidden ? 'Private' : 'Public'}${(book as Book).collab ? ' · with ' + (book as Book).collab!.name : (book as Book).role === 'collab' ? ' · ' + (book as Book).owner?.name + '’s, shared with you' : ''}`,
+      mgSummary: `${images.length} ${images.length === 1 ? 'page' : 'pages'} · ${(book as Book).hidden ? 'Private' : (book as Book).linkOnly ? 'Link only' : (book as Book).isPublic === false ? 'Private' : 'Public'}${(book as Book).collab ? ' · with ' + (book as Book).collab!.name : (book as Book).role === 'collab' ? ' · ' + (book as Book).owner?.name + '’s, shared with you' : ''}`,
       ...(() => {
         const o = other as OtherBook | null, mineB = books[active];
         return {
@@ -1851,7 +1928,7 @@ export default class App extends Component<object, State> {
           bkLiked: !!(o && s.liked?.[o.id]), bkLike: () => o && this.toggleLike(o),
           bkLikes: (() => { const id = o?.id || (mineB && !mineB.id.startsWith('local') ? mineB.id : ''); return id ? s.counts?.['b:' + id] || 0 : 0; })(),
           bkShare: () => o ? this.share(o.arch ? `/archive/${o.id}` : `/@${o.handle}/${o.id}`, `${o.name} by ${o.artist}`) : s.acct && mineB && this.share(`/@${mineB.owner?.handle || s.acct.handle}/${mineB.id}`, `${mineB.name} by ${mineB.owner?.name || s.acct.name}`),
-          bkCanShare: !!o || (!!s.acct && mineB?.isPublic !== false && !mineB?.id.startsWith('local')),
+          bkCanShare: !!o || (!!s.acct && (mineB?.isPublic !== false || !!mineB?.linkOnly) && !mineB?.id.startsWith('local')),
           bkMoreOpen: s.more === 'book', bkMore: () => this.setState(st => ({ more: st.more === 'book' ? null : 'book' })),
           bkArch: o?.arch ? { years: o.arch.years, source: o.arch.source, url: o.arch.url, note: o.arch.note } : (() => { const e = mineB && (s.archive || []).find(b => b.id === mineB.id)?.arch; return s.mode === 'mine' && e ? { years: e.years, source: e.source, url: e.url, note: e.note, own: true } : null; })(),
           bkArchLbl: (s.archive || []).some(b => b.id === (o?.id || mineB?.id)) ? 'Edit archive details…' : 'Add to the archive…',
@@ -1877,8 +1954,35 @@ export default class App extends Component<object, State> {
           },
         };
       })(),
-      bookPublic: (book as Book).isPublic !== false && !(book as Book).hidden, bookHidden: !other && !!(book as Book).hidden,
-      setPublic: (on: boolean) => !(book as Book).hidden && this.updateBook({ isPublic: on }),
+      bookHidden: !other && !!(book as Book).hidden,
+      // Who can see it: public, link only (Plus) or private.
+      bookVis: (book as Book).hidden ? 'private' : (book as Book).linkOnly ? 'link' : (book as Book).isPublic === false ? 'private' : 'public',
+      setVis: (k: 'public' | 'link' | 'private') => {
+        if ((book as Book).hidden) return;
+        if (k === 'link' && !s.plus) return this.openPlus('link');
+        this.updateBook({ isPublic: k === 'public', linkOnly: k === 'link' });
+      },
+      ...(() => {
+        // Stats and pinning (Plus), for the owner of a saved sketchbook.
+        const b = book as Book, st = s.stats?.id === b.id ? s.stats.s : null, a = s.acct, likes = s.counts?.['b:' + b.id] || 0;
+        const own = !other && !!a && b.role !== 'collab' && !b.id?.startsWith('local'), pinned = !!a?.pin && a.pin === b.id && !!s.plus;
+        const src: [ViewSource, string][] = [['explore', 'Explore'], ['profile', 'Profiles'], ['home', 'Home'], ['link', 'Links'], ['embed', 'Embeds']];
+        return {
+          stOwn: own, stPlus: !!s.plus, stReady: !!st,
+          stTotals: st ? [[st.views, st.views === 1 ? 'view' : 'views'], [likes, likes === 1 ? 'like' : 'likes'], [st.saves, st.saves === 1 ? 'save' : 'saves']].map(([n, l]) => ({ n: fmtK(n as number), l })) : [],
+          stFrom: st ? src.map(([k, l]) => ({ key: k, label: l, n: st.from[k], share: st.views ? st.from[k] / st.views : 0 })) : [],
+          stTeaser: st ? (st.views ? `Viewed ${fmtK(st.views)} ${st.views === 1 ? 'time' : 'times'} so far.` : 'No views yet.') : '',
+          stUpgrade: () => this.openPlus('stats'),
+          pinOn: pinned,
+          togglePin: () => {
+            if (!a || !own) return;
+            if (!s.plus) return this.openPlus('pin');
+            const next = pinned ? '' : b.id;
+            this.setState({ acct: { ...a, pin: next } });
+            api.setPin(a.uid, next).then(() => this.toast(next ? 'Pinned to your profile' : 'Unpinned')).catch(e => { console.error(e); this.setState({ acct: { ...a } }); this.toast('Couldn’t change that. Try again.'); });
+          },
+        };
+      })(),
       ...(() => {
         // Mediums (from a fixed list) and free tags, edited on the Pages screen, shown under the title.
         const mine = (book as Book), meds = book.mediums || [], tags = book.tags || [];
@@ -2029,6 +2133,7 @@ export default class App extends Component<object, State> {
         {v.newPick && <NewBookPicker v={v} />}
         {v.managing && <Manager v={v} />}
         {v.editing && <Editor v={v} />}
+        {v.plOpen && <PlusModal v={v} />}
         <input ref={this.fileRef} type="file" accept="image/*" multiple onChange={v.onFiles} style={{ display: 'none' }} />
         {/* Phones: opens the camera straight away. */}
         <input ref={this.camRef} type="file" accept="image/*" capture="environment" onChange={v.onFiles} style={{ display: 'none' }} />

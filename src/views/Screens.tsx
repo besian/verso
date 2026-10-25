@@ -4,7 +4,7 @@ import type { V } from '../App';
 import ClosedBook from '../ClosedBook';
 import { hover, wheelSideways } from '../pseudo';
 import { CANVAS, INK, MARK, MUTED, PAGE_EDGES, PAPER, SANS, SERIF, STONE, label, pagePad, serif } from '../theme';
-import { HandleField, MoreMenu, Notice, TextField } from './Overlays';
+import { HandleField, MoreMenu, Notice, PlusTag, TextField } from './Overlays';
 import { Popover } from './Popover';
 import { Verified } from './Verified';
 
@@ -362,7 +362,7 @@ export function Profile({ v }: { v: V }) {
         <div style={{ width: mob ? 56 : 72, height: mob ? 56 : 72, flexShrink: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.22)', boxSizing: 'border-box', background: v.pfAvBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `400 ${mob ? 22 : 28}px ${SERIF}` }}>{v.pfInit}</div>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '2px 12px', flexWrap: 'wrap' }}>
-            <h1 style={{ margin: 0, display: 'flex', alignItems: 'center', ...serif(mob ? 30 : 36, 1.05, '-.01em') }}>{v.pfName}{v.pfVerified && <Verified size={mob ? 20 : 22} />}</h1>
+            <h1 style={{ margin: 0, display: 'flex', alignItems: 'center', ...serif(mob ? 30 : 36, 1.05, '-.01em') }}>{v.pfName}{v.pfVerified && <Verified size={mob ? 20 : 22} />}{v.pfPlus && <span title="Fletora Plus" style={{ marginLeft: 10, display: 'inline-flex' }}><PlusTag /></span>}</h1>
             <div style={{ display: 'flex', gap: '2px 7px', flexWrap: 'wrap', fontSize: 13, color: MUTED }}>{meta}</div>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: mob ? '2px 12px' : '2px 16px', fontSize: 14, color: MUTED }}>
@@ -531,6 +531,14 @@ export function Settings({ v }: { v: V }) {
           </span>
         </div>
         {(v.acErr || v.acInfo) && <Notice err={v.acErr} info={v.acInfo} />}
+        <SettingsSection title="Plan" note={v.acPlus ? 'Change plan, update your card, see receipts or cancel on Stripe’s billing page.' : 'Plus adds unlimited sketchbooks, link-only sketchbooks, stats, more handwriting and more.'}>
+          <span style={{ fontSize: 14, lineHeight: 1.5 }}>{v.acPlan}</span>
+          {v.acPastDue && <span style={{ fontSize: 14, lineHeight: 1.5, color: MARK }}>Your last payment didn’t go through. Update your card to keep Plus.</span>}
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+            {!v.acPlus && <button onClick={v.seePlus} style={formBtn()}>See Plus</button>}
+            {v.acHasBilling && <button onClick={v.manageBilling} disabled={v.acBusy === 'billing'} className={v.acPlus ? undefined : hoverLine} style={v.acPlus ? { ...formBtn(), opacity: v.acBusy === 'billing' ? 0.6 : 1 } : { ...underlineBtn(14), alignSelf: 'center' }}>{v.acBusy === 'billing' ? 'Opening…' : v.acPlus ? 'Manage billing' : 'Billing and receipts'}</button>}
+          </div>
+        </SettingsSection>
         <SettingsSection title="Email" note={v.acVerified ? 'Your email is confirmed.' : <>Not confirmed yet. Open the link we sent to <b style={{ fontWeight: 600 }}>{v.acEmail}</b>.</>}>
           {!v.acVerified && (
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
@@ -568,7 +576,7 @@ export function Settings({ v }: { v: V }) {
         <SettingsSection title="Your data" note="What we store about you and how it’s used.">
           <LegalLinks v={v} align="flex-start" />
         </SettingsSection>
-        <SettingsSection title="Delete account" note="Permanently deletes your profile, handle, follows and every sketchbook with all its pages. This can’t be undone.">
+        <SettingsSection title="Delete account" note={`Permanently deletes your profile, handle, follows and every sketchbook with all its pages.${v.acHasBilling ? ' A Plus subscription is cancelled straight away.' : ''} This can’t be undone.`}>
           <form onSubmit={v.deleteAccount} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <TextField label={`Type your handle (${v.acHandle}) to confirm`} value={f.delHandle} onChange={on.delHandle} placeholder={v.acHandle} />
             <TextField label="Password" value={f.pwDel} onChange={on.pwDel} type="password" autoComplete="current-password" />
