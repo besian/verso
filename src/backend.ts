@@ -11,7 +11,7 @@ import {
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import {
-  collection, connectFirestoreEmulator, deleteDoc, doc, getDoc, getDocs, getFirestore, increment, limit, onSnapshot,
+  collection, connectFirestoreEmulator, deleteDoc, deleteField, doc, getDoc, getDocs, getFirestore, increment, limit, onSnapshot,
   limitToLast, orderBy, query, runTransaction, serverTimestamp, setDoc, startAfter, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
 import type { DocumentData, QueryConstraint, QueryDocumentSnapshot } from 'firebase/firestore';
@@ -81,6 +81,8 @@ export function errMsg(e: unknown): string {
     'billing/already-plus': 'You already have Plus.',
     'billing/stripe-failed': 'Couldn’t reach the payment page. Try again in a moment.',
     'billing/failed': 'Couldn’t reach the payment page. Check your connection.',
+    'already-shared': 'They’re already in this sketchbook.',
+    'share-full': 'This sketchbook is shared with as many people as it can be.',
     'billing/no-subscription': 'There’s no subscription on this account.',
     'billing/paid': 'They pay for Plus, so it can’t be given or taken away here.',
     'billing/not-allowed': 'Only moderators can do that.',
@@ -198,10 +200,19 @@ export interface BookDoc {
   /** Margin notes per page, aligned with `pages` like thumbs. */
   captions: string[]; dates: string[];
   mediums: string[]; tags: string[]; hidden: boolean;
-  /** The one other person who can add pages, and a pending invitation. */
-  collab: Member | null; invite: Member | null;
+  /** People who can add pages, and people invited who haven't answered yet. */
+  collabs: Member[]; invites: Member[];
 }
-const member = (d: DocumentData, k: 'collab' | 'invite'): Member | null => d[k] ? { uid: d[k], name: d[k + 'Name'] || '', handle: d[k + 'Handle'] || '' } : null;
+/** Sharing as stored: `collabs` and `invites` (uids) with names in `people`. Books shared before there could be
+ *  several people keep one `collab` / `invite` (with their names alongside) until their sharing next changes. */
+const sharing = (d: DocumentData) => {
+  const p: Record<string, { name?: string; handle?: string }> = d.people || {};
+  const list = (k: 'collab' | 'invite'): Member[] => {
+    const ids: string[] = [...(d[k + 's'] || []), ...(d[k] && !(d[k + 's'] || []).includes(d[k]) ? [d[k]] : [])];
+    return ids.map(uid => ({ uid, name: p[uid]?.name || (d[k] === uid ? d[k + 'Name'] : '') || '', handle: p[uid]?.handle || (d[k] === uid ? d[k + 'Handle'] : '') || '' }));
+  };
+  return { collabs: list('collab'), invites: list('invite') };
+};
 
 const bookDoc = (id: string, d: DocumentData): BookDoc => ({
   id, ownerId: d.ownerId, ownerName: d.ownerName || '', ownerHandle: d.ownerHandle || '', name: d.name || 'sketchbook',
@@ -209,7 +220,7 @@ const bookDoc = (id: string, d: DocumentData): BookDoc => ({
   createdAt: d.createdAt || 0, updatedAt: d.updatedAt || 0, isPublic: d.isPublic !== false, legacy: d.isPublic === undefined, linkOnly: d.linkOnly === true,
   thumbs: d.thumbs || [], coverThumb: d.coverThumb || null,
   captions: d.captions || [], dates: d.dates || [], mediums: d.mediums || [], tags: d.tags || [], hidden: d.hidden === true,
-  collab: member(d, 'collab'), invite: member(d, 'invite'),
+  ...sharing(d),
 });
 
 export const thumbMap = (b: BookDoc): Record<string, string> => {
@@ -227,7 +238,7 @@ export const noteMap = (b: BookDoc): Record<string, PageNote> => {
 export const toBook = (b: BookDoc, me?: string): Book => ({
   id: b.id, name: b.name, color: b.color, shape: b.shape, coverImg: b.cover, images: b.pages, createdAt: b.createdAt, isPublic: b.isPublic, linkOnly: b.linkOnly,
   thumbs: thumbMap(b), notes: noteMap(b), mediums: b.mediums, tags: b.tags, hidden: b.hidden,
-  role: me && b.ownerId !== me ? 'collab' : 'owner', owner: { uid: b.ownerId, name: b.ownerName, handle: b.ownerHandle }, collab: b.collab, invite: b.invite,
+  role: me && b.ownerId !== me ? 'collab' : 'owner', owner: { uid: b.ownerId, name: b.ownerName, handle: b.ownerHandle }, collabs: b.collabs, invites: b.invites,
 });
 
 export function newBookId(): string { return doc(collection(need().db, 'books')).id; }
@@ -236,8 +247,11 @@ export function newBookId(): string { return doc(collection(need().db, 'books'))
  *  themselves, otherwise only public ones. */
 export async function userBooks(uid: string, publicOnly = false): Promise<BookDoc[]> {
   const c = collection(need().db, 'books'), pub = publicOnly ? [where('isPublic', '==', true)] : [];
-  const [own, shared] = await Promise.all([getDocs(query(c, where('ownerId', '==', uid), ...pub)), getDocs(query(c, where('collab', '==', uid), ...pub)).catch(() => null)]);
-  return [...own.docs, ...(shared?.docs || [])].map(x => bookDoc(x.id, x.data())).sort((a, b) => a.createdAt - b.createdAt);
+  const [own, shared, older] = await Promise.all([getDocs(query(c, where('ownerId', '==', uid), ...pub)),
+    getDocs(query(c, where('collabs', 'array-contains', uid), ...pub)).catch(() => null), getDocs(query(c, where('collab', '==', uid), ...pub)).catch(() => null)]);
+  const seen = new Set<string>();
+  return [...own.docs, ...(shared?.docs || []), ...(older?.docs || [])].filter(x => !seen.has(x.id) && !!seen.add(x.id))
+    .map(x => bookDoc(x.id, x.data())).sort((a, b) => a.createdAt - b.createdAt);
 }
 
 export type Cursor = QueryDocumentSnapshot | null;
@@ -334,24 +348,40 @@ async function writePages(b: Book) {
 
 // ---------- shared sketchbooks ----------
 
-const NO_INVITE = { invite: null, inviteName: null, inviteHandle: null };
-/** Invites someone (by handle) to add pages; they accept from their notifications. Returns who. */
-export async function invite(me: Account, book: { id: string; name: string }, handle: string): Promise<Member> {
+/** People who can share a sketchbook with its owner: one on the free plan, five with Plus (see firestore.rules). */
+export const SHARE_FREE = 1, SHARE_PLUS = 5;
+const OLD_SHARE = { collab: deleteField(), collabName: deleteField(), collabHandle: deleteField(), invite: deleteField(), inviteName: deleteField(), inviteHandle: deleteField() };
+/** Changes who a sketchbook is shared with, reading it fresh (and moving an older single-person book to lists). */
+async function reshare(bookId: string, fn: (c: Member[], i: Member[]) => { c: Member[]; i: Member[] }): Promise<{ collabs: Member[]; invites: Member[] }> {
+  const { db: d } = need(), ref = doc(d, 'books', bookId);
+  return runTransaction(d, async tx => {
+    const cur = await tx.get(ref); if (!cur.exists()) throw Object.assign(new Error('gone'), { code: 'not-found' });
+    const was = sharing(cur.data()), { c, i } = fn(was.collabs, was.invites);
+    const people = Object.fromEntries([...c, ...i].map(m => [m.uid, { name: m.name.slice(0, 80), handle: m.handle }]));
+    tx.update(ref, { collabs: c.map(m => m.uid), invites: i.map(m => m.uid), people, ...OLD_SHARE });
+    return { collabs: c, invites: i };
+  });
+}
+/** Invites someone (by handle) to add pages; they accept from their notifications. */
+export async function invite(me: Account, book: { id: string; name: string }, handle: string, limit: number) {
   const uid = await uidForHandle(handle.replace(/^@/, ''));
   if (!uid) throw Object.assign(new Error('no such handle'), { code: 'no-handle' });
   if (uid === me.uid) throw Object.assign(new Error('self'), { code: 'self-invite' });
   const p = await getProfile(uid), m = { uid, name: p?.name || handle, handle: p?.handle || handle };
-  await updateDoc(doc(need().db, 'books', book.id), { invite: m.uid, inviteName: m.name, inviteHandle: m.handle });
+  const out = await reshare(book.id, (c, i) => {
+    if ([...c, ...i].some(x => x.uid === uid)) throw Object.assign(new Error('already'), { code: 'already-shared' });
+    if (c.length + i.length >= limit) throw Object.assign(new Error('full'), { code: 'share-full' });
+    return { c, i: [...i, m] };
+  });
   notifyOnce(uid, `invite_${book.id}_${me.uid}`, { ...note(me, 'like', book), type: 'invite' });
-  return m;
+  return out;
 }
-export async function cancelInvite(bookId: string) { await updateDoc(doc(need().db, 'books', bookId), NO_INVITE); }
-export async function acceptInvite(me: Account, bookId: string) {
-  await updateDoc(doc(need().db, 'books', bookId), { collab: me.uid, collabName: me.name, collabHandle: me.handle, ...NO_INVITE });
-}
-export async function declineInvite(bookId: string) { await updateDoc(doc(need().db, 'books', bookId), NO_INVITE); }
-/** The owner removing the other person, or that person leaving. */
-export async function endShare(bookId: string) { await updateDoc(doc(need().db, 'books', bookId), { collab: null, collabName: null, collabHandle: null }); }
+export const cancelInvite = (bookId: string, uid: string) => reshare(bookId, (c, i) => ({ c, i: i.filter(x => x.uid !== uid) }));
+export const acceptInvite = (me: Account, bookId: string) =>
+  reshare(bookId, (c, i) => ({ c: [...c.filter(x => x.uid !== me.uid), { uid: me.uid, name: me.name, handle: me.handle }], i: i.filter(x => x.uid !== me.uid) }));
+export const declineInvite = (bookId: string, uid: string) => cancelInvite(bookId, uid);
+/** The owner removing someone, or someone leaving. */
+export const endShare = (bookId: string, uid: string) => reshare(bookId, (c, i) => ({ c: c.filter(x => x.uid !== uid), i }));
 
 // ---------- messages ----------
 // chats/{a}_{b}: a conversation between two people (see firestore.rules for who may do what).
@@ -412,15 +442,21 @@ export async function markChatRead(id: string, uid: string) { await updateDoc(do
 /** Accept (or decline) a message request. Declining is silent: the sender isn't told. */
 export async function answerChat(id: string, accept: boolean) { await updateDoc(doc(need().db, 'chats', id), { status: accept ? 'open' : 'declined' }); }
 
-/** Live list of sketchbooks the user has been invited to draw in. */
+/** Live list of sketchbooks the user has been invited to draw in (in lists, or an older single invite). */
 export function watchInvites(uid: string, cb: (b: BookDoc[]) => void): () => void {
   if (!db) return () => {};
-  return onSnapshot(query(collection(db, 'books'), where('invite', '==', uid)), s => cb(s.docs.map(x => bookDoc(x.id, x.data()))), () => cb([]));
+  const found: Record<string, BookDoc[]> = { a: [], b: [] }, send = () => { const m = new Map([...found.a, ...found.b].map(b => [b.id, b])); cb([...m.values()]); };
+  const on = (k: 'a' | 'b', q: QueryConstraint) => onSnapshot(query(collection(db!, 'books'), q),
+    s => { found[k] = s.docs.map(x => bookDoc(x.id, x.data())).filter(b => b.invites.some(m => m.uid === uid)); send(); }, () => { found[k] = []; send(); });
+  const stops = [on('a', where('invites', 'array-contains', uid)), on('b', where('invite', '==', uid))];
+  return () => stops.forEach(f => f());
 }
 /** Live copy of one book; `local` is true while the change is this browser's own unsent write. */
 export function watchBook(id: string, cb: (b: BookDoc | null, local: boolean) => void): () => void {
   if (!db) return () => {};
-  return onSnapshot(doc(db, 'books', id), s => cb(s.exists() ? bookDoc(s.id, s.data()) : null, s.metadata.hasPendingWrites), () => cb(null, false));
+  // Only what the server says: the browser's cached copy can be older than a change just made (inviting someone
+  // starts this watch, and a cached copy without them would take the invitation off the screen).
+  return onSnapshot(doc(db, 'books', id), s => { if (!s.metadata.fromCache) cb(s.exists() ? bookDoc(s.id, s.data()) : null, s.metadata.hasPendingWrites); }, () => cb(null, false));
 }
 
 export async function deleteBook(id: string, files: string[]) {
@@ -804,8 +840,9 @@ export async function deleteAccount(pw: string, acct: Account, subscribed = fals
   if (subscribed) await billing('close');
   const books = await getDocs(query(collection(d, 'books'), where('ownerId', '==', acct.uid)));
   // Leave sketchbooks shared with this account, and turn down open invitations.
-  const [shared, invited] = await Promise.all([getDocs(query(collection(d, 'books'), where('collab', '==', acct.uid))), getDocs(query(collection(d, 'books'), where('invite', '==', acct.uid)))]);
-  await Promise.all([...shared.docs.map(b => endShare(b.id)), ...invited.docs.map(b => declineInvite(b.id))]).catch(e => console.warn('leaving shared books', e));
+  const q = (f: QueryConstraint) => getDocs(query(collection(d, 'books'), f)).then(s => s.docs.map(x => x.id)).catch(() => [] as string[]);
+  const [shared, shared1, invited, invited1] = await Promise.all([q(where('collabs', 'array-contains', acct.uid)), q(where('collab', '==', acct.uid)), q(where('invites', 'array-contains', acct.uid)), q(where('invite', '==', acct.uid))]);
+  await Promise.all([...[...new Set([...shared, ...shared1])].map(id => endShare(id, acct.uid)), ...[...new Set([...invited, ...invited1])].map(id => declineInvite(id, acct.uid))]).catch(e => console.warn('leaving shared books', e));
   const subs = await Promise.all(['following', 'followers', 'saved', 'blocked', 'notifications'].map(c => getDocs(collection(d, 'users', acct.uid, c))));
   // The username is only removed if it's really this account's: older accounts may not have one (or have an old
   // one), and deleting a missing or someone else's handle is refused, which used to fail the whole deletion.

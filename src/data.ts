@@ -42,9 +42,9 @@ export interface Book {
   tags?: string[];
   /** Hidden by a moderator: stays private until they restore it. */
   hidden?: boolean;
-  /** Shared sketchbooks: the owner plus at most one other person who can add pages. */
+  /** Shared sketchbooks: the owner, people who can add pages (one, or five with Plus), and invitations waiting. */
   role?: 'owner' | 'collab';
-  owner?: Member; collab?: Member | null; invite?: Member | null;
+  owner?: Member; collabs?: Member[]; invites?: Member[];
 }
 
 export interface Member { uid: string; name: string; handle: string }

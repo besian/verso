@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { loadStripe } from '@stripe/stripe-js';
+import { loadStripe } from '@stripe/stripe-js/pure'; // pure: Stripe.js loads only when checkout opens, not on every page
 import type { Appearance, StripeCheckoutLoadActionsSuccess, StripeCheckoutSession, StripeElements } from '@stripe/stripe-js';
 import type { CSSProperties, ChangeEventHandler, MouseEventHandler, ReactNode } from 'react';
 import { Popover } from './Popover';
@@ -638,26 +638,31 @@ function PageSheet({ v, pg }: { v: V; pg: V }) {
   );
 }
 
-/** Invite one other person to add pages, see who's drawing in it, or stop sharing. */
+/** Who draws in the sketchbook: the people in it, invitations waiting, and inviting someone (one person, or five with Plus). */
 function SharePanel({ v }: { v: V }) {
   const who = (m: V) => <><b style={{ fontWeight: 600 }}>{m.name}</b> <span style={{ color: 'rgba(var(--ink-rgb),.6)' }}>{m.handle}</span></>;
+  const line: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', fontSize: 14, padding: '8px 0', borderBottom: '1px solid rgba(var(--ink-rgb),.08)' };
   return (
-    <Row label="Draw together" note="One other person can add and caption pages. Invitations are sent straight away, without needing Save.">
-      {v.shCollab ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', fontSize: 14 }}>
-          <span>Drawing with {who(v.shCollab)}</span>
-          <button onClick={v.shRemove} disabled={v.shBusy} style={linkBtn(MARK)}>Stop sharing</button>
+    <Row label="Draw together" note={`${v.shPlus ? 'Up to five people' : 'One other person'} can add and caption pages. Invitations are sent straight away, without needing Save.`}>
+      {(v.shPeople.length > 0 || v.shInvites.length > 0) && (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {v.shPeople.map((m: V) => (
+            <div key={m.key} style={line}><span>{who(m)}</span><button onClick={m.remove} disabled={v.shBusy} style={linkBtn(MARK)}>Stop sharing</button></div>
+          ))}
+          {v.shInvites.map((m: V) => (
+            <div key={m.key} style={line}><span>{who(m)} <span style={{ color: 'rgba(var(--ink-rgb),.6)' }}>· invited</span></span><button onClick={m.cancel} disabled={v.shBusy} style={linkBtn('rgba(var(--ink-rgb),.75)')}>Cancel invitation</button></div>
+          ))}
         </div>
-      ) : v.shInvite ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', fontSize: 14 }}>
-          <span>Waiting for {who(v.shInvite)} to accept</span>
-          <button onClick={v.shCancel} disabled={v.shBusy} style={linkBtn(MARK)}>Cancel invitation</button>
-        </div>
-      ) : (
+      )}
+      {v.shRoom ? (
         <form onSubmit={v.shInviteSend} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div style={{ flex: '1 1 220px' }}><HandleField value={v.shDraft} onChange={v.onShDraft} placeholder="their handle" /></div>
           <button type="submit" disabled={v.shBusy || !v.shDraft} style={{ height: 44, padding: '0 20px', borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer', opacity: v.shBusy || !v.shDraft ? 0.5 : 1 }}>{v.shBusy ? 'Inviting…' : 'Invite'}</button>
         </form>
+      ) : v.shPlus ? (
+        <span style={hint}>Shared with as many people as a sketchbook can be ({v.shLimit}).</span>
+      ) : (
+        <button onClick={v.shMore} className={hoverTint} style={{ ...ghostBtn, alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 14px' }}>Invite more people <PlusTag /></button>
       )}
       <Notice err={v.shErr} />
     </Row>

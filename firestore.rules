@@ -250,7 +250,8 @@ service cloud.firestore {
     match /books/{bookId} {
       function valid(d) {
         return d.keys().hasOnly(['ownerId', 'ownerName', 'ownerHandle', 'name', 'color', 'shape', 'cover', 'pages', 'pageCount', 'createdAt', 'updatedAt', 'isPublic', 'linkOnly', 'thumbs', 'coverThumb',
-            'captions', 'dates', 'mediums', 'tags', 'labels', 'hidden', 'collab', 'collabName', 'collabHandle', 'invite', 'inviteName', 'inviteHandle'])
+            'captions', 'dates', 'mediums', 'tags', 'labels', 'hidden', 'collab', 'collabName', 'collabHandle', 'invite', 'inviteName', 'inviteHandle',
+            'collabs', 'invites', 'people'])
           && (!('isPublic' in d) || d.isPublic is bool)
           && (!('thumbs' in d) || (d.thumbs is list && d.thumbs.size() <= 1000))
           && (!('captions' in d) || (d.captions is list && d.captions.size() <= 1000))
@@ -281,40 +282,62 @@ service cloud.firestore {
         let was = resource.data.get('hidden', false);
         return request.resource.data.get('hidden', false) == was && (was == false || (request.resource.data.isPublic == false && request.resource.data.get('linkOnly', false) == false));
       }
-      // Sharing: one other person (`collab`) can add pages; the owner invites them (`invite`) and they accept.
+      // Sharing: people in `collabs` can add pages; the owner invites people (`invites`, with names in `people`) and
+      // they accept. One person on the free plan, five with Plus. Books shared before there could be several people
+      // keep one `collab` / `invite` until their sharing next changes, which moves them to the lists.
       function was(k) { return resource.data.get(k, null); }
       function now(k) { return request.resource.data.get(k, null); }
-      function same(k) { return now(k) == was(k); }
       function changes() { return request.resource.data.diff(resource.data).affectedKeys(); }
       function me() { return signedIn() ? request.auth.uid : ''; }
-      // The owner may invite one person while no one else draws in it, cancel the invite, or remove the other person.
+      function oldCollabs() { return resource.data.get('collabs', []).concat(was('collab') == null ? [] : [was('collab')]); }
+      function oldInvites() { return resource.data.get('invites', []).concat(was('invite') == null ? [] : [was('invite')]); }
+      function newCollabs() { return request.resource.data.get('collabs', []); }
+      function newInvites() { return request.resource.data.get('invites', []); }
+      function shareFields() { return ['collab', 'collabName', 'collabHandle', 'invite', 'inviteName', 'inviteHandle', 'collabs', 'invites', 'people']; }
+      // Any change to sharing writes the lists (clearing the older single fields), with names only for people in it.
+      function shareShape() {
+        return now('collab') == null && now('invite') == null && newCollabs() is list && newInvites() is list
+          && newCollabs().size() <= 5 && newInvites().size() <= 5
+          && (!('people' in request.resource.data) || (request.resource.data.people is map
+            && request.resource.data.people.keys().hasOnly(newCollabs().concat(newInvites()))));
+      }
+      // The owner may invite people up to their plan's limit, cancel invitations and remove people, but never add
+      // someone directly. Over the limit (Plus ended), they can still remove people, just not invite more.
       function ownerShares() {
-        return ((same('collab') && same('collabName') && same('collabHandle')) || now('collab') == null)
-          && ((same('invite') && same('inviteName') && same('inviteHandle')) || now('invite') == null
-            || (now('invite') is string && now('invite') != resource.data.ownerId && now('collab') == null));
+        return !changes().hasAny(shareFields()) || (shareShape()
+          && newCollabs().hasOnly(oldCollabs())
+          && !(resource.data.ownerId in newInvites()) && !(resource.data.ownerId in newCollabs())
+          && (newInvites().hasOnly(oldInvites()) || newCollabs().size() + newInvites().size() <= (plus(resource.data.ownerId) ? 5 : 1)));
       }
       function collabEdits() {
-        return was('collab') == me() && changes().hasOnly(['pages', 'pageCount', 'thumbs', 'captions', 'dates', 'updatedAt']) && valid(request.resource.data);
+        return me() in oldCollabs() && changes().hasOnly(['pages', 'pageCount', 'thumbs', 'captions', 'dates', 'updatedAt']) && valid(request.resource.data);
       }
-      function shareFields() { return ['collab', 'collabName', 'collabHandle', 'invite', 'inviteName', 'inviteHandle']; }
+      // Someone invited accepts (moving into collabs) or declines; someone drawing in it leaves.
       function inviteeAnswers() {
-        return was('invite') == me() && changes().hasOnly(shareFields()) && now('invite') == null
-          && ((was('collab') == null && now('collab') == me()) || same('collab'));
+        return me() in oldInvites() && changes().hasOnly(shareFields()) && shareShape()
+          && newInvites().toSet() == oldInvites().toSet().difference([me()].toSet())
+          && (newCollabs().toSet() == oldCollabs().toSet() || newCollabs().toSet() == oldCollabs().toSet().union([me()].toSet()));
       }
-      function collabLeaves() { return was('collab') == me() && changes().hasOnly(['collab', 'collabName', 'collabHandle']) && now('collab') == null; }
+      function collabLeaves() {
+        return me() in oldCollabs() && changes().hasOnly(shareFields()) && shareShape()
+          && newCollabs().toSet() == oldCollabs().toSet().difference([me()].toSet()) && newInvites().toSet() == oldInvites().toSet();
+      }
 
       // Private books are readable only by their owner, the person they're shared with or invited to (and moderators).
       // A link-only book opens for anyone with its address, but never shows up in a list (Explore, profiles).
       function readable() {
         return resource.data.get('isPublic', true) == true || (signedIn() && resource.data.ownerId == request.auth.uid)
-          || (signedIn() && resource.data.get('collab', null) == request.auth.uid) || (signedIn() && resource.data.get('invite', null) == request.auth.uid) || isAdmin();
+          || (signedIn() && resource.data.get('collab', null) == request.auth.uid) || (signedIn() && resource.data.get('invite', null) == request.auth.uid)
+          || (signedIn() && request.auth.uid in resource.data.get('collabs', [])) || (signedIn() && request.auth.uid in resource.data.get('invites', [])) || isAdmin();
       }
       allow get: if readable() || (resource.data.get('linkOnly', false) == true && resource.data.get('hidden', false) == false);
       // Lists read isPublic directly: a default (get('isPublic', true)) lets a query match private books.
       allow list: if resource.data.isPublic == true || (signedIn() && resource.data.ownerId == request.auth.uid)
-        || (signedIn() && resource.data.collab == request.auth.uid) || (signedIn() && resource.data.invite == request.auth.uid) || isAdmin();
+        || (signedIn() && resource.data.collab == request.auth.uid) || (signedIn() && resource.data.invite == request.auth.uid)
+        || (signedIn() && request.auth.uid in resource.data.collabs) || (signedIn() && request.auth.uid in resource.data.invites) || isAdmin();
       allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid && valid(request.resource.data)
-        && request.resource.data.get('hidden', false) == false && now('collab') == null && now('invite') == null;
+        && request.resource.data.get('hidden', false) == false && now('collab') == null && now('invite') == null
+        && newCollabs().size() == 0 && newInvites().size() == 0;
       allow update: if (signedIn() && resource.data.ownerId == request.auth.uid
           && request.resource.data.ownerId == resource.data.ownerId && valid(request.resource.data) && keepsHidden() && ownerShares())
         || (signedIn() && (collabEdits() || inviteeAnswers() || collabLeaves()))

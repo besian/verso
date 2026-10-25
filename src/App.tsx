@@ -152,11 +152,16 @@ const pruneThumbs = (b: Book) => Object.fromEntries([...b.images, b.coverImg].fi
 const localBook = (): Book => ({ id: 'local', name: 'sketchbook', color: '#b8243a', images: [] });
 /** A Firestore book shown read-only (Explore, profiles). */
 const toOther = (b: BookDoc, idx: number): OtherBook => ({
-  id: b.id, idx, shape: b.shape, likes: b.pageCount, artist: (b.ownerName || '@' + b.ownerHandle) + (b.collab ? ' & ' + (b.collab.name || '@' + b.collab.handle) : ''), name: b.name, color: b.color,
+  id: b.id, idx, shape: b.shape, likes: b.pageCount, artist: names([{ name: b.ownerName, handle: b.ownerHandle }, ...b.collabs]), name: b.name, color: b.color,
   images: b.pages, pages: Math.max(CONFIG.minPages, b.pageCount + (b.pageCount % 2)), initials: ini(b.ownerName), coverImg: b.cover,
   ownerId: b.ownerId, handle: b.ownerHandle, updatedAt: b.updatedAt, thumbs: api.thumbMap(b),
   notes: api.noteMap(b), mediums: b.mediums, tags: b.tags,
 });
+/** "Ana", "Ana & Ben", "Ana, Ben & Cleo", "Ana, Ben & 3 others". */
+const names = (l: { name: string; handle: string }[] = []) => {
+  const n = l.map(m => m.name || '@' + m.handle);
+  return n.length <= 1 ? n[0] || '' : n.length <= 3 ? `${n.slice(0, -1).join(', ')} & ${n[n.length - 1]}` : `${n.slice(0, 2).join(', ')} & ${n.length - 2} others`;
+};
 const fmtDate = (d?: string) => { if (!d) return ''; const t = new Date(d + 'T12:00:00'); return isNaN(+t) ? '' : t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); };
 /** "Lisbon · 12 Mar 2026" */
 const noteText = (n?: PageNote) => [n?.c?.trim(), fmtDate(n?.d)].filter(Boolean).join(' · ');
@@ -461,7 +466,7 @@ export default class App extends Component<object, State> {
     if (me && openChat) want.set('msg:' + openChat, () => api.watchMessages(openChat, msgs => this.setState({ msgs })));
     if (me && openChat) this.markSeen(openChat);
     // Books two people can change are kept in sync live.
-    if (me) for (const b of s.books) if (b.role === 'collab' || b.collab || b.invite) want.set('sb:' + b.id, () => api.watchBook(b.id, (d, local) => this.onSharedBook(b.id, d, local)));
+    if (me) for (const b of s.books) if (b.role === 'collab' || b.collabs?.length || b.invites?.length) want.set('sb:' + b.id, () => api.watchBook(b.id, (d, local) => this.onSharedBook(b.id, d, local)));
     for (const [k, stop] of this.watches) if (!want.has(k)) { stop(); this.watches.delete(k); }
     for (const [k, start] of want) if (!this.watches.has(k)) this.watches.set(k, start());
     // Goals: a one-off notification the first time a count reaches 100.
@@ -712,7 +717,7 @@ export default class App extends Component<object, State> {
     const id = this.mgHold, snap = this.mgSnap; this.mgHold = null; if (!id || !snap) return;
     this.setState(s => {
       // Sharing changes take effect straight away, so they survive a Cancel.
-      const books = s.books.map(b => b.id === id ? { ...snap, collab: b.collab, invite: b.invite, owner: b.owner } : b), mine = s.books[s.active]?.id === id;
+      const books = s.books.map(b => b.id === id ? { ...snap, collabs: b.collabs, invites: b.invites, owner: b.owner } : b), mine = s.books[s.active]?.id === id;
       return { books, images: mine ? snap.images : s.images, mgPage: null, tagDraft: '' };
     });
   }
@@ -721,14 +726,14 @@ export default class App extends Component<object, State> {
   /** A shared book changed elsewhere: take the other person's pages unless this browser has edits of its own on the way. */
   onSharedBook(id: string, d: BookDoc | null, local: boolean) {
     const me = this.state.acct?.uid, cur = this.findBook(id); if (!me || !cur || local) return;
-    if (!d || (cur.role === 'collab' && d.collab?.uid !== me)) {
+    if (!d || (cur.role === 'collab' && !d.collabs.some(m => m.uid === me))) {
       // Removed from it, or it was deleted.
       if (cur.role !== 'collab') return;
       this.setState(s => { const books = s.books.filter(b => b.id !== id), k = Math.min(s.active, books.length - 1);
         return books.length ? { books, active: k, images: s.books[s.active]?.id === id ? books[k].images : s.images } : null; });
       return this.toast(`You’re no longer drawing in “${cur.name}”`);
     }
-    const share = { collab: d.collab, invite: d.invite, owner: { uid: d.ownerId, name: d.ownerName, handle: d.ownerHandle } };
+    const share = { collabs: d.collabs, invites: d.invites, owner: { uid: d.ownerId, name: d.ownerName, handle: d.ownerHandle } };
     const busy = this.mgHold === id || this.dirty.has(id) || (this.busy.get(id) || 0) > 0 || bookUrls(cur).some(isData) || (this.editedAt.get(id) || 0) > d.updatedAt;
     const fresh = api.toBook(d, me);
     const next: Book = busy ? { ...cur, ...share } : { ...cur, ...share, images: fresh.images, thumbs: fresh.thumbs, notes: fresh.notes,
@@ -746,13 +751,14 @@ export default class App extends Component<object, State> {
     } catch (e) {
       const c = (e as { code?: string }).code;
       this.setState({ shErr: c === 'no-handle' ? 'No one has that handle.' : c === 'self-invite' ? 'That’s you.' : api.errMsg(e) });
+      if (c === 'share-full' && !this.state.plus) this.openPlus('people');
     } finally { this.setState({ shBusy: false }); }
   }
   async answerInvite(d: BookDoc, yes: boolean) {
     const a = this.state.acct; if (!a) return;
     this.setState(s => ({ invites: (s.invites || []).filter(x => x.id !== d.id) }));
     try {
-      if (!yes) return void await api.declineInvite(d.id);
+      if (!yes) return void await api.declineInvite(d.id, a.uid);
       await api.acceptInvite(a, d.id);
       const fresh = await api.getBook(d.id); if (!fresh) return;
       const b = api.toBook(fresh, a.uid); this.synced.set(b.id, bookUrls(b));
@@ -1198,7 +1204,7 @@ export default class App extends Component<object, State> {
     const pin = mine ? (s.plus ? a.pin : '') : s.pf?.uid === s.profileOf?.uid && s.pf?.plus ? s.pf?.profile?.pin : '';
     const card = (b: AnyBook, bg: string, showLabel: boolean, pages: number, open: () => void) => ({
       key: b.id, name: b.name, color: b.color, bg, showLabel, a: this.shapeOf(b).a, s: this.shapeOf(b).s,
-      count: `${pin && b.id === pin ? 'Pinned · ' : ''}${pages} ${pages === 1 ? 'page' : 'pages'} · ${(b as Book).role === 'collab' ? 'With ' + (b as Book).owner?.name : (b as Book).collab ? 'With ' + (b as Book).collab!.name : this.shapeOf(b).label || 'Portrait'}${(b as Book).linkOnly ? ' · Link only' : (b as Book).isPublic === false ? ' · Private' : ''}`, open,
+      count: `${pin && b.id === pin ? 'Pinned · ' : ''}${pages} ${pages === 1 ? 'page' : 'pages'} · ${(b as Book).role === 'collab' ? 'With ' + (b as Book).owner?.name : (b as Book).collabs?.length ? 'With ' + names((b as Book).collabs) : this.shapeOf(b).label || 'Portrait'}${(b as Book).linkOnly ? ' · Link only' : (b as Book).isPublic === false ? ' · Private' : ''}`, open,
     });
     const pinFirst = <T extends { key: string }>(l: T[]) => pin ? [...l.filter(x => x.key === pin), ...l.filter(x => x.key !== pin)] : l;
     let p: { name?: string; handle?: string; bio?: string; loc?: string; web?: string; ig?: string; mail?: string; socials?: Record<string, string>; accent?: string; av?: string | null; joined: string; stats: [number, string][] };
@@ -2005,7 +2011,7 @@ export default class App extends Component<object, State> {
       titleOp: ((sw ? 1 - Math.sin(Math.PI * (s.swT || 0)) * 0.85 : 1) * (1 - fz)).toFixed(3),
       bookName: book.name,
       bookMeta: (other ? `by ${(other as OtherBook).artist} · ${(other as OtherBook).pages} pages` : books.length > 1 ? `${images.length} ${images.length === 1 ? 'page' : 'pages'} · ${active + 1} of ${books.length}` : `${images.length} ${images.length === 1 ? 'page' : 'pages'}`) + (!other && (book as Book).linkOnly ? ' · Link only' : !other && (book as Book).isPublic === false ? ' · Private' : '')
-        + (!other && (book as Book).role === 'collab' ? ` · ${(book as Book).owner?.name}’s, shared with you` : !other && (book as Book).collab ? ` · with ${(book as Book).collab!.name}` : ''),
+        + (!other && (book as Book).role === 'collab' ? ` · ${(book as Book).owner?.name}’s, shared with you` : !other && (book as Book).collabs?.length ? ` · with ${names((book as Book).collabs)}` : ''),
       multi: !other && books.length > 1, prevBook: () => this.switchBook(active - 1), nextBook: () => this.switchBook(active + 1),
       prevOp: active > 0 ? 1 : 0.3, nextOp: active < books.length - 1 ? 1 : 0.3,
       sideBooks, sbBase: `rotateX(${tilt}deg)`, ghostT: sideT(books.length), ghostW: ghostD.W, ghostH: ghostD.H, ghostTop: -ghostD.H / 2,
@@ -2035,7 +2041,7 @@ export default class App extends Component<object, State> {
       mgTab: s.mgTab || 'pages', setMgTab: (t: State['mgTab']) => this.setState({ mgTab: t, mgPage: null }),
       mgPage: s.mgPage != null && s.mgPage < images.length ? s.mgPage : null, openPage: (i: number) => this.setState({ mgPage: i }), closePage: () => this.setState({ mgPage: null }),
       mgChanged: s.managing && this.mgChanged(), mgSave: () => this.saveEdits(), mgCancel: () => this.setState({ managing: false }),
-      mgSummary: `${images.length} ${images.length === 1 ? 'page' : 'pages'} · ${(book as Book).hidden ? 'Private' : (book as Book).linkOnly ? 'Link only' : (book as Book).isPublic === false ? 'Private' : 'Public'}${(book as Book).collab ? ' · with ' + (book as Book).collab!.name : (book as Book).role === 'collab' ? ' · ' + (book as Book).owner?.name + '’s, shared with you' : ''}`,
+      mgSummary: `${images.length} ${images.length === 1 ? 'page' : 'pages'} · ${(book as Book).hidden ? 'Private' : (book as Book).linkOnly ? 'Link only' : (book as Book).isPublic === false ? 'Private' : 'Public'}${(book as Book).collabs?.length ? ' · with ' + names((book as Book).collabs) : (book as Book).role === 'collab' ? ' · ' + (book as Book).owner?.name + '’s, shared with you' : ''}`,
       ...(() => {
         const o = other as OtherBook | null, mineB = books[active];
         return {
@@ -2139,17 +2145,25 @@ export default class App extends Component<object, State> {
         return {
           isCollab, canShare: !other && !isCollab && !!s.acct && !b.id?.startsWith('local'),
           shOwner: b.owner?.name || '', shOwnerHandle: b.owner?.handle ? '@' + b.owner.handle : '',
-          shCollab: b.collab ? { name: b.collab.name, handle: '@' + b.collab.handle } : null,
-          shInvite: b.invite ? { name: b.invite.name, handle: '@' + b.invite.handle } : null,
-          shDraft: s.shDraft || '', shBusy: !!s.shBusy, shErr: s.shErr || '',
-          onShDraft: (e: ChangeEvent<HTMLInputElement>) => this.setState({ shDraft: slug(e.target.value), shErr: '' }),
-          shInviteSend: (e?: { preventDefault(): void }) => { e?.preventDefault(); const a = s.acct, h = s.shDraft; if (!a || !h) return;
-            this.share$(async () => ({ invite: await api.invite(a, { id: b.id, name: b.name }, h) }), `Invitation sent to @${h}`); },
-          shCancel: () => this.share$(async () => { await api.cancelInvite(b.id); return { invite: null }; }, 'Invitation cancelled'),
-          shRemove: () => this.ask({ title: `Stop sharing with ${b.collab?.name}?`, text: `They won’t be able to add pages to “${b.name}” any more. The pages they added stay in it.`, yes: 'Stop sharing', danger: true, run: () =>
-            this.share$(async () => { await api.endShare(b.id); return { collab: null }; }, 'Sharing stopped') }),
-          shLeave: () => this.ask({ title: `Leave “${b.name}”?`, text: `It goes back to being only ${b.owner?.name}’s. The pages you added stay in it.`, yes: 'Leave', danger: true, run: () =>
-            this.share$(async () => { await api.endShare(b.id); this.setState(st => { const books = st.books.filter(x => x.id !== b.id), k = Math.max(0, Math.min(st.active, books.length - 1)); return { books, active: k, images: books[k]?.images || [], managing: false }; }); }, `You left “${b.name}”`) }),
+          // Up to one person on the free plan, five with Plus (people drawing in it plus invitations waiting).
+          ...(() => {
+            const limit = s.plus ? api.SHARE_PLUS : api.SHARE_FREE, used = (b.collabs?.length || 0) + (b.invites?.length || 0);
+            return {
+              shPeople: (b.collabs || []).map(m => ({ key: m.uid, name: m.name || '@' + m.handle, handle: '@' + m.handle,
+                remove: () => this.ask({ title: `Stop sharing with ${m.name || '@' + m.handle}?`, text: `They won’t be able to add pages to “${b.name}” any more. The pages they added stay in it.`, yes: 'Stop sharing', danger: true,
+                  run: () => this.share$(() => api.endShare(b.id, m.uid), 'Sharing stopped') }) })),
+              shInvites: (b.invites || []).map(m => ({ key: m.uid, name: m.name || '@' + m.handle, handle: '@' + m.handle,
+                cancel: () => this.share$(() => api.cancelInvite(b.id, m.uid), 'Invitation cancelled') })),
+              shRoom: used < limit, shPlus: !!s.plus, shUsed: used, shLimit: limit,
+              shMore: () => this.openPlus('people'),
+              shDraft: s.shDraft || '', shBusy: !!s.shBusy, shErr: s.shErr || '',
+              onShDraft: (e: ChangeEvent<HTMLInputElement>) => this.setState({ shDraft: slug(e.target.value), shErr: '' }),
+              shInviteSend: (e?: { preventDefault(): void }) => { e?.preventDefault(); const a = s.acct, h = s.shDraft; if (!a || !h) return;
+                this.share$(() => api.invite(a, { id: b.id, name: b.name }, h, limit), `Invitation sent to @${h}`); },
+            };
+          })(),
+          shLeave: () => this.ask({ title: `Leave “${b.name}”?`, text: `It goes back to being ${b.owner?.name}’s without you. The pages you added stay in it.`, yes: 'Leave', danger: true, run: () =>
+            this.share$(async () => { await api.endShare(b.id, s.acct?.uid || ''); this.setState(st => { const books = st.books.filter(x => x.id !== b.id), k = Math.max(0, Math.min(st.active, books.length - 1)); return { books, active: k, images: books[k]?.images || [], managing: false }; }); }, `You left “${b.name}”`) }),
         };
       })(),
       W, H, leaves, stageRef: this.stageRef, fileRef: this.fileRef,
