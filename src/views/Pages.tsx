@@ -251,9 +251,6 @@ function ContactPage({ v }: { v: V }) {
             <Help title="Plus and billing">
               <span>Cancel, change plan, update your card and get receipts in Account settings → Plan. For refunds or anything else, choose <b style={{ fontWeight: 600 }}>Plus and billing</b> in the form.</span>
             </Help>
-            <Help title="Post">
-              <span>fletora.<br />{ADDRESS}</span>
-            </Help>
           </aside>
         </div>
         <SiteFooter v={v} />
