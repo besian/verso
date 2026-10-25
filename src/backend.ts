@@ -595,10 +595,10 @@ export async function isPlus(uid: string): Promise<boolean> {
 }
 
 /** Calls api/billing: a Stripe page to go to (url), or a checkout to embed on ours (clientSecret). */
-async function billing(action: 'checkout' | 'portal' | 'close', extra: object = {}): Promise<{ url?: string; clientSecret?: string }> {
+async function billing(action: 'checkout' | 'portal' | 'sync' | 'close', extra: object = {}): Promise<{ url?: string; clientSecret?: string; plus?: boolean }> {
   const u = need().auth.currentUser; if (!u) throw Object.assign(new Error('signed out'), { code: 'auth/no-current-user' });
   const r = await fetch('/api/billing', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + await u.getIdToken() }, body: JSON.stringify({ action, ...extra }) }).catch(() => null);
-  const body = r && await r.json().catch(() => null) as { url?: string; clientSecret?: string; error?: string } | null;
+  const body = r && await r.json().catch(() => null) as { url?: string; clientSecret?: string; plus?: boolean; error?: string } | null;
   if (!r || !r.ok) throw Object.assign(new Error(body?.error || 'billing'), { code: 'billing/' + (body?.error || 'failed') });
   return body || {};
 }
@@ -606,6 +606,8 @@ async function billing(action: 'checkout' | 'portal' | 'close', extra: object = 
 export const STRIPE_KEY: string = env.VITE_STRIPE_PUBLISHABLE_KEY || '';
 export const checkout = (plan: 'month' | 'year', embedded = !!STRIPE_KEY) => billing('checkout', { plan, embedded });
 export const billingPortal = async () => (await billing('portal')).url || '';
+/** Back from paying: asks the server to record that checkout now rather than waiting for Stripe's webhook. */
+export const confirmCheckout = (session: string) => billing('sync', { session });
 
 /** Where a view came from, for the owner's stats. */
 export type ViewSource = 'explore' | 'profile' | 'home' | 'link' | 'embed';

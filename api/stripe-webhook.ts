@@ -1,15 +1,10 @@
-// Stripe tells us about subscriptions here, and this is the only place Fletora Plus is switched on or off.
-// Each event is checked against STRIPE_WEBHOOK_SECRET, then the subscription is read fresh from Stripe (so
-// events arriving out of order can't leave the wrong state) and written to plus/{uid} (public: on/off, for
-// the Plus mark and the rules) and billing/{uid} (private: plan details, for Settings).
-// When Plus ends, link-only sketchbooks go back to private.
+// Stripe tells us about subscriptions here: renewals, plan changes, cancellations and failed payments.
+// Each event is checked against STRIPE_WEBHOOK_SECRET, then recorded by api/_lib/plus (plus/{uid} and billing/{uid}).
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { stripe } from './_lib/stripe.js';
+import { syncCheckout, syncSubscription } from './_lib/plus.js';
 
-const GRACE_MS = 3 * 86400000; // a late renewal doesn't switch Plus off for a few days
-const LIVE = ['active', 'trialing', 'past_due'];
 const json = (status: number, body: object) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
 function db() {
@@ -26,26 +21,6 @@ function verified(raw: string, header: string, secret: string) {
   return sigs.some(s => { const got = Buffer.from(s); return got.length === want.length && timingSafeEqual(got, want); });
 }
 
-/** Reads the subscription and records what it means for its account. */
-async function sync(subId: string, uidHint?: string) {
-  const d = db(), sub = await stripe('GET', `subscriptions/${subId}`);
-  const uid: string = sub.metadata?.uid || uidHint || '';
-  if (!uid) return console.warn('subscription without uid', subId);
-  const item = sub.items?.data?.[0], end = (sub.current_period_end ?? item?.current_period_end ?? 0) * 1000;
-  const on = LIVE.includes(sub.status);
-  await Promise.all([
-    d.collection('plus').doc(uid).set({ on, until: on ? end + GRACE_MS : 0 }),
-    d.collection('billing').doc(uid).set({
-      customer: typeof sub.customer === 'string' ? sub.customer : sub.customer?.id, sub: sub.id, status: sub.status,
-      interval: item?.price?.recurring?.interval || '', periodEnd: end, renews: on && !sub.cancel_at_period_end, at: Date.now(),
-    }, { merge: true }),
-  ]);
-  if (!on) {
-    const books = await d.collection('books').where('ownerId', '==', uid).where('linkOnly', '==', true).get();
-    const batch = d.batch(); books.forEach(b => batch.update(b.ref, { linkOnly: false })); if (!books.empty) await batch.commit();
-  }
-}
-
 export function GET() { return json(405, { error: 'use POST' }); }
 
 export async function POST(req: Request) {
@@ -55,8 +30,8 @@ export async function POST(req: Request) {
   if (!verified(raw, req.headers.get('stripe-signature') || '', secret)) return json(400, { error: 'bad-signature' });
   const ev = JSON.parse(raw) as { type: string; data: { object: Record<string, any> } }, o = ev.data.object;
   try {
-    if (ev.type === 'checkout.session.completed' && o.mode === 'subscription' && o.subscription) await sync(o.subscription, o.client_reference_id);
-    else if (ev.type.startsWith('customer.subscription.')) await sync(o.id);
+    if (ev.type === 'checkout.session.completed' && o.mode === 'subscription') await syncCheckout(db(), o.id);
+    else if (ev.type.startsWith('customer.subscription.')) await syncSubscription(db(), o.id);
   } catch (e) {
     // A failure answers 500 so Stripe tries again later.
     console.error('webhook', ev.type, e);

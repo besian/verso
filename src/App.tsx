@@ -234,7 +234,8 @@ export default class App extends Component<object, State> {
       if (!u.verified && !acct) this.checkVerified();
       this.setState(s => ({ acct: a, verified: acct ? false : !!u.verified, follows, saved, blocked, books, active: 0, images: books[0].images, p: 0, authReady: true, mode: this.routed && (s.mode === 'home' || s.mode === 'auth') ? 'mine' : s.mode }),
         () => { if (fresh || legacy) this.persist(books); this.backfillThumbs(); this.loadFollowFeed(); api.mirrorFollows(u.uid, follows).catch(e => console.warn('follower backfill', e));
-          api.isAdmin(u.uid).then(admin => this.setState({ admin }, () => { if (admin && this.state.mode === 'admin') this.loadReports(); })); });
+          api.isAdmin(u.uid).then(admin => this.setState({ admin }, () => { if (admin && this.state.mode === 'admin') this.loadReports(); }));
+          if (this.pendingCheckout) this.confirmPlus(this.pendingCheckout); });
     } catch (e) {
       console.error(e);
       this.setState({ authReady: true });
@@ -486,6 +487,12 @@ export default class App extends Component<object, State> {
     this.setState({ mode: 'other', other: b, images: b.images, p: 0, focus: false, fz: 0 });
   }
   viewed = new Set<string>();
+  pendingCheckout: string | null = null;
+  confirmPlus(session: string | null) {
+    if (!session || !session.startsWith('cs_')) return;
+    api.confirmCheckout(session).then(r => { this.pendingCheckout = null; if (!r.plus) this.toast('Payment received. Plus switches on in a moment.'); })
+      .catch(e => console.warn('confirm checkout', e));
+  }
   /** Opens the Fletora Plus sheet, saying why (a key of REASONS, or '' for none). */
   openPlus = (why = '') => this.setState({ plusFor: why, plusErr: '', more: null });
   /** Room left in the open sketchbook for new pages. Someone else's plan decides for a shared one (the rules check it). */
@@ -566,9 +573,11 @@ export default class App extends Component<object, State> {
       if (a === 'admin') return s.acct ? this.openAdmin() : this.openAuth('signin');
       if (a === 'signin' || a === 'join' || a === 'reset') { if (s.acct) return this.goMode('mine'); this.openAuth(a === 'join' ? 'join' : 'signin'); if (a === 'reset') this.setState({ suMode: 'reset' }); return; }
       if (a === 'settings') {
-        if (!s.acct) return this.openAuth('signin');
-        // Back from Stripe's checkout. Plus switches on as soon as Stripe tells us (usually a few seconds).
-        if (new URLSearchParams(location.search).get('plus') === 'welcome') this.toast('Welcome to Fletora Plus');
+        // Signed out on the way back from paying: confirm the checkout once they've signed in.
+        if (!s.acct) { this.pendingCheckout = new URLSearchParams(location.search).get('session_id') || this.pendingCheckout; return this.openAuth('signin'); }
+        // Back from Stripe's checkout: confirm it with the server straight away (the webhook follows too).
+        const q = new URLSearchParams(location.search);
+        if (q.get('plus') === 'welcome') { this.toast('Welcome to Fletora Plus'); this.confirmPlus(q.get('session_id')); }
         return this.openSettings();
       }
       if (a === 'plus') { if (!s.acct) return this.openAuth('join'); this.openSettings(); return this.openPlus(); }

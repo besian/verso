@@ -1,13 +1,20 @@
 // Fletora Plus billing through Stripe (Managed Payments: Stripe is the seller and handles tax, fraud and
 // disputes). Checkout starts a subscription, the portal is where people change plan, update their card or
-// cancel, and `close` cancels everything when an account is deleted. Plus itself is switched on and off by
-// api/stripe-webhook, never here. Needs STRIPE_SECRET_KEY and FIREBASE_SERVICE_ACCOUNT in Vercel.
+// cancel, `sync` confirms a checkout as soon as someone comes back from paying (the webhook does too, and keeps
+// it up to date after), and `close` cancels everything when an account is deleted.
+// Needs STRIPE_SECRET_KEY and FIREBASE_SERVICE_ACCOUNT in Vercel.
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { stripe } from './_lib/stripe.js';
+import { syncCheckout } from './_lib/plus.js';
 
 const ORIGIN = process.env.APP_ORIGIN || 'https://fletora.studio';
+/** Back to the same address the person paid from (www. or not), so they're still signed in there. */
+const originOf = (req: Request) => {
+  const o = req.headers.get('origin') || '';
+  return /^https:\/\/(www\.)?fletora\.studio$/.test(o) || o === ORIGIN ? o : ORIGIN;
+};
 // The product in Stripe whose monthly and yearly prices are offered.
 const PRODUCT = process.env.STRIPE_PRODUCT_NAME || 'Fletora Plus';
 const json = (status: number, body: object) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -31,7 +38,8 @@ export async function POST(req: Request) {
   let uid = '', email = '';
   try { const u = await auth.verifyIdToken((req.headers.get('authorization') || '').replace(/^Bearer /, '')); uid = u.uid; email = u.email || ''; }
   catch { return json(401, { error: 'sign-in' }); }
-  const body = await req.json().catch(() => ({})) as { action?: string; plan?: string; embedded?: boolean };
+  const body = await req.json().catch(() => ({})) as { action?: string; plan?: string; embedded?: boolean; session?: string };
+  const here = originOf(req), back = `${here}/settings?plus=welcome&session_id={CHECKOUT_SESSION_ID}`;
   const billing = db.collection('billing').doc(uid), bill = (await billing.get()).data() || {};
 
   try {
@@ -51,17 +59,21 @@ export async function POST(req: Request) {
       // embedded_page (newer) and embedded, so both are tried before falling back to Stripe's own page.
       if (body.embedded) for (const ui_mode of ['embedded_page', 'embedded']) {
         try {
-          const s = await stripe('POST', 'checkout/sessions', { ...base, ui_mode, return_url: `${ORIGIN}/settings?plus=welcome` });
+          const s = await stripe('POST', 'checkout/sessions', { ...base, ui_mode, return_url: back });
           if (s.client_secret) return json(200, { clientSecret: s.client_secret });
         } catch (e) { console.warn('embedded checkout', ui_mode, (e as Error).message); }
       }
-      const s = await stripe('POST', 'checkout/sessions', { ...base, success_url: `${ORIGIN}/settings?plus=welcome`, cancel_url: `${ORIGIN}/settings` });
+      const s = await stripe('POST', 'checkout/sessions', { ...base, success_url: back, cancel_url: `${here}/settings` });
       return json(200, { url: s.url });
     }
     if (body.action === 'portal') {
       if (!bill.customer) return json(404, { error: 'no-customer' });
-      const s = await stripe('POST', 'billing_portal/sessions', { customer: bill.customer, return_url: `${ORIGIN}/settings` });
+      const s = await stripe('POST', 'billing_portal/sessions', { customer: bill.customer, return_url: `${here}/settings` });
       return json(200, { url: s.url });
+    }
+    if (body.action === 'sync') {
+      if (!/^cs_[A-Za-z0-9_]+$/.test(body.session || '')) return json(400, { error: 'bad-request' });
+      return json(200, { plus: await syncCheckout(db, body.session!, uid) });
     }
     if (body.action === 'close') {
       // Deleting the account: end the subscription now (no further charges) and forget the billing link.
@@ -72,6 +84,7 @@ export async function POST(req: Request) {
     return json(400, { error: 'bad-request' });
   } catch (e) {
     console.error('billing', body.action, e);
+    if ((e as { status?: number }).status === 403) return json(403, { error: 'not-yours' });
     return json(502, { error: 'stripe-failed' });
   }
 }
