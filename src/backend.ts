@@ -628,10 +628,12 @@ export async function report(by: string, r: { kind: 'book' | 'user' | 'message';
 /** Plan details from billing/{uid} (written by the server when Stripe reports a change). */
 export interface Billing { status: string; interval: string; periodEnd: number; renews: boolean }
 /** Whether a plus/{uid} document means Plus is on now. */
-export const plusOn = (d: DocumentData | null) => !!d && d.on === true && (d.until || 0) > Date.now();
+/** `until` in milliseconds; also read when typed in the console as text, or saved as a date. */
+const untilMs = (u: unknown): number => typeof u === 'number' ? u : typeof u === 'string' ? Number(u) || 0 : (u as { toMillis?: () => number } | null)?.toMillis?.() ?? 0;
+export const plusOn = (d: DocumentData | null) => !!d && d.on === true && untilMs(d.until) > Date.now();
 /** Someone's Plus: whether it's on, and if it was given by Fletora (a gift) rather than paid for, until when. */
 export interface PlusInfo { on: boolean; gift: boolean; until: number; forever: boolean }
-export const plusInfo = (d: DocumentData | null): PlusInfo => ({ on: plusOn(d), gift: !!d?.gift, until: d?.until || 0, forever: !!d?.forever });
+export const plusInfo = (d: DocumentData | null): PlusInfo => ({ on: plusOn(d), gift: !!d?.gift, until: untilMs(d?.until), forever: !!d?.forever });
 export async function getPlus(uid: string): Promise<PlusInfo> {
   try { return plusInfo((await getDoc(doc(need().db, 'plus', uid))).data() || null); } catch { return plusInfo(null); }
 }

@@ -11,9 +11,14 @@ service cloud.firestore {
     function isAdmin() { return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
     function suspended() { return signedIn() && exists(/databases/$(database)/documents/banned/$(request.auth.uid)); }
     // Fletora Plus: plus/{uid}, written only by api/stripe-webhook. `until` already includes a few days' grace.
+    // `until` is milliseconds; a number typed in the console as text, or a date, counts too.
     function plus(uid) {
       let p = /databases/$(database)/documents/plus/$(uid);
-      return exists(p) && get(p).data.get('on', false) == true && get(p).data.get('until', 0) > request.time.toMillis();
+      let u = exists(p) ? get(p).data.get('until', 0) : 0;
+      return exists(p) && get(p).data.get('on', false) == true
+        && (((u is int || u is float) && u > request.time.toMillis())
+          || (u is string && u.matches('^[0-9]{10,16}$') && int(u) > request.time.toMillis())
+          || (u is timestamp && u > request.time));
     }
 
     // Social links on a profile: known platforms only, one handle (≤ 100 characters) each.

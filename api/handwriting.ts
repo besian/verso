@@ -37,7 +37,9 @@ export async function POST(req: Request) {
   // Count this month's conversions for the user.
   const ref = db.collection('inkLog').doc(`${uid}_${new Date().toISOString().slice(0, 7)}`);
   const [log, plus] = await Promise.all([ref.get(), db.collection('plus').doc(uid).get()]);
-  const n = (log.get('n') as number | undefined) || 0, isPlus = plus.get('on') === true && (plus.get('until') || 0) > Date.now();
+  // `until` in ms; also when typed in the console as text, or saved as a date.
+  const u = plus.get('until'), until = typeof u === 'number' ? u : typeof u === 'string' ? Number(u) || 0 : u?.toMillis?.() ?? 0;
+  const n = (log.get('n') as number | undefined) || 0, isPlus = plus.get('on') === true && until > Date.now();
   if (n >= (isPlus ? PER_MONTH_PLUS : PER_MONTH)) return json(429, { error: isPlus ? 'limit' : 'limit-free' });
   await ref.set({ n: FieldValue.increment(1) }, { merge: true });
 
