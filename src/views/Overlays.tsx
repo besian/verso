@@ -462,6 +462,29 @@ export function CardModal({ v }: { v: V }) {
   );
 }
 
+/** Moderators: give someone Plus for free, for a while or for good, or take a gift back. */
+export function GiftModal({ v }: { v: V }) {
+  const opt = (months: number, l: string) => (
+    <button key={months} onClick={() => v.gfGive(months)} disabled={v.gfBusy} className={hoverTint} style={{ ...ghostBtn, height: 44, padding: '0 16px', fontSize: 14, opacity: v.gfBusy ? 0.6 : 1 }}>{l}</button>
+  );
+  return (
+    <Modal onClose={e => { if (e.target === e.currentTarget) v.gfClose(); }} pad={v.mModalPad} maxWidth={460} gap={16} z={40} shadow="0 30px 60px rgba(10,10,30,.35)">
+      <span style={{ font: `600 11px ${SANS}`, letterSpacing: '.14em', textTransform: 'uppercase', color: MARK }}>Moderators</span>
+      <span style={{ ...heading, fontSize: 32, lineHeight: 1.05 }}>Give {v.gfName} Plus</span>
+      <span style={{ fontSize: 14, lineHeight: 1.5 }}>{v.gfNow || 'Free, with no card needed. They get everything in Plus straight away, and it ends by itself.'}</span>
+      {v.gfPaid ? null : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+            {opt(1, '1 month')}{opt(3, '3 months')}{opt(12, '12 months')}{opt(0, 'For good')}
+          </div>
+          {v.gfHas && <button onClick={() => v.gfGive(-1)} disabled={v.gfBusy} style={{ ...linkBtn(MARK), alignSelf: 'flex-start' }}>Remove their Plus</button>}
+        </>
+      )}
+      <button onClick={v.gfClose} className="tap" style={{ ...linkBtn('rgba(var(--ink-rgb),.75)'), alignSelf: 'center', padding: 4 }}>Close</button>
+    </Modal>
+  );
+}
+
 /** Asks before cancelling Plus or switching it to yearly. */
 export function PlanConfirm({ v }: { v: V }) {
   const cancel = v.bdAsk === 'cancel';

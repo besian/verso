@@ -26,7 +26,7 @@ import Stage from './views/Stage';
 import { AuthPage, BillingPage, Explore, HomeScreen, Profile, Settings } from './views/Screens';
 import { Admin, AuthAction, Legal, NotFound } from './views/Pages';
 import { Messages } from './views/Messages';
-import { ArchiveModal, CardModal, CollectionModal, Editor, EditProfile, EmbedModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
+import { ArchiveModal, CardModal, CollectionModal, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
 
 export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound' | 'action' | 'messages' | 'billing';
 /** A report with what it points at, for the moderation page. */
@@ -59,10 +59,12 @@ interface State {
   acct: Account | null; follows: string[];
   books: Book[]; active: number; images: string[];
   other?: AnyBook | null; profileOf?: Who | null; pfPreview?: boolean;
-  pf?: { uid: string; profile: PublicProfile | null; books: OtherBook[]; plus?: boolean } | null;
+  pf?: { uid: string; profile: PublicProfile | null; books: OtherBook[]; plus?: boolean; gift?: api.PlusInfo } | null;
   /** Fletora Plus: whether you have it (undefined until known), your plan details, and the upgrade sheet
    *  (open when plusFor isn't null; its value says why it opened, see REASONS). */
-  plus?: boolean; bill?: Billing | null; plusFor?: string | null; plusPlan?: 'month' | 'year'; plusBusy?: boolean; plusErr?: string;
+  plus?: boolean; bill?: Billing | null; myGift?: api.PlusInfo | null;
+  /** Moderators giving someone Plus: who, and while it's being saved. */
+  giftFor?: { uid: string; name: string; gift: api.PlusInfo | null } | null; giftBusy?: boolean; plusFor?: string | null; plusPlan?: 'month' | 'year'; plusBusy?: boolean; plusErr?: string;
   /** Checkout on our page: its session's client secret, whether it's our own form with Stripe's card fields
    *  ('elements') or Stripe's whole form ('embedded'), and the thank-you once it's paid. */
   plusSecret?: string; plusUi?: 'elements' | 'embedded'; plusDone?: boolean; plusWhy?: string[];
@@ -443,9 +445,9 @@ export default class App extends Component<object, State> {
     if (me) want.set('iv:' + me, () => api.watchInvites(me, invites => this.setState({ invites })));
     if (me) want.set('ch:' + me, () => api.watchChats(me, chats => this.setState({ chats })));
     if (me) want.set('pl:' + me, () => api.watch(['plus', me], d => {
-      const on = api.plusOn(d);
+      const on = api.plusOn(d), info = api.plusInfo(d);
       // Without Plus, link-only sketchbooks are private again (the server changes the stored ones).
-      this.setState(st => ({ plus: on, books: on ? st.books : st.books.map(b => b.linkOnly ? { ...b, linkOnly: false } : b) }));
+      this.setState(st => ({ plus: on, myGift: info.gift && on ? info : null, books: on ? st.books : st.books.map(b => b.linkOnly ? { ...b, linkOnly: false } : b) }));
     }));
     if (me) want.set('bl:' + me, () => api.watch(['billing', me], d => this.setState({ bill: d ? { status: d.status || '', interval: d.interval || '', periodEnd: d.periodEnd || 0, renews: !!d.renews } : null })));
     const openChat = s.mode === 'messages' && s.chatOpen && (s.chats || []).some(c => c.id === s.chatOpen) ? s.chatOpen : null;
@@ -661,8 +663,8 @@ export default class App extends Component<object, State> {
     cancelAnimationFrame(this.raf); cancelAnimationFrame(this.exRaf); this.target = 0;
     this.setState(s => ({ mode: 'profile', profileOf: who, pf: null, pfPreview: false, other: null, acErr: '', acInfo: '', images: s.books[s.active].images, p: 0, focus: false, fz: 0, managing: false }));
     const uid = who?.uid;
-    if (uid) Promise.all([api.getProfile(uid), api.userBooks(uid, true), api.isPlus(uid)]).then(([profile, docs, plus]) => {
-      if (this.state.profileOf?.uid === uid) this.setState({ pf: { uid, profile, books: docs.filter(b => b.pageCount > 0).map(toOther), plus } });
+    if (uid) Promise.all([api.getProfile(uid), api.userBooks(uid, true), api.getPlus(uid)]).then(([profile, docs, p]) => {
+      if (this.state.profileOf?.uid === uid) this.setState({ pf: { uid, profile, books: docs.filter(b => b.pageCount > 0).map(toOther), plus: p.on, gift: p } });
     }).catch(e => console.error(e));
   }
   whoOf(b: OtherBook): Who { return { name: b.artist, uid: b.ownerId, handle: b.handle }; }
@@ -1231,6 +1233,9 @@ export default class App extends Component<object, State> {
           pfMessage: () => uid && this.messageUser({ uid, name: name || '', handle: handle || '', av: p.av || null }), pfCanMessage: !mine && !!uid && !blockedOn,
           pfMoreOpen: s.more === 'profile', pfMore: () => this.setState(st => ({ more: st.more === 'profile' ? null : 'profile' })),
           pfReport: () => this.openReport({ kind: 'user', targetId: uid, ownerId: uid, label: name }),
+          // Moderators can give Plus from someone's profile.
+          pfCanGift: !mine && !!s.admin && !!uid, pfGiftLbl: s.pf?.plus ? 'Plus: change or remove…' : 'Give Plus…',
+          pfGift: () => this.setState({ more: null, giftFor: { uid, name, gift: s.pf?.uid === uid ? s.pf.gift || null : null } }),
           pfBlock: () => this.toggleBlock(uid, name), pfBlockLbl: blockedOn ? `Unblock ${name}` : `Block ${name}`,
         };
       })(),
@@ -1309,6 +1314,23 @@ export default class App extends Component<object, State> {
         }
       },
       closeAuth: this.closeAuth,
+      // Moderators: give Plus.
+      gfOpen: !!s.giftFor && !!s.admin, gfName: s.giftFor?.name || '', gfBusy: !!s.giftBusy,
+      gfNow: (() => { const g = s.giftFor?.gift; if (!g?.on) return ''; if (!g.gift) return 'They pay for Plus.';
+        return g.forever ? 'They have Plus from Fletora, for good.' : `They have Plus from Fletora until ${new Date(g.until).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}.`; })(),
+      gfPaid: !!s.giftFor?.gift?.on && !s.giftFor.gift.gift, gfHas: !!s.giftFor?.gift?.on && !!s.giftFor.gift.gift,
+      gfClose: () => this.setState({ giftFor: null }),
+      gfGive: async (months: number) => {
+        const g = s.giftFor; if (!g || s.giftBusy) return;
+        this.setState({ giftBusy: true });
+        try {
+          months < 0 ? await api.ungiftPlus(g.uid) : await api.giftPlus(g.uid, months);
+          const p = await api.getPlus(g.uid);
+          this.setState(st => ({ giftFor: null, pf: st.pf?.uid === g.uid ? { ...st.pf, plus: p.on, gift: p } : st.pf }));
+          this.toast(months < 0 ? `Plus removed from ${g.name}` : `${g.name} has Plus${months ? ` for ${months} ${months === 1 ? 'month' : 'months'}` : ' for good'}`);
+        } catch (e) { this.toast(api.errMsg(e)); }
+        finally { this.setState({ giftBusy: false }); }
+      },
       // The Fletora Plus sheet.
       plOpen: s.plusFor != null && !!a, plReason: (s.plusFor && REASONS[s.plusFor]) || '', plHave: !!s.plus,
       plPerks: PERKS.map(([t, n]) => ({ key: t, title: t, note: n })),
@@ -1509,7 +1531,8 @@ export default class App extends Component<object, State> {
         const b = s.bill, end = b?.periodEnd ? new Date(b.periodEnd).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
         return {
           acPlus: !!s.plus, acHasBilling: !!b,
-          acPlan: !s.plus ? 'You’re on the free plan.' : `Fletora Plus${b?.interval ? ` · ${b.interval === 'year' ? 'yearly' : 'monthly'}` : ''}${end ? (b?.renews ? ` · renews ${end}` : ` · ends ${end}`) : ''}.`,
+          acGift: !!s.myGift, acGiftLine: s.myGift ? (s.myGift.forever ? 'Fletora Plus, from Fletora. It’s yours for good, no payment needed.' : `Fletora Plus, from Fletora, until ${new Date(s.myGift.until).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}. No payment needed.`) : '',
+          acPlan: !s.plus ? 'You’re on the free plan.' : s.myGift ? 'Fletora Plus, from Fletora.' : `Fletora Plus${b?.interval ? ` · ${b.interval === 'year' ? 'yearly' : 'monthly'}` : ''}${end ? (b?.renews ? ` · renews ${end}` : ` · ends ${end}`) : ''}.`,
           acPastDue: b?.status === 'past_due',
           seePlus: () => this.openPlus(),
           manageBilling: () => run('billing', async () => { location.href = await api.billingPortal(); }),
@@ -2200,6 +2223,7 @@ export default class App extends Component<object, State> {
         {v.editing && <Editor v={v} />}
         {v.plOpen && <PlusModal v={v} />}
         {v.isBilling && v.bdAsk && <PlanConfirm v={v} />}
+        {v.gfOpen && <GiftModal v={v} />}
         {v.isBilling && v.cardSecret && <CardModal v={v} />}
         <input ref={this.fileRef} type="file" accept="image/*" multiple onChange={v.onFiles} style={{ display: 'none' }} />
         {/* Phones: opens the camera straight away. */}

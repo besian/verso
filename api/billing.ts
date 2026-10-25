@@ -2,7 +2,8 @@
 // disputes). `checkout` starts a subscription (on Fletora's own page, with Stripe's card fields); `details`,
 // `cancel`, `resume`, `switch`, `card` and `card-done` run Fletora's billing page; `portal` is Stripe's own page,
 // kept as a fallback; `sync` confirms a checkout as soon as someone comes back from paying (the webhook does too,
-// and keeps it up to date after); `close` cancels everything when an account is deleted.
+// and keeps it up to date after); `close` cancels everything when an account is deleted; `gift` lets moderators
+// give someone Plus for free (or take a gift back).
 // Needs STRIPE_SECRET_KEY and FIREBASE_SERVICE_ACCOUNT in Vercel.
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
   let uid = '', email = '';
   try { const u = await auth.verifyIdToken((req.headers.get('authorization') || '').replace(/^Bearer /, '')); uid = u.uid; email = u.email || ''; }
   catch { return json(401, { error: 'sign-in' }); }
-  const body = await req.json().catch(() => ({})) as { action?: string; plan?: string; embedded?: boolean; session?: string; setup?: string };
+  const body = await req.json().catch(() => ({})) as { action?: string; plan?: string; embedded?: boolean; session?: string; setup?: string; target?: string; months?: number; remove?: boolean };
   const here = originOf(req), back = `${here}/settings?plus=welcome&session_id={CHECKOUT_SESSION_ID}`;
   const billing = db.collection('billing').doc(uid), bill = (await billing.get()).data() || {};
 
@@ -125,6 +126,23 @@ export async function POST(req: Request) {
       await stripe('POST', `customers/${bill.customer}`, { invoice_settings: { default_payment_method: pm } });
       if (bill.sub) await stripe('POST', `subscriptions/${bill.sub}`, { default_payment_method: pm });
       return json(200, { ok: true });
+    }
+    if (body.action === 'gift') {
+      // Moderators only. A gift is plus/{uid} with gift: true and no subscription behind it; a paid subscription
+      // always wins (the webhook rewrites plus/{uid} from it), and gifts never touch one.
+      if (!(await db.collection('admins').doc(uid).get()).exists) return json(403, { error: 'not-allowed' });
+      const target = String(body.target || '');
+      if (!/^[A-Za-z0-9]{10,40}$/.test(target)) return json(400, { error: 'bad-request' });
+      const [plus, paid] = await Promise.all([db.collection('plus').doc(target).get(), db.collection('billing').doc(target).get()]);
+      if (paid.data()?.renews || ['active', 'trialing', 'past_due'].includes(paid.data()?.status)) return json(409, { error: 'paid' });
+      if (body.remove) {
+        if (plus.data()?.gift) await plus.ref.set({ on: false, until: 0 });
+        return json(200, { ok: true });
+      }
+      const months = Math.max(0, Math.min(120, Math.floor(Number(body.months) || 0)));
+      const until = months ? new Date(new Date().setMonth(new Date().getMonth() + months)).getTime() : new Date('2100-01-01').getTime();
+      await plus.ref.set({ on: true, until, gift: true, forever: !months, by: uid, at: Date.now() });
+      return json(200, { ok: true, until });
     }
     if (body.action === 'sync') {
       if (!/^cs_[A-Za-z0-9_]+$/.test(body.session || '')) return json(400, { error: 'bad-request' });

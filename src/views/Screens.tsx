@@ -351,7 +351,7 @@ export function Profile({ v }: { v: V }) {
       {v.pfOther && <button onClick={v.toggleFollow} style={{ height: 38, minWidth: 112, padding: '0 20px', borderRadius: 2, border: `1.5px solid ${v.folBd}`, background: v.folBg, color: v.folFg, font: `500 14px ${SANS}`, cursor: 'pointer', ...(mob ? { flex: '1 1 0' } : {}) }}>{v.folLbl}</button>}
       {v.pfOther && v.pfCanMessage && <button onClick={v.pfMessage} className={hover('background:rgba(var(--ink-rgb),.08)')} style={small(false)}>Message</button>}
       {v.pfOther && <button onClick={v.pfShare} className={hover('background:rgba(var(--ink-rgb),.08)')} style={small(false)}>Share</button>}
-      {v.pfOther && <MoreMenu open={v.pfMoreOpen} onToggle={v.pfMore} align="right" items={[{ label: 'Report artist', onClick: v.pfReport }, { label: v.pfBlockLbl, onClick: v.pfBlock, danger: true }]} />}
+      {v.pfOther && <MoreMenu open={v.pfMoreOpen} onToggle={v.pfMore} align="right" items={[...(v.pfCanGift ? [{ label: v.pfGiftLbl, onClick: v.pfGift }] : []), { label: 'Report artist', onClick: v.pfReport }, { label: v.pfBlockLbl, onClick: v.pfBlock, danger: true }]} />}
     </div>
   );
   const header = (
@@ -531,9 +531,10 @@ export function Settings({ v }: { v: V }) {
           </span>
         </div>
         {(v.acErr || v.acInfo) && <Notice err={v.acErr} info={v.acInfo} />}
-        <SettingsSection title="Plan" note={v.acPlus ? 'Your plan, card and receipts are on the billing page.' : 'Plus adds unlimited sketchbooks, link-only sketchbooks, stats, more handwriting and more.'}>
-          <span style={{ fontSize: 14, lineHeight: 1.5, color: v.acPastDue ? MARK : INK }}>{v.acPastDue ? 'Your last payment didn’t go through. Update your card to keep Plus.' : v.acPlan}</span>
-          {v.acPlus ? <button onClick={v.openBilling} style={formBtn()}>Manage billing</button> : <button onClick={v.seePlus} style={formBtn()}>See Plus</button>}
+        <SettingsSection title="Plan" note={v.acGift ? 'A gift from Fletora: everything in Plus, free.' : v.acPlus ? 'Your plan, card and receipts are on the billing page.' : 'Plus adds unlimited sketchbooks, link-only sketchbooks, stats, more handwriting and more.'}>
+          <span style={{ fontSize: 14, lineHeight: 1.5, color: v.acPastDue ? MARK : INK }}>{v.acGift ? v.acGiftLine : v.acPastDue ? 'Your last payment didn’t go through. Update your card to keep Plus.' : v.acPlan}</span>
+          {v.acGift ? <button onClick={v.seePlus} className={hoverLine} style={{ ...underlineBtn(14), alignSelf: 'flex-start' }}>What’s included</button>
+            : v.acPlus ? <button onClick={v.openBilling} style={formBtn()}>Manage billing</button> : <button onClick={v.seePlus} style={formBtn()}>See Plus</button>}
         </SettingsSection>
         <SettingsSection title="Email" note={v.acVerified ? 'Your email is confirmed.' : <>Not confirmed yet. Open the link we sent to <b style={{ fontWeight: 600 }}>{v.acEmail}</b>.</>}>
           {!v.acVerified && (
@@ -596,7 +597,10 @@ export function BillingPage({ v }: { v: V }) {
   if (!v.acPlus || !v.bdShow) return (
     <div style={screen()}><div style={{ ...pagePad(mob), display: 'flex', flexDirection: 'column', gap: 32 }}>
       {head}
-      <SettingsSection title="Plan"><span style={{ fontSize: 14 }}>{v.acPlan}</span><button onClick={v.seePlus} style={formBtn()}>See Plus</button></SettingsSection>
+      <SettingsSection title="Plan" note={v.acGift ? 'A gift from Fletora. There’s nothing to pay and no card on file.' : undefined}>
+        <span style={{ fontSize: 14, lineHeight: 1.5 }}>{v.acGift ? v.acGiftLine : v.acPlan}</span>
+        <button onClick={v.seePlus} style={formBtn()}>{v.acGift ? 'What’s included' : 'See Plus'}</button>
+      </SettingsSection>
     </div></div>
   );
   return (

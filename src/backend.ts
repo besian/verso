@@ -82,6 +82,8 @@ export function errMsg(e: unknown): string {
     'billing/stripe-failed': 'Couldn’t reach the payment page. Try again in a moment.',
     'billing/failed': 'Couldn’t reach the payment page. Check your connection.',
     'billing/no-subscription': 'There’s no subscription on this account.',
+    'billing/paid': 'They pay for Plus, so it can’t be given or taken away here.',
+    'billing/not-allowed': 'Only moderators can do that.',
   };
   return msgs[code] || 'Something went wrong. Please try again.';
 }
@@ -591,11 +593,14 @@ export async function report(by: string, r: { kind: 'book' | 'user' | 'message';
 export interface Billing { status: string; interval: string; periodEnd: number; renews: boolean }
 /** Whether a plus/{uid} document means Plus is on now. */
 export const plusOn = (d: DocumentData | null) => !!d && d.on === true && (d.until || 0) > Date.now();
-export async function isPlus(uid: string): Promise<boolean> {
-  try { return plusOn((await getDoc(doc(need().db, 'plus', uid))).data() || null); } catch { return false; }
+/** Someone's Plus: whether it's on, and if it was given by Fletora (a gift) rather than paid for, until when. */
+export interface PlusInfo { on: boolean; gift: boolean; until: number; forever: boolean }
+export const plusInfo = (d: DocumentData | null): PlusInfo => ({ on: plusOn(d), gift: !!d?.gift, until: d?.until || 0, forever: !!d?.forever });
+export async function getPlus(uid: string): Promise<PlusInfo> {
+  try { return plusInfo((await getDoc(doc(need().db, 'plus', uid))).data() || null); } catch { return plusInfo(null); }
 }
 
-type BillingAction = 'checkout' | 'portal' | 'sync' | 'close' | 'details' | 'cancel' | 'resume' | 'switch' | 'card' | 'card-done';
+type BillingAction = 'checkout' | 'portal' | 'sync' | 'close' | 'details' | 'cancel' | 'resume' | 'switch' | 'card' | 'card-done' | 'gift';
 /** Calls api/billing: a Stripe page to go to (url), a checkout or card form for our page (clientSecret, ui), or data. */
 async function billing<T = { url?: string; clientSecret?: string; ui?: 'elements' | 'embedded'; plus?: boolean; refused?: string[] }>(action: BillingAction, extra: object = {}): Promise<T> {
   const u = need().auth.currentUser; if (!u) throw Object.assign(new Error('signed out'), { code: 'auth/no-current-user' });
@@ -623,6 +628,9 @@ export const changePlan = (action: 'cancel' | 'resume' | 'switch') => billing<{ 
 /** A new card: a setup to confirm with Stripe's card fields, then made the card Plus is charged to. */
 export const cardSetup = async () => (await billing<{ clientSecret: string }>('card')).clientSecret;
 export const cardDone = (setup: string) => billing<{ ok: boolean }>('card-done', { setup });
+/** Moderators: give someone Plus for some months (0 = for good), or take a gift back. */
+export const giftPlus = (target: string, months: number) => billing<{ ok: boolean }>('gift', { target, months });
+export const ungiftPlus = (target: string) => billing<{ ok: boolean }>('gift', { target, remove: true });
 
 /** Where a view came from, for the owner's stats. */
 export type ViewSource = 'explore' | 'profile' | 'home' | 'link' | 'embed';
