@@ -81,6 +81,7 @@ export function errMsg(e: unknown): string {
     'billing/already-plus': 'You already have Plus.',
     'billing/stripe-failed': 'Couldn’t reach the payment page. Try again in a moment.',
     'billing/failed': 'Couldn’t reach the payment page. Check your connection.',
+    'billing/no-subscription': 'There’s no subscription on this account.',
   };
   return msgs[code] || 'Something went wrong. Please try again.';
 }
@@ -594,13 +595,14 @@ export async function isPlus(uid: string): Promise<boolean> {
   try { return plusOn((await getDoc(doc(need().db, 'plus', uid))).data() || null); } catch { return false; }
 }
 
-/** Calls api/billing: a Stripe page to go to (url), or a checkout to embed on ours (clientSecret). */
-async function billing(action: 'checkout' | 'portal' | 'sync' | 'close', extra: object = {}): Promise<{ url?: string; clientSecret?: string; plus?: boolean }> {
+type BillingAction = 'checkout' | 'portal' | 'sync' | 'close' | 'details' | 'cancel' | 'resume' | 'switch' | 'card' | 'card-done';
+/** Calls api/billing: a Stripe page to go to (url), a checkout or card form for our page (clientSecret, ui), or data. */
+async function billing<T = { url?: string; clientSecret?: string; ui?: 'elements' | 'embedded'; plus?: boolean }>(action: BillingAction, extra: object = {}): Promise<T> {
   const u = need().auth.currentUser; if (!u) throw Object.assign(new Error('signed out'), { code: 'auth/no-current-user' });
   const r = await fetch('/api/billing', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + await u.getIdToken() }, body: JSON.stringify({ action, ...extra }) }).catch(() => null);
-  const body = r && await r.json().catch(() => null) as { url?: string; clientSecret?: string; plus?: boolean; error?: string } | null;
+  const body = r && await r.json().catch(() => null) as (T & { error?: string }) | null;
   if (!r || !r.ok) throw Object.assign(new Error(body?.error || 'billing'), { code: 'billing/' + (body?.error || 'failed') });
-  return body || {};
+  return (body || {}) as T;
 }
 /** Stripe's publishable key: with it, checkout opens inside the Plus sheet instead of on Stripe's site. */
 export const STRIPE_KEY: string = env.VITE_STRIPE_PUBLISHABLE_KEY || '';
@@ -608,6 +610,19 @@ export const checkout = (plan: 'month' | 'year', embedded = !!STRIPE_KEY) => bil
 export const billingPortal = async () => (await billing('portal')).url || '';
 /** Back from paying: asks the server to record that checkout now rather than waiting for Stripe's webhook. */
 export const confirmCheckout = (session: string) => billing('sync', { session });
+
+/** What Fletora's billing page shows. Amounts are in pence. */
+export interface BillingDetails {
+  status: string; interval: string; amount: number; currency: string; periodEnd: number; cancelling: boolean;
+  card: { brand: string; last4: string; exp: string } | null;
+  invoices: { id: string; at: number; amount: number; currency: string; status: string; url: string }[];
+}
+export const billingDetails = () => billing<BillingDetails>('details');
+/** Cancel at the end of the paid period, undo that, or move from monthly to yearly. */
+export const changePlan = (action: 'cancel' | 'resume' | 'switch') => billing<{ ok: boolean }>(action);
+/** A new card: a setup to confirm with Stripe's card fields, then made the card Plus is charged to. */
+export const cardSetup = async () => (await billing<{ clientSecret: string }>('card')).clientSecret;
+export const cardDone = (setup: string) => billing<{ ok: boolean }>('card-done', { setup });
 
 /** Where a view came from, for the owner's stats. */
 export type ViewSource = 'explore' | 'profile' | 'home' | 'link' | 'embed';

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { loadStripe } from '@stripe/stripe-js';
+import type { Appearance, StripeCheckoutLoadActionsSuccess, StripeCheckoutSession, StripeElements } from '@stripe/stripe-js';
 import type { CSSProperties, ChangeEventHandler, MouseEventHandler, ReactNode } from 'react';
 import { Popover } from './Popover';
 import type { V } from '../App';
@@ -333,6 +334,150 @@ function EmbeddedCheckout({ v }: { v: V }) {
   );
 }
 
+/** Stripe's card fields drawn in Fletora's colours and type (they live in Stripe's iframe, so they get real
+ *  colours rather than our CSS variables). */
+const STRIPE_FONTS = [{ cssSrc: 'https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap' }];
+function stripeLook(dark: boolean): Appearance {
+  const ink = dark ? '236,231,219' : '34,35,32', mark = dark ? '#D7705B' : '#AD493A';
+  return {
+    theme: dark ? 'night' : 'stripe',
+    variables: { colorPrimary: mark, colorBackground: dark ? '#1A1B18' : '#F4F1E9', colorText: `rgb(${ink})`, colorTextSecondary: `rgba(${ink},.65)`, colorDanger: mark, fontFamily: "'Geist', sans-serif", fontSizeBase: '15px', borderRadius: '2px', spacingUnit: '4px' },
+    rules: {
+      '.Input': { backgroundColor: `rgba(${ink},.06)`, border: `1.5px solid rgba(${ink},.14)`, boxShadow: 'none' },
+      '.Input:focus': { borderColor: mark, boxShadow: 'none' },
+      '.Label': { fontSize: '13px', color: `rgba(${ink},.75)` },
+      '.Tab': { backgroundColor: 'transparent', border: `1.5px solid rgba(${ink},.14)`, boxShadow: 'none' },
+      '.Tab--selected': { borderColor: `rgb(${ink})`, boxShadow: 'none' },
+    },
+  };
+}
+
+/** Checkout on Fletora's own page: the order, then Stripe's card fields (only they ever see the card), then Pay. */
+function FletoraCheckout({ v }: { v: V }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [sess, setSess] = useState<StripeCheckoutSession | null>(null), [actions, setActions] = useState<StripeCheckoutLoadActionsSuccess | null>(null);
+  const [err, setErr] = useState(''), [busy, setBusy] = useState(false), [code, setCode] = useState(''), [codeOpen, setCodeOpen] = useState(false);
+  useEffect(() => {
+    let gone = false, pe: { destroy(): void } | null = null;
+    loadStripe(v.plStripeKey).then(async stripe => {
+      if (!stripe) throw new Error('Stripe.js didn’t load');
+      const co = stripe.initCheckoutElementsSdk({ clientSecret: v.plSecret, elementsOptions: { appearance: stripeLook(v.plDark), fonts: STRIPE_FONTS } });
+      co.on('change', ss => { if (!gone) setSess(ss); });
+      const r = await co.loadActions();
+      if (r.type !== 'success') throw new Error(r.error.message);
+      if (gone) return;
+      setActions(r.actions); setSess(r.actions.getSession());
+      const el = co.createPaymentElement({ layout: 'tabs' }); el.mount(box.current!); pe = el;
+    }).catch(e => { console.error('checkout', e); if (!gone) v.plEmbedFailed(); });
+    return () => { gone = true; pe?.destroy(); };
+  }, [v.plSecret]);
+  const pay = async () => {
+    if (!actions || busy) return;
+    setBusy(true); setErr('');
+    const r = await actions.confirm({ redirect: 'if_required' }).catch(e => ({ type: 'error' as const, error: { message: (e as Error).message } }));
+    if (r.type === 'success') v.plPaid(); else { setErr(r.error.message); setBusy(false); }
+  };
+  const promo = async () => {
+    if (!actions || !code.trim()) return;
+    const r = await actions.applyPromotionCode(code.trim());
+    if (r.type === 'error') setErr(r.error.message); else { setErr(''); setCodeOpen(false); }
+  };
+  const t = sess?.total, every = sess?.recurring?.interval === 'year' ? 'year' : 'month', vat = t?.taxInclusive.minorUnitsAmount ? t.taxInclusive.amount : '';
+  const row: CSSProperties = { display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 14 };
+  return (
+    <>
+      <button onClick={v.plBack} className="tap" style={{ ...linkBtn('rgba(var(--ink-rgb),.75)'), alignSelf: 'flex-start', padding: '4px 0' }}>← Back</button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={{ font: `600 11px ${SANS}`, letterSpacing: '.14em', textTransform: 'uppercase', color: MARK }}>Checkout</span>
+        <span style={{ ...heading, fontSize: v.notMob ? 34 : 30, lineHeight: 1.05 }}>Fletora Plus, {every === 'year' ? 'yearly' : 'monthly'}</span>
+      </div>
+      {!sess ? <span style={{ ...hint, padding: '24px 0' }}>Loading…</span> : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 14, borderBottom: '1px solid rgba(var(--ink-rgb),.14)' }}>
+          {t?.discount.minorUnitsAmount ? <div style={row}><span>Discount</span><span>−{t.discount.amount}</span></div> : null}
+          <div style={{ ...row, fontSize: 18, fontWeight: 500 }}><span>Today</span><span>{t?.total.amount}</span></div>
+          <span style={hint}>{vat ? `Includes ${vat} VAT. ` : ''}Then {sess.recurring?.dueNext?.total?.amount || t?.total.amount} every {every}, until you cancel.</span>
+          {sess.email && <span style={hint}>Receipts go to {sess.email}.</span>}
+        </div>
+      )}
+      <div ref={box} />
+      {sess && (codeOpen ? (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input value={code} onChange={e => setCode(e.target.value)} placeholder="Promotion code" aria-label="Promotion code" className={focusMark} style={{ ...field, flex: 1 }} />
+          <button onClick={promo} className={hoverTint} style={{ ...ghostBtn, height: 44, padding: '0 16px' }}>Apply</button>
+        </div>
+      ) : <button onClick={() => setCodeOpen(true)} className="tap" style={{ ...linkBtn('rgba(var(--ink-rgb),.75)'), alignSelf: 'flex-start' }}>Have a promotion code?</button>)}
+      <Notice err={err} />
+      <button onClick={pay} disabled={!sess?.canConfirm || busy} className={busy ? undefined : hover(`background:${INK}`)} style={{ height: 50, border: 'none', borderRadius: 2, background: MARK, color: PAPER, font: `500 15px ${SANS}`, cursor: busy ? 'progress' : 'pointer', opacity: !sess?.canConfirm || busy ? 0.55 : 1 }}>{busy ? 'Paying…' : `Pay ${t?.total.amount || ''}`}</button>
+      <span style={{ fontSize: 12, lineHeight: 1.5, color: 'rgba(var(--ink-rgb),.6)' }}>Plus is sold by Stripe as merchant of record, who take the payment and handle tax and receipts. It renews automatically; cancel anytime in Settings. By paying you agree to Fletora’s Terms.</span>
+    </>
+  );
+}
+
+/** After paying on our page. */
+function PlusThanks({ v }: { v: V }) {
+  return (
+    <>
+      <span style={{ font: `600 11px ${SANS}`, letterSpacing: '.14em', textTransform: 'uppercase', color: MARK }}>Fletora Plus</span>
+      <span style={{ ...heading, lineHeight: 1.05 }}>Thank you. Plus is on.</span>
+      <span style={{ fontSize: 15, lineHeight: 1.55 }}>Link-only sketchbooks, stats and pinning are in each sketchbook’s Details, and you have more room for sketchbooks, pages and handwriting. Your receipt is on its way by email, and you can manage Plus in Settings.</span>
+      <button onClick={v.plClose} className={hover(`background:${MARK}`)} style={{ height: 48, border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 15px ${SANS}`, cursor: 'pointer' }}>Back to my sketchbooks</button>
+    </>
+  );
+}
+
+/** Change the card Plus is charged to, with Stripe's card fields on our page. */
+export function CardModal({ v }: { v: V }) {
+  const box = useRef<HTMLDivElement>(null), ref = useRef<{ stripe: Awaited<ReturnType<typeof loadStripe>>; elements: StripeElements } | null>(null);
+  const [ready, setReady] = useState(false), [busy, setBusy] = useState(false), [err, setErr] = useState('');
+  useEffect(() => {
+    let gone = false, pe: { destroy(): void } | null = null;
+    loadStripe(v.plStripeKey).then(stripe => {
+      if (!stripe || gone) return;
+      const elements = stripe.elements({ clientSecret: v.cardSecret, appearance: stripeLook(v.plDark), fonts: STRIPE_FONTS });
+      const el = elements.create('payment', { layout: 'tabs' }); el.mount(box.current!); el.on('ready', () => setReady(true));
+      pe = el; ref.current = { stripe, elements };
+    }).catch(e => setErr((e as Error).message));
+    return () => { gone = true; pe?.destroy(); };
+  }, [v.cardSecret]);
+  const save = async () => {
+    const r = ref.current; if (!r?.stripe || busy) return;
+    setBusy(true); setErr('');
+    const res = await r.stripe.confirmSetup({ elements: r.elements, redirect: 'if_required', confirmParams: { return_url: location.origin + '/settings' } });
+    if (res.error) { setErr(res.error.message || 'That card didn’t work.'); setBusy(false); return; }
+    try { await v.cardSaved(res.setupIntent.id); } catch { setErr('Saved with Stripe, but couldn’t switch Plus to it. Try again.'); setBusy(false); }
+  };
+  return (
+    <Modal onClose={() => {}} pad={v.mModalPad} maxWidth={480} gap={16} z={40} shadow="0 30px 60px rgba(10,10,30,.35)">
+      <span style={{ ...heading, fontSize: 32 }}>Change card</span>
+      <span style={hint}>Plus will be charged to this card from now on.</span>
+      {!ready && <span style={hint}>Loading…</span>}
+      <div ref={box} />
+      <Notice err={err} />
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <button onClick={v.cardClose} className={hoverTint} style={{ ...ghostBtn, height: 44, padding: '0 18px', fontSize: 14 }}>Cancel</button>
+        <button onClick={save} disabled={!ready || busy} style={{ height: 44, padding: '0 22px', border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer', opacity: !ready || busy ? 0.55 : 1 }}>{busy ? 'Saving…' : 'Save card'}</button>
+      </div>
+    </Modal>
+  );
+}
+
+/** Asks before cancelling Plus or switching it to yearly. */
+export function PlanConfirm({ v }: { v: V }) {
+  const cancel = v.bdAsk === 'cancel';
+  return (
+    <Modal onClose={e => { if (e.target === e.currentTarget) v.bdNo(); }} pad={v.mModalPad} maxWidth={440} gap={16} z={40} shadow="0 30px 60px rgba(10,10,30,.35)">
+      <span style={{ ...heading, fontSize: 32 }}>{cancel ? 'Cancel Plus?' : 'Switch to yearly?'}</span>
+      <span style={{ fontSize: 15, lineHeight: 1.55 }}>{cancel
+        ? `You keep Plus until ${v.bdEnd} and won’t be charged again. After that, link-only sketchbooks become private and the free plan’s limits apply to anything new. Nothing you’ve made is deleted.`
+        : `Your year starts today at ${v.bdYearPrice}, less credit for what’s left of this month, charged to your saved card now.`}</span>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        <button onClick={v.bdNo} className={hoverTint} style={{ ...ghostBtn, height: 44, padding: '0 18px', fontSize: 14 }}>{cancel ? 'Keep Plus' : 'Not now'}</button>
+        <button onClick={cancel ? v.bdCancel : v.bdSwitch} disabled={v.bdBusy} style={{ height: 44, padding: '0 20px', border: 'none', borderRadius: 2, background: cancel ? MARK : INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer', opacity: v.bdBusy ? 0.6 : 1 }}>{v.bdBusy ? 'One moment…' : cancel ? 'Cancel Plus' : 'Switch to yearly'}</button>
+      </div>
+    </Modal>
+  );
+}
+
 /** Phones: the checkout as a page of its own that the browser scrolls. iPhones don't pass a scroll from inside
  *  Stripe's form (an iframe) on to a scrolling box around it, only to the page, so the page scrolls while it's open. */
 function CheckoutPage({ v }: { v: V }) {
@@ -343,17 +488,22 @@ function CheckoutPage({ v }: { v: V }) {
   }, []);
   return createPortal(
     <div role="dialog" aria-label="Checkout" style={{ position: 'absolute', top: 0, left: 0, right: 0, minHeight: '100%', zIndex: 1000, background: PAPER, color: INK, fontFamily: SANS, boxSizing: 'border-box', padding: '14px 12px calc(32px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <EmbeddedCheckout v={v} />
+      {v.plUi === 'elements' ? <FletoraCheckout v={v} /> : <EmbeddedCheckout v={v} />}
     </div>, document.body);
 }
 
 /** Fletora Plus: what it adds, monthly or yearly, then Stripe's checkout (in the sheet, or on Stripe's page). */
 export function PlusModal({ v }: { v: V }) {
+  if (v.plDone) return (
+    <Modal onClose={e => { if (e.target === e.currentTarget) v.plClose(); }} pad={v.mModalPad} maxWidth={480} gap={18} z={40} shadow="0 30px 60px rgba(10,10,30,.35)">
+      <PlusThanks v={v} />
+    </Modal>
+  );
   if (v.plSecret && !v.notMob) return <CheckoutPage v={v} />;
   if (v.plSecret) return (
     // Clicking outside doesn't close it mid-payment; Back does.
-    <Modal onClose={() => {}} pad={v.notMob ? 24 : 12} maxWidth={640} gap={14} z={40} shadow="0 30px 60px rgba(10,10,30,.35)">
-      <EmbeddedCheckout v={v} />
+    <Modal onClose={() => {}} pad={v.notMob ? (v.plUi === 'elements' ? v.mModalPad : 24) : 12} maxWidth={v.plUi === 'elements' ? 520 : 640} gap={v.plUi === 'elements' ? 16 : 14} z={40} shadow="0 30px 60px rgba(10,10,30,.35)">
+      {v.plUi === 'elements' ? <FletoraCheckout v={v} /> : <EmbeddedCheckout v={v} />}
     </Modal>
   );
   return (

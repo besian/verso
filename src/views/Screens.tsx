@@ -531,13 +531,20 @@ export function Settings({ v }: { v: V }) {
           </span>
         </div>
         {(v.acErr || v.acInfo) && <Notice err={v.acErr} info={v.acInfo} />}
-        <SettingsSection title="Plan" note={v.acPlus ? 'Change plan, update your card, see receipts or cancel on Stripe’s billing page.' : 'Plus adds unlimited sketchbooks, link-only sketchbooks, stats, more handwriting and more.'}>
-          <span style={{ fontSize: 14, lineHeight: 1.5 }}>{v.acPlan}</span>
-          {v.acPastDue && <span style={{ fontSize: 14, lineHeight: 1.5, color: MARK }}>Your last payment didn’t go through. Update your card to keep Plus.</span>}
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-            {!v.acPlus && <button onClick={v.seePlus} style={formBtn()}>See Plus</button>}
-            {v.acHasBilling && <button onClick={v.manageBilling} disabled={v.acBusy === 'billing'} className={v.acPlus ? undefined : hoverLine} style={v.acPlus ? { ...formBtn(), opacity: v.acBusy === 'billing' ? 0.6 : 1 } : { ...underlineBtn(14), alignSelf: 'center' }}>{v.acBusy === 'billing' ? 'Opening…' : v.acPlus ? 'Manage billing' : 'Billing and receipts'}</button>}
-          </div>
+        <SettingsSection title="Plan" note={v.bdShow ? 'Your Fletora Plus subscription, card and receipts.' : 'Plus adds unlimited sketchbooks, link-only sketchbooks, stats, more handwriting and more.'}>
+          {v.bdShow && v.acPlus ? (v.bdReady ? <BillingPanel v={v} /> : v.bdErr ? (
+            // Couldn't load the details: say what we know, and offer Stripe's page instead.
+            <>
+              <span style={{ fontSize: 14, lineHeight: 1.5 }}>{v.acPlan}</span>
+              <Notice err={v.bdErr} />
+              <button onClick={v.manageBilling} disabled={v.acBusy === 'billing'} className={hoverLine} style={{ ...underlineBtn(14), alignSelf: 'flex-start' }}>{v.acBusy === 'billing' ? 'Opening…' : 'Manage on Stripe instead'}</button>
+            </>
+          ) : <span style={{ fontSize: 14, color: MUTED }}>Loading your plan…</span>) : (
+            <>
+              <span style={{ fontSize: 14, lineHeight: 1.5 }}>{v.acPlan}</span>
+              <button onClick={v.seePlus} style={formBtn()}>See Plus</button>
+            </>
+          )}
         </SettingsSection>
         <SettingsSection title="Email" note={v.acVerified ? 'Your email is confirmed.' : <>Not confirmed yet. Open the link we sent to <b style={{ fontWeight: 600 }}>{v.acEmail}</b>.</>}>
           {!v.acVerified && (
@@ -583,6 +590,45 @@ export function Settings({ v }: { v: V }) {
             <button type="submit" disabled={v.acBusy === 'delete'} className={hover(`background:${MARK};color:${PAPER}`)} style={{ ...formBtn(true), opacity: v.acBusy === 'delete' ? 0.6 : 1 }}>{v.acBusy === 'delete' ? 'Deleting…' : 'Delete my account'}</button>
           </form>
         </SettingsSection>
+      </div>
+    </div>
+  );
+}
+
+/** Fletora's own billing page: the plan and its renewal, changing it, the card, and receipts. */
+function BillingPanel({ v }: { v: V }) {
+  const sub: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 16, borderBottom: '1px solid rgba(var(--ink-rgb),.12)' };
+  const small: CSSProperties = { fontSize: 12, letterSpacing: '.1em', textTransform: 'uppercase', color: MUTED };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={sub}>
+        <span style={small}>Plan</span>
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}><span style={serif(26, 1.1)}>Fletora Plus</span><span style={{ fontSize: 14, color: MUTED }}>{v.bdPlan}</span></span>
+        <span style={{ fontSize: 14, lineHeight: 1.5, color: v.bdWarn ? MARK : INK }}>{v.bdNext}</span>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center', marginTop: 4 }}>
+          {v.bdCancelling
+            ? <button onClick={v.bdResume} disabled={v.bdBusy} style={formBtn()}>{v.bdBusy ? 'One moment…' : 'Keep Plus'}</button>
+            : <>
+                {v.bdCanSwitch && <button onClick={v.bdAskSwitch} style={formBtn()}>Switch to yearly · save 29%</button>}
+                <button onClick={v.bdAskCancel} className={hoverLine} style={{ ...underlineBtn(14), color: MARK, borderColor: MARK }}>Cancel Plus</button>
+              </>}
+        </div>
+      </div>
+      <div style={sub}>
+        <span style={small}>Payment method</span>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 14 }}>{v.bdCardLbl}</span>
+          <button onClick={v.bdCard} disabled={v.acBusy === 'card'} className={hoverLine} style={underlineBtn(14)}>{v.acBusy === 'card' ? 'Opening…' : 'Change card'}</button>
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <span style={small}>Receipts</span>
+        {v.bdInvoices.length ? v.bdInvoices.map((i: V) => (
+          <div key={i.key} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 14, alignItems: 'baseline', fontSize: 14 }}>
+            <span>{i.date}</span><span>{i.amount}</span><span style={{ color: MUTED }}>{i.status}</span>
+            {i.url ? <a href={i.url} target="_blank" rel="noopener noreferrer" style={{ color: INK }}>View</a> : <span />}
+          </div>
+        )) : <span style={{ fontSize: 14, color: MUTED }}>No receipts yet.</span>}
       </div>
     </div>
   );

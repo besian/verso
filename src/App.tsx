@@ -3,7 +3,7 @@ import type { ChangeEvent, DragEvent, MouseEvent, PointerEvent, WheelEvent } fro
 import { CONFIG, GRID_WIDTH, MAX_MEDIUMS, MAX_TAGS, MEDIUMS, PALETTE, SHAPES, mediumKey, tagSlug } from './data';
 import type { Account, ArchiveEntry, Book, OtherBook, PageNote, Shape, ShapeKey } from './data';
 import * as api from './backend';
-import type { AuthUser, Billing, BookDoc, Chat, Msg, Notif, Person, Report, Saved, Stats, ViewSource } from './backend';
+import type { AuthUser, Billing, BillingDetails, BookDoc, Chat, Msg, Notif, Person, Report, Saved, Stats, ViewSource } from './backend';
 import { BOOKS_FREE, PAGES_FREE, PAGES_PLUS, PERKS, PRICE, REASONS, YEAR_SAVING } from './plus';
 import * as store from './storage';
 import * as sound from './sound';
@@ -26,7 +26,7 @@ import Stage from './views/Stage';
 import { AuthPage, Explore, HomeScreen, Profile, Settings } from './views/Screens';
 import { Admin, AuthAction, Legal, NotFound } from './views/Pages';
 import { Messages } from './views/Messages';
-import { ArchiveModal, CollectionModal, Editor, EditProfile, EmbedModal, Manager, NewBookPicker, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
+import { ArchiveModal, CardModal, CollectionModal, Editor, EditProfile, EmbedModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
 
 export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound' | 'action' | 'messages';
 /** A report with what it points at, for the moderation page. */
@@ -63,8 +63,11 @@ interface State {
   /** Fletora Plus: whether you have it (undefined until known), your plan details, and the upgrade sheet
    *  (open when plusFor isn't null; its value says why it opened, see REASONS). */
   plus?: boolean; bill?: Billing | null; plusFor?: string | null; plusPlan?: 'month' | 'year'; plusBusy?: boolean; plusErr?: string;
-  /** Stripe's checkout shown inside the Plus sheet (its session's client secret). */
-  plusSecret?: string;
+  /** Checkout on our page: its session's client secret, whether it's our own form with Stripe's card fields
+   *  ('elements') or Stripe's whole form ('embedded'), and the thank-you once it's paid. */
+  plusSecret?: string; plusUi?: 'elements' | 'embedded'; plusDone?: boolean;
+  /** The billing page in Settings: plan, card and receipts from Stripe, the change being confirmed, and a new card's setup. */
+  bd?: BillingDetails | null; bdErr?: string; bdAsk?: 'cancel' | 'switch' | null; bdBusy?: boolean; cardSecret?: string | null;
   /** The open sketchbook's stats on the edit screen. */
   stats?: { id: string; s: Stats } | null;
   acErr?: string; acInfo?: string; acBusy?: string; verified?: boolean;
@@ -401,6 +404,8 @@ export default class App extends Component<object, State> {
     }
     if (prev.managing && !s.managing && this.mgHold) this.revertEdits();
     this.syncWatches();
+    // Settings shows the plan, card and receipts; they're fetched again whenever the plan changes.
+    if (s.mode === 'settings' && s.bill && (prev.mode !== 'settings' || prev.bill !== s.bill)) this.loadBilling();
     // The first route is applied once we know who's signed in; after that the URL follows the screen.
     if (s.authReady && !this.routed) { this.routed = true; this.applyRoute(); }
     else if (this.routed) {
@@ -494,7 +499,8 @@ export default class App extends Component<object, State> {
       .catch(e => console.warn('confirm checkout', e));
   }
   /** Opens the Fletora Plus sheet, saying why (a key of REASONS, or '' for none). */
-  openPlus = (why = '') => this.setState({ plusFor: why, plusErr: '', more: null });
+  openPlus = (why = '') => this.setState({ plusFor: why, plusErr: '', plusDone: false, more: null });
+  loadBilling() { api.billingDetails().then(bd => this.setState({ bd, bdErr: '' })).catch(e => this.setState({ bdErr: api.errMsg(e) })); }
   /** Room left in the open sketchbook for new pages. Someone else's plan decides for a shared one (the rules check it). */
   pageRoom() { const s = this.state, b = s.books[s.active]; return b?.role === 'collab' ? Infinity : (s.plus ? PAGES_PLUS : PAGES_FREE) - s.images.length; }
   pagesFull() { if (this.state.plus) this.toast(`A sketchbook holds up to ${PAGES_PLUS} pages. Start a new one for more.`); else this.openPlus('pages'); }
@@ -1306,17 +1312,19 @@ export default class App extends Component<object, State> {
       plPlan: s.plusPlan || 'year', plSetPlan: (k: 'month' | 'year') => this.setState({ plusPlan: k }),
       plPlans: ([['month', 'Monthly', `${PRICE.month} a month`], ['year', 'Yearly', `${PRICE.year} a year · save ${YEAR_SAVING}`]] as const).map(([k, l, n]) => ({ key: k, label: l, note: n })),
       plBusy: !!s.plusBusy, plErr: s.plusErr || '',
-      plClose: () => this.setState({ plusFor: null, plusSecret: '' }),
+      plClose: () => this.setState({ plusFor: null, plusSecret: '', plusDone: false }),
       // Checkout opens inside the sheet when it can, otherwise on Stripe's own page; both come back to /settings.
       plBuy: async () => {
         if (s.plusBusy) return;
         this.setState({ plusBusy: true, plusErr: '' });
         try {
           const r = await api.checkout(s.plusPlan || 'year');
-          if (r.clientSecret) this.setState({ plusSecret: r.clientSecret, plusBusy: false }); else location.href = r.url || '';
+          if (r.clientSecret) this.setState({ plusSecret: r.clientSecret, plusUi: r.ui || 'embedded', plusBusy: false }); else location.href = r.url || '';
         } catch (e) { this.setState({ plusErr: api.errMsg(e), plusBusy: false }); }
       },
-      plSecret: s.plusSecret || '', plStripeKey: api.STRIPE_KEY,
+      plSecret: s.plusSecret || '', plUi: s.plusUi || 'embedded', plStripeKey: api.STRIPE_KEY, plDone: !!s.plusDone, plDark: !!s.dark,
+      // Paid on our own form: thank them here and confirm it with the server (the session id leads its client secret).
+      plPaid: () => { const id = (s.plusSecret || '').split('_secret_')[0]; this.setState({ plusSecret: '', plusDone: true }); this.confirmPlus(id); },
       plBack: () => this.setState({ plusSecret: '' }),
       // Stripe.js couldn't load the embedded form (blocked, offline…): carry on with Stripe's own page.
       plEmbedFailed: async () => {
@@ -1499,6 +1507,34 @@ export default class App extends Component<object, State> {
           acPastDue: b?.status === 'past_due',
           seePlus: () => this.openPlus(),
           manageBilling: () => run('billing', async () => { location.href = await api.billingPortal(); }),
+          ...(() => {
+            // Fletora's billing page.
+            const d = s.bd, money = (n: number, c = 'gbp') => (n / 100).toLocaleString('en-GB', { style: 'currency', currency: c.toUpperCase() });
+            const date = (t: number) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+            const act = (k: 'cancel' | 'resume' | 'switch', done: string) => async () => {
+              this.setState({ bdBusy: true });
+              try { await api.changePlan(k); this.toast(done); this.loadBilling(); this.setState({ bdAsk: null }); }
+              catch (e) { this.toast(api.errMsg(e)); }
+              finally { this.setState({ bdBusy: false }); }
+            };
+            return {
+              bdShow: !!b, bdReady: !!d, bdErr: s.bdErr || '',
+              bdPlan: d ? `${d.interval === 'year' ? 'Yearly' : 'Monthly'} · ${money(d.amount, d.currency)} a ${d.interval === 'year' ? 'year' : 'month'}` : '',
+              bdNext: d ? (d.cancelling ? `Cancelled. You keep Plus until ${date(d.periodEnd)}, and won’t be charged again.` : d.status === 'past_due' ? 'Your last payment didn’t go through. Update your card to keep Plus.' : `Renews on ${date(d.periodEnd)}.`) : '',
+              bdWarn: !!d && (d.cancelling || d.status === 'past_due'),
+              bdCardLbl: d?.card ? (d.card.last4 ? `${d.card.brand.charAt(0).toUpperCase() + d.card.brand.slice(1)} •••• ${d.card.last4}${d.card.exp ? ` · expires ${d.card.exp}` : ''}` : d.card.brand) : 'No card saved',
+              bdCanSwitch: !!d && d.interval === 'month' && !d.cancelling, bdCancelling: !!d?.cancelling,
+              bdInvoices: (d?.invoices || []).map(i => ({ key: i.id, date: new Date(i.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }), amount: money(i.amount, i.currency), status: i.status === 'paid' ? 'Paid' : i.status === 'open' ? 'Due' : i.status, url: i.url })),
+              bdAsk: s.bdAsk || null, bdBusy: !!s.bdBusy, bdEnd: d ? date(d.periodEnd) : '', bdYearPrice: PRICE.year,
+              bdAskCancel: () => this.setState({ bdAsk: 'cancel' }), bdAskSwitch: () => this.setState({ bdAsk: 'switch' }), bdNo: () => this.setState({ bdAsk: null }),
+              bdCancel: act('cancel', 'Plus is cancelled. You keep it until the end of this period.'),
+              bdSwitch: act('switch', 'You’re on yearly Plus now'),
+              bdResume: act('resume', 'Plus will carry on renewing'),
+              bdCard: () => run('card', async () => { this.setState({ cardSecret: await api.cardSetup() }); }),
+              cardSecret: s.cardSecret || '', cardClose: () => this.setState({ cardSecret: null }),
+              cardSaved: async (setupId: string) => { await api.cardDone(setupId); this.setState({ cardSecret: null }); this.toast('Card updated'); this.loadBilling(); },
+            };
+          })(),
         };
       })(),
     };
@@ -2156,6 +2192,8 @@ export default class App extends Component<object, State> {
         {v.managing && <Manager v={v} />}
         {v.editing && <Editor v={v} />}
         {v.plOpen && <PlusModal v={v} />}
+        {v.isSettings && v.bdAsk && <PlanConfirm v={v} />}
+        {v.isSettings && v.cardSecret && <CardModal v={v} />}
         <input ref={this.fileRef} type="file" accept="image/*" multiple onChange={v.onFiles} style={{ display: 'none' }} />
         {/* Phones: opens the camera straight away. */}
         <input ref={this.camRef} type="file" accept="image/*" capture="environment" onChange={v.onFiles} style={{ display: 'none' }} />

@@ -119,7 +119,7 @@ function Terms() {
       <Sec title="Fletora Plus">
         <P>Plus is an optional subscription that adds features to your account, at {PRICE.month} a month or {PRICE.year} a year. It’s sold to you by Stripe as merchant of record: Stripe takes the payment, charges any VAT or sales tax that applies, and sends your receipts, and its terms apply to the purchase.</P>
         <Ul items={[
-          'Plus renews automatically at the end of each month or year until you cancel. Cancel anytime from Account settings → Manage billing; you keep Plus until the end of the period you’ve paid for and aren’t charged again.',
+          'Plus renews automatically at the end of each month or year until you cancel. Cancel anytime from Account settings → Plan; you keep Plus until the end of the period you’ve paid for and aren’t charged again.',
           <>If you’re in the UK or EU, you can cancel within 14 days of first subscribing for a refund, less a fair amount for the days you’ve already had Plus. To ask, <Contact />.</>,
           'If a payment fails, Plus stays on for a few days while it’s retried, then ends.',
           `When Plus ends, nothing you’ve made is deleted. Link-only sketchbooks become private, stats and your pinned sketchbook are hidden again, and the free plan’s limits apply to anything new (${BOOKS_FREE} sketchbooks, ${PAGES_FREE} pages each, ${INK_FREE} handwriting conversions a month).`,
