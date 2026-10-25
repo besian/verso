@@ -9,7 +9,7 @@ import { loadAnalytics } from './storage';
 import {
   EmailAuthProvider, applyActionCode, checkActionCode, confirmPasswordReset, connectAuthEmulator, verifyPasswordResetCode, createUserWithEmailAndPassword, deleteUser, getAuth, onAuthStateChanged,
   reauthenticateWithCredential, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut as fbSignOut,
-  updatePassword, verifyBeforeUpdateEmail,
+  updatePassword, verifyBeforeUpdateEmail, GoogleAuthProvider, signInWithPopup, signInWithRedirect, reauthenticateWithPopup,
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import {
@@ -89,6 +89,12 @@ export function errMsg(e: unknown): string {
     'auth/weak-password': 'Choose a password of at least 6 characters.',
     'auth/too-many-requests': 'Too many attempts. Wait a moment and try again.',
     'auth/network-request-failed': 'Couldn’t reach the server. Check your connection.',
+    'auth/popup-closed-by-user': 'The Google window was closed before signing in finished.',
+    'auth/cancelled-popup-request': 'The Google window was closed before signing in finished.',
+    'auth/unauthorized-domain': 'Google sign-in isn’t switched on for this address yet.',
+    'auth/operation-not-allowed': 'Google sign-in isn’t switched on yet.',
+    'auth/account-exists-with-different-credential': 'There’s already an account with that email. Sign in with your password.',
+    'auth/user-mismatch': 'That’s a different Google account from the one you’re signed in with.',
     'permission-denied': 'You don’t have permission to do that.',
     'storage/unauthorized': 'Upload refused. Images must be under 10 MB.',
     'auth/requires-recent-login': 'For your security, sign in again and retry.',
@@ -125,12 +131,29 @@ export function errMsg(e: unknown): string {
 
 // ---------- auth ----------
 
-export interface AuthUser { uid: string; email: string; verified?: boolean }
+/** `password`: the account has a password (false for one that only signs in with Google). */
+export interface AuthUser { uid: string; email: string; verified?: boolean; password?: boolean; name?: string }
 
+const authUser = (u: User): AuthUser => ({ uid: u.uid, email: u.email || '', verified: u.emailVerified, password: u.providerData.some(p => p.providerId === 'password'), name: u.displayName || '' });
 export function watchAuth(cb: (u: AuthUser | null) => void): () => void {
   if (!auth) { cb(null); return () => {}; }
-  return onAuthStateChanged(auth, (u: User | null) => cb(u ? { uid: u.uid, email: u.email || '', verified: u.emailVerified } : null));
+  return onAuthStateChanged(auth, (u: User | null) => cb(u ? authUser(u) : null));
 }
+
+const google = () => { const p = new GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' }); return p; };
+/** Signs in (or up) with Google in a pop-up; where pop-ups can't open, by going to Google and back. A new
+ *  account gets its profile from the Google name (see ensureProfile). */
+export async function signInGoogle() {
+  const a = need().auth;
+  try { await signInWithPopup(a, google()); }
+  catch (e) {
+    const code = (e as { code?: string }).code;
+    if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') return signInWithRedirect(a, google());
+    throw e;
+  }
+}
+/** Whether the signed-in account has a password (accounts made with Google don't). */
+export const hasPassword = () => !!auth?.currentUser?.providerData.some(p => p.providerId === 'password');
 
 export async function signIn(email: string, pw: string) { await signInWithEmailAndPassword(need().auth, email, pw); }
 export async function signOut() { if (auth) await fbSignOut(auth); }
@@ -189,10 +212,11 @@ async function writeProfile(uid: string, p: PublicProfile, prevHandle: string | 
 export async function ensureProfile(u: AuthUser): Promise<Account> {
   const p = await getProfile(u.uid);
   if (p) return { ...p, uid: u.uid, email: u.email };
-  const local = u.email.split('@')[0] || 'artist';
-  let handle = slugHandle(local) || 'artist';
+  // A Google account brings its name; otherwise the name comes from the email address.
+  const local = u.email.split('@')[0] || 'artist', named = (u.name || '').trim().slice(0, 60);
+  let handle = slugHandle(named.replace(/\s+/g, '') || local) || slugHandle(local) || 'artist';
   if (!(await handleFree(handle, u.uid))) handle = (handle.slice(0, 20) + Math.floor(1000 + Math.random() * 9000)).slice(0, 24);
-  const np: PublicProfile = { name: local.charAt(0).toUpperCase() + local.slice(1), handle, bio: '', loc: '', web: '', accent: '#C9C3B4', av: null, joined: Date.now() };
+  const np: PublicProfile = { name: named || local.charAt(0).toUpperCase() + local.slice(1), handle, bio: '', loc: '', web: '', accent: '#C9C3B4', av: null, joined: Date.now() };
   await writeProfile(u.uid, np, null);
   return { ...np, uid: u.uid, email: u.email };
 }
@@ -867,9 +891,11 @@ export async function getBook(id: string): Promise<BookDoc | null> {
 
 // ---------- account ----------
 
+/** Confirms it's really them before a sensitive change: their password, or Google again for an account without one. */
 async function reauth(pw: string) {
   const u = need().auth.currentUser; if (!u?.email) throw Object.assign(new Error('signed out'), { code: 'auth/no-current-user' });
-  await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, pw));
+  if (!hasPassword()) await reauthenticateWithPopup(u, google());
+  else await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, pw));
   return u;
 }
 

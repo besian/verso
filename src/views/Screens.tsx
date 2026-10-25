@@ -466,6 +466,7 @@ export function AuthPage({ v }: { v: V }) {
           <p style={{ margin: 0, maxWidth: 400, fontSize: 17, lineHeight: 1.55, color: MUTED, textWrap: 'pretty' } as CSSProperties}>{v.suSub}</p>
         </section>
         <form onSubmit={v.suSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 420, width: '100%', paddingTop: 20, borderTop: `1px solid ${INK}`, justifySelf: mob ? 'stretch' : 'end' }}>
+          {!v.suReset && <GoogleButton v={v} />}
           {v.suJoin && (
             <>
               <TextField label="Name" value={v.suName} onChange={v.onSuName} placeholder="Your name" autoComplete="name" />
@@ -480,7 +481,7 @@ export function AuthPage({ v }: { v: V }) {
             </div>
           )}
           <Notice err={v.suErr} info={v.suInfo} />
-          {v.suJoin && <div style={{ fontSize: 12, lineHeight: 1.5, color: MUTED }}>By creating an account you agree to the <button type="button" onClick={v.openTerms} className={hoverLine} style={{ ...quietLink('rgba(var(--ink-rgb),.4)'), font: `500 12px ${SANS}` }}>Terms</button> and <button type="button" onClick={v.openPrivacy} className={hoverLine} style={{ ...quietLink('rgba(var(--ink-rgb),.4)'), font: `500 12px ${SANS}` }}>Privacy policy</button>. Your email is only used to sign in and is never shown.</div>}
+          {!v.suReset && <div style={{ fontSize: 12, lineHeight: 1.5, color: MUTED }}>By {v.suJoin ? 'creating an account' : 'continuing'} you agree to the <button type="button" onClick={v.openTerms} className={hoverLine} style={{ ...quietLink('rgba(var(--ink-rgb),.4)'), font: `500 12px ${SANS}` }}>Terms</button> and <button type="button" onClick={v.openPrivacy} className={hoverLine} style={{ ...quietLink('rgba(var(--ink-rgb),.4)'), font: `500 12px ${SANS}` }}>Privacy policy</button>. Your email is only used to sign in and is never shown.</div>}
           <button type="submit" disabled={v.suBusy} className={v.suBusy ? undefined : hover(`background:${MARK}`)} style={{ height: 50, marginTop: 4, border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 15px ${SANS}`, cursor: v.suBusy ? 'progress' : 'pointer', opacity: v.suBusy ? 0.6 : v.suOk ? 1 : 0.55, transition: 'background .25s' }}>{v.suBusy ? 'One moment…' : v.suBtn}</button>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontSize: 13, color: MUTED }}>
             {v.suReset
@@ -492,6 +493,26 @@ export function AuthPage({ v }: { v: V }) {
         <div style={{ gridColumn: '1 / -1', alignSelf: 'end' }}><SiteFooter v={v} /></div>
       </div>
     </div>
+  );
+}
+
+/** Sign in or join with Google, above the email form. */
+function GoogleButton({ v }: { v: V }) {
+  return (
+    <>
+      <button type="button" onClick={v.suGoogle} disabled={v.suBusy} className={hover('background:rgba(var(--ink-rgb),.06)')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, height: 50, border: '1.5px solid rgba(var(--ink-rgb),.35)', borderRadius: 2, background: 'none', color: INK, font: `500 15px ${SANS}`, cursor: v.suBusy ? 'progress' : 'pointer', opacity: v.suBusy ? 0.6 : 1 }}>
+        <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+        </svg>
+        Continue with Google
+      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: MUTED }}>
+        <span style={{ flex: 1, height: 1, background: 'rgba(var(--ink-rgb),.15)' }} />or with email<span style={{ flex: 1, height: 1, background: 'rgba(var(--ink-rgb),.15)' }} />
+      </div>
+    </>
   );
 }
 
@@ -549,19 +570,21 @@ export function Settings({ v }: { v: V }) {
               <button onClick={v.checkVerified} disabled={v.acBusy === 'verify'} className={hoverLine} style={{ ...underlineBtn(14), alignSelf: 'center' }}>I’ve confirmed</button>
             </div>
           )}
-          <form onSubmit={v.changeEmail} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <TextField label="New email" value={f.email} onChange={on.email} type="email" placeholder="you@example.com" autoComplete="email" />
-            <TextField label="Current password" value={f.pwEmail} onChange={on.pwEmail} type="password" autoComplete="current-password" />
-            <button type="submit" disabled={v.acBusy === 'email'} style={{ ...formBtn(), opacity: v.acBusy === 'email' ? 0.6 : 1 }}>{v.acBusy === 'email' ? 'Sending…' : 'Change email'}</button>
-          </form>
+          {v.acPw ? (
+            <form onSubmit={v.changeEmail} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <TextField label="New email" value={f.email} onChange={on.email} type="email" placeholder="you@example.com" autoComplete="email" />
+              <TextField label="Current password" value={f.pwEmail} onChange={on.pwEmail} type="password" autoComplete="current-password" />
+              <button type="submit" disabled={v.acBusy === 'email'} style={{ ...formBtn(), opacity: v.acBusy === 'email' ? 0.6 : 1 }}>{v.acBusy === 'email' ? 'Sending…' : 'Change email'}</button>
+            </form>
+          ) : <span style={{ fontSize: 14, lineHeight: 1.5 }}>You sign in with Google as <b style={{ fontWeight: 600 }}>{v.acEmail}</b>. To use a different email, change it in your Google account.</span>}
         </SettingsSection>
-        <SettingsSection title="Password">
+        {v.acPw && <SettingsSection title="Password">
           <form onSubmit={v.changePassword} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <TextField label="Current password" value={f.pwOld} onChange={on.pwOld} type="password" autoComplete="current-password" />
             <TextField label="New password" value={f.pwNew} onChange={on.pwNew} type="password" placeholder="At least 6 characters" autoComplete="new-password" />
             <button type="submit" disabled={v.acBusy === 'password'} style={{ ...formBtn(), opacity: v.acBusy === 'password' ? 0.6 : 1 }}>{v.acBusy === 'password' ? 'Saving…' : 'Change password'}</button>
           </form>
-        </SettingsSection>
+        </SettingsSection>}
         <SettingsSection title="Appearance" note="Dark keeps your sketchbooks on paper, on a desk at night.">
           <div role="radiogroup" aria-label="Theme" style={{ display: 'flex', gap: 2, padding: 3, border: '1px solid rgba(var(--ink-rgb),.2)', alignSelf: 'flex-start' }}>
             {([['light', 'Light'], ['dark', 'Dark']] as const).map(([k, l]) => {
@@ -594,7 +617,8 @@ export function Settings({ v }: { v: V }) {
         <SettingsSection title="Delete account" note={`Permanently deletes your profile, handle, follows and every sketchbook with all its pages.${v.acHasBilling ? ' A Plus subscription is cancelled straight away.' : ''} This can’t be undone.`}>
           <form onSubmit={v.deleteAccount} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <TextField label={`Type your handle (${v.acHandle}) to confirm`} value={f.delHandle} onChange={on.delHandle} placeholder={v.acHandle} />
-            <TextField label="Password" value={f.pwDel} onChange={on.pwDel} type="password" autoComplete="current-password" />
+            {v.acPw ? <TextField label="Password" value={f.pwDel} onChange={on.pwDel} type="password" autoComplete="current-password" />
+              : <span style={{ fontSize: 13, color: MUTED }}>Google will ask you to confirm it’s you.</span>}
             <button type="submit" disabled={v.acBusy === 'delete'} className={hover(`background:${MARK};color:${PAPER}`)} style={{ ...formBtn(true), opacity: v.acBusy === 'delete' ? 0.6 : 1 }}>{v.acBusy === 'delete' ? 'Deleting…' : 'Delete my account'}</button>
           </form>
         </SettingsSection>

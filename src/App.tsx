@@ -1422,6 +1422,13 @@ export default class App extends Component<object, State> {
         }
       },
       closeAuth: this.closeAuth,
+      suGoogle: async () => {
+        if (s.suBusy) return;
+        this.setState({ suBusy: true, suErr: '', suInfo: '' });
+        try { await api.signInGoogle(); this.closeAuth(); }
+        catch (e) { const code = (e as { code?: string }).code; if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') this.setState({ suErr: api.errMsg(e) }); }
+        finally { this.setState({ suBusy: false }); }
+      },
       // Moderators: give Plus.
       gfOpen: !!s.giftFor && !!s.admin, gfName: s.giftFor?.name || '', gfBusy: !!s.giftBusy,
       gfNow: (() => {
@@ -1625,7 +1632,8 @@ export default class App extends Component<object, State> {
     return {
       isSettings: s.mode === 'settings', openSettings: this.openSettings, closeSettings: () => this.openProfile(null),
       isBilling: s.mode === 'billing', openBilling: this.openBilling,
-      acEmail: a?.email || '', acVerified: !!s.verified, acErr: s.acErr || '', acInfo: s.acInfo || '', acBusy: s.acBusy || '',
+      // Accounts made with Google have no password: no password fields, and Google confirms it's them instead.
+      acPw: api.hasPassword(), acEmail: a?.email || '', acVerified: !!s.verified, acErr: s.acErr || '', acInfo: s.acInfo || '', acBusy: s.acBusy || '',
       acF: { email: f.email || '', pwEmail: f.pwEmail || '', pwOld: f.pwOld || '', pwNew: f.pwNew || '', delHandle: f.delHandle || '', pwDel: f.pwDel || '' },
       onAc: { email: set('email'), pwEmail: set('pwEmail'), pwOld: set('pwOld'), pwNew: set('pwNew'), delHandle: set('delHandle'), pwDel: set('pwDel') },
       acHandle: a?.handle || '',
