@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { loadStripe } from '@stripe/stripe-js';
 import type { CSSProperties, ChangeEventHandler, MouseEventHandler, ReactNode } from 'react';
 import { Popover } from './Popover';
@@ -332,8 +333,23 @@ function EmbeddedCheckout({ v }: { v: V }) {
   );
 }
 
+/** Phones: the checkout as a page of its own that the browser scrolls. iPhones don't pass a scroll from inside
+ *  Stripe's form (an iframe) on to a scrolling box around it, only to the page, so the page scrolls while it's open. */
+function CheckoutPage({ v }: { v: V }) {
+  useEffect(() => {
+    const els = [document.documentElement, document.body], was = els.map(e => [e.style.overflow, e.style.height]);
+    els.forEach(e => { e.style.overflow = 'auto'; e.style.height = 'auto'; }); scrollTo(0, 0);
+    return () => els.forEach((e, i) => { [e.style.overflow, e.style.height] = was[i]; });
+  }, []);
+  return createPortal(
+    <div role="dialog" aria-label="Checkout" style={{ position: 'absolute', top: 0, left: 0, right: 0, minHeight: '100%', zIndex: 1000, background: PAPER, color: INK, fontFamily: SANS, boxSizing: 'border-box', padding: '14px 12px calc(32px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <EmbeddedCheckout v={v} />
+    </div>, document.body);
+}
+
 /** Fletora Plus: what it adds, monthly or yearly, then Stripe's checkout (in the sheet, or on Stripe's page). */
 export function PlusModal({ v }: { v: V }) {
+  if (v.plSecret && !v.notMob) return <CheckoutPage v={v} />;
   if (v.plSecret) return (
     // Clicking outside doesn't close it mid-payment; Back does.
     <Modal onClose={() => {}} pad={v.notMob ? 24 : 12} maxWidth={640} gap={14} z={40} shadow="0 30px 60px rgba(10,10,30,.35)">
