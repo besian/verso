@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { V } from '../App';
 import ClosedBook from '../ClosedBook';
@@ -620,6 +620,9 @@ export function BillingPage({ v }: { v: V }) {
             <SettingsSection title="Plan" note={v.bdPlan}>
               <span style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}><span style={serif(26, 1.1)}>Fletora Plus</span></span>
               <span style={{ fontSize: 14, lineHeight: 1.5, color: v.bdWarn ? MARK : INK }}>{v.bdNext}</span>
+              <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 18px', fontSize: 14 }}>
+                {v.bdDates.map((d: V) => <Fragment key={d.key}><dt style={{ color: MUTED }}>{d.label}</dt><dd style={{ margin: 0 }}>{d.value}</dd></Fragment>)}
+              </dl>
               <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
                 {v.bdCancelling
                   ? <button onClick={v.bdResume} disabled={v.bdBusy} style={formBtn()}>{v.bdBusy ? 'One moment…' : 'Keep Plus'}</button>
@@ -630,16 +633,17 @@ export function BillingPage({ v }: { v: V }) {
               </div>
             </SettingsSection>
             <SettingsSection title="Payment method" note="The card Plus is charged to.">
-              <span style={{ fontSize: 14 }}>{v.bdCardLbl}</span>
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 14 }}>{v.bdCardLbl}</span>{v.bdCardAdded && <span style={{ fontSize: 13, color: MUTED }}>{v.bdCardAdded}</span>}</span>
               <button onClick={v.bdCard} disabled={v.acBusy === 'card'} style={{ ...formBtn(), opacity: v.acBusy === 'card' ? 0.6 : 1 }}>{v.acBusy === 'card' ? 'Opening…' : 'Change card'}</button>
             </SettingsSection>
-            <SettingsSection title="Receipts" note="Sent by Stripe, who sell Plus on Fletora’s behalf.">
+            <SettingsSection title="Payments" note="Each payment, the card it was charged to, and its receipt (sent by Stripe, who sell Plus on Fletora’s behalf).">
               {v.bdInvoices.length ? v.bdInvoices.map((i: V) => (
-                <div key={i.key} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 14, alignItems: 'baseline', fontSize: 14, paddingBottom: 10, borderBottom: '1px solid rgba(var(--ink-rgb),.1)' }}>
-                  <span>{i.date}</span><span>{i.amount}</span><span style={{ color: MUTED }}>{i.status}</span>
-                  {i.url ? <a href={i.url} target="_blank" rel="noopener noreferrer" style={{ color: INK }}>View</a> : <span />}
+                <div key={i.key} style={{ display: 'grid', gridTemplateColumns: mob ? '1fr auto' : '1fr auto 1fr auto auto', gap: mob ? '2px 14px' : 14, alignItems: 'baseline', fontSize: 14, paddingBottom: 10, borderBottom: '1px solid rgba(var(--ink-rgb),.1)' }}>
+                  <span>{i.date}</span><span>{i.amount}</span>
+                  <span style={{ color: MUTED }}>{i.card}</span><span style={{ color: i.bad ? MARK : MUTED }}>{i.status}</span>
+                  {i.url ? <a href={i.url} target="_blank" rel="noopener noreferrer" style={{ color: INK, ...(mob ? { gridColumn: '1 / -1' } : {}) }}>Receipt</a> : <span />}
                 </div>
-              )) : <span style={{ fontSize: 14, color: MUTED }}>No receipts yet.</span>}
+              )) : <span style={{ fontSize: 14, color: MUTED }}>No payments yet.</span>}
             </SettingsSection>
           </>
         )}

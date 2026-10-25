@@ -654,9 +654,12 @@ export const confirmCheckout = (session: string) => billing('sync', { session })
 
 /** What Fletora's billing page shows. Amounts are in pence. */
 export interface BillingDetails {
-  status: string; interval: string; amount: number; currency: string; periodEnd: number; cancelling: boolean;
-  card: { brand: string; last4: string; exp: string } | null;
-  invoices: { id: string; at: number; amount: number; currency: string; status: string; url: string }[];
+  status: string; interval: string; amount: number; currency: string;
+  /** Dates (ms): when Plus started, the period paid for now, and if cancelled, when that was and when it ends. */
+  started: number; periodStart: number; periodEnd: number; cancelling: boolean; cancelledAt: number; endsAt: number;
+  card: { brand: string; last4: string; exp: string; added: number } | null;
+  /** Each payment with the card it used; refunds included. */
+  payments: { id: string; at: number; amount: number; refunded: number; currency: string; status: string; card: { brand: string; last4: string } | null; url: string }[];
 }
 export const billingDetails = () => billing<BillingDetails>('details');
 /** Cancel at the end of the paid period, undo that, or move from monthly to yearly. */

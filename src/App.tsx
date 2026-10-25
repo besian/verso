@@ -1588,11 +1588,21 @@ export default class App extends Component<object, State> {
             return {
               bdShow: !!b, bdReady: !!d, bdErr: s.bdErr || '',
               bdPlan: d ? `${d.interval === 'year' ? 'Yearly' : 'Monthly'} · ${money(d.amount, d.currency)} a ${d.interval === 'year' ? 'year' : 'month'}` : '',
-              bdNext: d ? (d.cancelling ? `Cancelled. You keep Plus until ${date(d.periodEnd)}, and won’t be charged again.` : d.status === 'past_due' ? 'Your last payment didn’t go through. Update your card to keep Plus.' : `Renews on ${date(d.periodEnd)}.`) : '',
+              bdNext: d ? (d.cancelling ? `Cancelled. You keep Plus until ${date(d.endsAt || d.periodEnd)}, and won’t be charged again.` : d.status === 'past_due' ? 'Your last payment didn’t go through. Update your card to keep Plus.' : `Renews on ${date(d.periodEnd)}.`) : '',
+              // The dates behind it: started, this period, and cancelled / ends, or renews.
+              bdDates: d ? ([
+                ['Started', d.started ? date(d.started) : ''],
+                ['This period', d.periodStart && d.periodEnd ? `${date(d.periodStart)} – ${date(d.periodEnd)}` : ''],
+                ...(d.cancelling ? [['Cancelled on', d.cancelledAt ? date(d.cancelledAt) : ''], ['Plus ends on', date(d.endsAt || d.periodEnd)]] : [['Next payment', `${money(d.amount, d.currency)} on ${date(d.periodEnd)}`]]),
+              ] as [string, string][]).filter(([, x]) => x).map(([k, x]) => ({ key: k, label: k, value: x })) : [],
               bdWarn: !!d && (d.cancelling || d.status === 'past_due'),
               bdCardLbl: d?.card ? (d.card.last4 ? `${d.card.brand.charAt(0).toUpperCase() + d.card.brand.slice(1)} •••• ${d.card.last4}${d.card.exp ? ` · expires ${d.card.exp}` : ''}` : d.card.brand) : 'No card saved',
+              bdCardAdded: d?.card?.added ? `Added ${date(d.card.added)}` : '',
               bdCanSwitch: !!d && d.interval === 'month' && !d.cancelling, bdCancelling: !!d?.cancelling,
-              bdInvoices: (d?.invoices || []).map(i => ({ key: i.id, date: new Date(i.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }), amount: money(i.amount, i.currency), status: i.status === 'paid' ? 'Paid' : i.status === 'open' ? 'Due' : i.status, url: i.url })),
+              bdInvoices: (d?.payments || []).map(i => ({ key: i.id, date: new Date(i.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }), amount: money(i.amount, i.currency),
+                card: i.card?.last4 ? `${i.card.brand.charAt(0).toUpperCase() + i.card.brand.slice(1)} •••• ${i.card.last4}` : '',
+                status: i.status === 'paid' ? 'Paid' : i.status === 'refunded' ? 'Refunded' : i.status === 'part-refunded' ? `${money(i.refunded, i.currency)} refunded` : i.status === 'open' ? 'Due' : i.status === 'failed' ? 'Failed' : i.status,
+                bad: i.status === 'failed' || i.status === 'open', url: i.url })),
               bdAsk: s.bdAsk || null, bdBusy: !!s.bdBusy, bdEnd: d ? date(d.periodEnd) : '', bdYearPrice: PRICE.year,
               bdAskCancel: () => this.setState({ bdAsk: 'cancel' }), bdAskSwitch: () => this.setState({ bdAsk: 'switch' }), bdNo: () => this.setState({ bdAsk: null }),
               bdCancel: act('cancel', 'Plus is cancelled. You keep it until the end of this period.'),

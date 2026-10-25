@@ -15,7 +15,11 @@ const esc = (s: string) => s.replace(/[\\()]/g, m => '\\' + m).replace(/[\r\n]+/
 
 /** A page image as JPEG bytes with its size; other formats are re-encoded through a canvas. */
 async function jpeg(url: string): Promise<{ bytes: Uint8Array; w: number; h: number }> {
-  const blob = await (await fetch(url, { mode: 'cors' })).blob();
+  // Fetched fresh: a copy the browser kept from showing the page (as a background, without CORS) would be
+  // refused here, which is what broke PDFs of saved sketchbooks.
+  const r = await fetch(url, /^https?:/.test(url) ? { mode: 'cors', cache: 'reload' } : {});
+  if (!r.ok) throw new Error(`page image ${r.status}`);
+  const blob = await r.blob();
   const bmp = await createImageBitmap(blob);
   const { width: w, height: h } = bmp;
   if (blob.type === 'image/jpeg') { bmp.close(); return { bytes: new Uint8Array(await blob.arrayBuffer()), w, h }; }

@@ -84,16 +84,26 @@ export async function POST(req: Request) {
     // ---------- Fletora's billing page ----------
     if (body.action === 'details') {
       if (!bill.sub) return json(404, { error: 'no-subscription' });
-      const [sub, inv] = await Promise.all([
+      const [sub, inv, ch] = await Promise.all([
         stripe('GET', `subscriptions/${bill.sub}`, { expand: ['default_payment_method', 'customer.invoice_settings.default_payment_method'] }),
-        stripe<{ data: Record<string, any>[] }>('GET', 'invoices', { customer: bill.customer, limit: 12 }),
+        stripe<{ data: Record<string, any>[] }>('GET', 'invoices', { customer: bill.customer, limit: 24 }),
+        stripe<{ data: Record<string, any>[] }>('GET', 'charges', { customer: bill.customer, limit: 24 }).catch(() => ({ data: [] })),
       ]);
       const item = sub.items?.data?.[0], pm = sub.default_payment_method || sub.customer?.invoice_settings?.default_payment_method, card = pm?.card;
+      const ms = (t?: number | null) => (t ? t * 1000 : 0);
+      const cardOf = (c?: Record<string, any> | null) => c ? { brand: c.brand || '', last4: c.last4 || '', exp: c.exp_month ? `${String(c.exp_month).padStart(2, '0')}/${String(c.exp_year).slice(-2)}` : '' } : null;
+      // Payments: each charge with the card it used, refunds included; invoices fill in any charge can't be listed.
+      const payments = ch.data.length ? ch.data.map(c => ({
+        id: c.id, at: ms(c.created), amount: c.amount, refunded: c.amount_refunded || 0, currency: c.currency,
+        status: c.refunded ? 'refunded' : c.amount_refunded ? 'part-refunded' : c.status === 'succeeded' ? 'paid' : c.status,
+        card: cardOf(c.payment_method_details?.card), url: c.receipt_url || '',
+      })) : inv.data.filter(i => i.status !== 'draft').map(i => ({ id: i.id, at: ms(i.created), amount: i.amount_paid || i.total, refunded: 0, currency: i.currency, status: i.status, card: null, url: i.hosted_invoice_url || i.invoice_pdf || '' }));
       return json(200, {
         status: sub.status, interval: item?.price?.recurring?.interval || '', amount: item?.price?.unit_amount || 0, currency: item?.price?.currency || 'gbp',
-        periodEnd: (sub.current_period_end ?? item?.current_period_end ?? 0) * 1000, cancelling: !!sub.cancel_at_period_end,
-        card: card ? { brand: card.brand, last4: card.last4, exp: `${String(card.exp_month).padStart(2, '0')}/${String(card.exp_year).slice(-2)}` } : pm?.type ? { brand: pm.type, last4: '', exp: '' } : null,
-        invoices: inv.data.filter(i => i.status !== 'draft').map(i => ({ id: i.id, at: i.created * 1000, amount: i.amount_paid || i.total, currency: i.currency, status: i.status, url: i.hosted_invoice_url || i.invoice_pdf || '' })),
+        periodEnd: ms(sub.current_period_end ?? item?.current_period_end), periodStart: ms(sub.current_period_start ?? item?.current_period_start),
+        started: ms(sub.start_date || sub.created), cancelling: !!sub.cancel_at_period_end, cancelledAt: ms(sub.canceled_at), endsAt: ms(sub.cancel_at || sub.ended_at),
+        card: card ? { ...cardOf(card)!, added: ms(pm.created) } : pm?.type ? { brand: pm.type, last4: '', exp: '', added: ms(pm.created) } : null,
+        payments,
       });
     }
     if (body.action === 'cancel' || body.action === 'resume') {
