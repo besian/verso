@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { V } from '../App';
 import { hover } from '../pseudo';
 import { INK, MARK, MUTED, PAPER, SANS, label, pagePad, serif } from '../theme';
+import { ADDRESS, SiteFooter } from './Footer';
 import { Notice, TextArea, TextField } from './Overlays';
 import { BOOKS_FREE, INK_FREE, PAGES_FREE, PRICE } from '../plus';
 
@@ -10,8 +11,6 @@ const hoverText = hover(`color:${MARK}`);
 const hoverLine = hover(`color:${MARK};border-color:${MARK}`);
 const underline = (fs = 14): CSSProperties => ({ padding: '4px 0', border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', color: INK, font: `500 ${fs}px ${SANS}`, cursor: 'pointer' });
 const contact = import.meta.env.VITE_CONTACT_EMAIL || 'hello@fletora.studio';
-/** Fletora's postal address, shown on the Contact page (the law asks a site that sells something to give one). */
-const ADDRESS = '45 Earls Court Square, London';
 /** What a message on the Contact page is about; keys must match KINDS in api/contact.ts. */
 export const CONTACT_KINDS = [['help', 'A question or help'], ['complaint', 'A complaint about Fletora'], ['appeal', 'Appeal a moderation decision'], ['bug', 'A problem with the site'],
   ['report', 'Reporting content or a person'], ['privacy', 'A privacy or data request'], ['billing', 'Plus and billing'], ['other', 'Something else']] as const;
@@ -28,6 +27,7 @@ function Page({ v, kicker, title, children }: { v: V; kicker: string; title: Rea
           <h1 style={{ margin: 0, ...serif(mob ? 44 : 64, 1, '-.02em') }}>{title}</h1>
         </div>
         {children}
+        <SiteFooter v={v} />
       </div>
     </div>
   );
@@ -255,6 +255,7 @@ function ContactPage({ v }: { v: V }) {
             </Help>
           </aside>
         </div>
+        <SiteFooter v={v} />
       </div>
     </div>
   );

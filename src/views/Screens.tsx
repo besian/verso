@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { V } from '../App';
+import { SiteFooter } from './Footer';
 import ClosedBook from '../ClosedBook';
 import { hover, wheelSideways } from '../pseudo';
 import { CANVAS, INK, MARK, MUTED, PAGE_EDGES, PAPER, SANS, SERIF, STONE, label, pagePad, serif } from '../theme';
@@ -51,7 +52,7 @@ export function HomeScreen({ v }: { v: V }) {
             <span style={{ color: MUTED, whiteSpace: 'nowrap' }}>by {v.hmPick.artist} →</span>
           </button>
         )}
-        {signedOut && <LegalLinks v={v} />}
+        <LegalLinks v={v} />
       </section>
       <section style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10, paddingTop: mob ? 0 : 28 }}>
         <div style={{ overflow: 'hidden', paddingTop: 16 }}>
@@ -197,6 +198,7 @@ export function Explore({ v }: { v: V }) {
             <button onClick={v.loadMore} disabled={v.exBusy} className={hoverLine} style={{ ...underlineBtn(14), opacity: v.exBusy ? 0.5 : 1 }}>{v.exBusy ? 'Loading…' : 'Load more'}</button>
           </div>
         )}
+        {!v.exStack && <SiteFooter v={v} />}
         {v.exStack && (
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: v.stDir, alignItems: 'center', justifyContent: 'center', gap: v.stGap }}>
             <div onWheel={v.stackWheel} onPointerDown={v.stDown0} onPointerUp={v.stUp0} style={{ position: 'relative', width: 440, maxWidth: v.stMaxW, flex: v.stFlex, height: 'min(560px,100%)', minHeight: 0, perspective: 1300, touchAction: 'none' }}>
@@ -438,6 +440,7 @@ export function Profile({ v }: { v: V }) {
             </div>
           )}
         </section>
+        <SiteFooter v={v} />
       </div>
     </div>
   );
@@ -485,6 +488,7 @@ export function AuthPage({ v }: { v: V }) {
             <button type="button" onClick={v.closeAuth} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'rgba(var(--ink-rgb),.75)', font: `500 13px ${SANS}`, cursor: 'pointer' }}>Not now</button>
           </div>
         </form>
+        <div style={{ gridColumn: '1 / -1' }}><SiteFooter v={v} /></div>
       </div>
     </div>
   );
@@ -585,7 +589,6 @@ export function Settings({ v }: { v: V }) {
               Help improve fletora. with anonymous usage statistics
             </label>
           )}
-          <LegalLinks v={v} align="flex-start" />
         </SettingsSection>
         <SettingsSection title="Delete account" note={`Permanently deletes your profile, handle, follows and every sketchbook with all its pages.${v.acHasBilling ? ' A Plus subscription is cancelled straight away.' : ''} This can’t be undone.`}>
           <form onSubmit={v.deleteAccount} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -594,6 +597,7 @@ export function Settings({ v }: { v: V }) {
             <button type="submit" disabled={v.acBusy === 'delete'} className={hover(`background:${MARK};color:${PAPER}`)} style={{ ...formBtn(true), opacity: v.acBusy === 'delete' ? 0.6 : 1 }}>{v.acBusy === 'delete' ? 'Deleting…' : 'Delete my account'}</button>
           </form>
         </SettingsSection>
+        <SiteFooter v={v} />
       </div>
     </div>
   );
@@ -615,6 +619,7 @@ export function BillingPage({ v }: { v: V }) {
         <span style={{ fontSize: 14, lineHeight: 1.5 }}>{v.acGift ? v.acGiftLine : v.acPlan}</span>
         <button onClick={v.seePlus} style={formBtn()}>{v.acGift ? 'What’s included' : 'See Plus'}</button>
       </SettingsSection>
+      <SiteFooter v={v} />
     </div></div>
   );
   return (
@@ -661,6 +666,7 @@ export function BillingPage({ v }: { v: V }) {
             </SettingsSection>
           </>
         )}
+        <SiteFooter v={v} />
       </div>
     </div>
   );
