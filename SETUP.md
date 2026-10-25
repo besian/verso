@@ -139,10 +139,11 @@ which nobody can read, and the server sends it to Claude (Opus 5.5) to check, th
 | Claude finds | What happens |
 | --- | --- |
 | nothing of concern | published to `users/{uid}/`, with a thumbnail made on the server |
-| a drawing with nudity or sexual content (adults) | published, and the sketchbook is labelled Mature for good (moderators can clear it); if Claude wasn't sure, a report asks a moderator to check the label |
+| a drawing with nudity (adults, not sexually explicit) | published, and the sketchbook is labelled Mature for good (moderators can clear it); if Claude wasn't sure, a report asks a moderator to check the label |
 | a photo, photo-real image or collage with nudity or sexual content | refused and deleted |
 | anything that sexualises someone who looks under 18, drawn or not | refused, moved to `quarantine/`, the sketchbook hidden, a report made and `SAFETY_EMAIL` emailed at once |
 | non-sexual nudity of someone who looks under 18, or Claude declines to look | held back in `quarantine/` with a report for a moderator |
+| a sexually explicit drawing | refused (showing it would need proper age checks under the Online Safety Act) |
 | nudity in a profile picture | refused |
 
 If Claude can't be reached, nothing is published: the app keeps the page and tries again on the next save.

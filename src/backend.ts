@@ -107,6 +107,7 @@ export function errMsg(e: unknown): string {
     'billing/paid': 'They pay for Plus, so it can’t be given or taken away here.',
     'billing/not-allowed': 'Only moderators can do that.',
     'image/refused-photo': 'Photos with nudity or sexual content can’t be posted on Fletora. Drawings can.',
+    'image/refused-explicit': 'Sexually explicit pictures can’t be posted on Fletora. Nude figure drawings are welcome.',
     'image/refused-avatar': 'Profile pictures can’t show nudity. Choose another picture.',
     'image/refused-hold': 'That picture is waiting for a moderator to look at it, so it wasn’t added.',
     'image/check-unavailable': 'Couldn’t check your pictures just now. Try again in a moment.',
@@ -327,7 +328,7 @@ export async function labelBooks(lbl: string): Promise<BookDoc[]> {
 
 /** What the upload check decided about a picture that wasn't let through: a photo with nudity or sexual content,
  *  a profile picture with nudity, or held back for a moderator. */
-export type Refusal = 'photo' | 'avatar' | 'hold';
+export type Refusal = 'photo' | 'explicit' | 'avatar' | 'hold';
 export interface Uploads { done: Map<string, { full: string; thumb: string }>; refused: Map<string, Refusal>; mature: boolean; error?: unknown }
 
 /** Uploads data URLs for a book's pages/cover. Each is checked on the server before it goes public (api/image),

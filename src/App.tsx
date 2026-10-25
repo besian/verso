@@ -515,8 +515,8 @@ export default class App extends Component<object, State> {
     // Mature sketchbooks open for people who've chosen to see them (signed in, 18 or over), and their own artists.
     if (b.mature && !s.showMature && !s.admin && b.ownerId !== uid && !(uid && b.collabIds?.includes(uid))) {
       return uid
-        ? this.ask({ title: 'Mature sketchbook', text: 'This sketchbook has drawings with nudity or sexual content. Only open it if you’re 18 or over. You can change this any time in Account settings.', yes: 'I’m 18 or over, show it', run: () => this.setMature(true, () => this.openOtherBook(b, from)) })
-        : this.ask({ title: 'Mature sketchbook', text: 'This sketchbook has drawings with nudity or sexual content. Sign in to choose whether to see Mature work.', yes: 'Sign in', run: () => this.openAuth('signin') });
+        ? this.ask({ title: 'Mature sketchbook', text: 'This sketchbook has drawings with nudity. Only open it if you’re 18 or over. You can change this any time in Account settings.', yes: 'I’m 18 or over, show it', run: () => this.setMature(true, () => this.openOtherBook(b, from)) })
+        : this.ask({ title: 'Mature sketchbook', text: 'This sketchbook has drawings with nudity. Sign in to choose whether to see Mature work.', yes: 'Sign in', run: () => this.openAuth('signin') });
     }
     if (b.ownerId !== s.acct?.uid && !this.viewed.has(b.id)) {
       this.viewed.add(b.id);
@@ -826,8 +826,9 @@ export default class App extends Component<object, State> {
         const why = [...refused.values()], n = refused.size;
         this.ask({ title: n === 1 ? 'A page wasn’t added' : `${n} pages weren’t added`, yes: 'OK', notice: true, run: () => {},
           text: why.includes('photo') ? 'Photos with nudity or sexual content can’t be posted on Fletora. Drawings with nudity are welcome, labelled Mature.'
+            : why.includes('explicit') ? 'Sexually explicit pictures can’t be posted on Fletora. Nude figure drawings are welcome, labelled Mature.'
             : 'The automatic check couldn’t clear it, so a moderator will look at it. If it was a mistake, they’ll be in touch.' });
-      } else if (mature && !this.findBook(id)?.mature) this.toast('Labelled Mature: drawn nudity or sexual content');
+      } else if (mature && !this.findBook(id)?.mature) this.toast('Labelled Mature: drawn nudity');
       if (mature) this.persist(this.state.books);
       if (error) throw error;
       b = this.findBook(id); if (!b) return;
@@ -1493,7 +1494,7 @@ export default class App extends Component<object, State> {
       anChoose: (yes: boolean) => { store.saveAnalytics(yes ? 'yes' : 'no'); api.analyticsConsent(yes); this.setState({ analytics: yes ? 'yes' : 'no' }); },
       mtOn: !!s.showMature,
       mtToggle: () => s.showMature ? this.setMature(false)
-        : this.ask({ title: 'Show Mature work?', text: 'Mature sketchbooks have drawings with nudity or sexual content. Turn this on only if you’re 18 or over.', yes: 'I’m 18 or over', run: () => this.setMature(true) }),
+        : this.ask({ title: 'Show Mature work?', text: 'Mature sketchbooks have drawings with nudity. Turn this on only if you’re 18 or over.', yes: 'I’m 18 or over', run: () => this.setMature(true) }),
       anToggle: () => { const yes = s.analytics !== 'yes'; store.saveAnalytics(yes ? 'yes' : 'no'); api.analyticsConsent(yes); this.setState({ analytics: yes ? 'yes' : 'no' }); },
       // Fletora's own confirm dialog.
       askQ: s.ask || null, askNo: () => this.setState({ ask: null }), askYes: () => { const q = s.ask; this.setState({ ask: null }); q?.run(); },

@@ -2,7 +2,9 @@
 // then asks for a check: Claude looks at it, and only then is it moved to users/{uid}/ (public), with a thumbnail
 // made here. The rules:
 //   - photos (or photo-real images) with nudity or sexual content: refused and deleted;
-//   - drawings with nudity or sexual content: allowed, and the sketchbook is labelled Mature;
+//   - drawings with nudity: allowed, and the sketchbook is labelled Mature;
+//   - sexually explicit drawings: refused for now (showing them would need proper age checks under the Online
+//     Safety Act, not just an 'I'm 18' tick);
 //   - anything that sexualises someone who looks under 18, drawn or not: refused, kept out of sight for the
 //     report to the authorities, and emailed to the safety inbox straight away;
 //   - anything the check can't decide on, or won't look at: held back for a moderator.
@@ -39,7 +41,7 @@ const PROMPT = `You check pictures uploaded to Fletora, a site where artists sha
 
 - medium: "drawing" for hand-made or digital artwork of any style (sketches, paintings, comics, anime, life drawing), including a photograph of a drawing or a sketchbook page. "photo" for a photograph of real people or things, or an image made to look like one (photo-real renders or AI images). "mixed" when real photographs are part of the picture (a collage with photos). "none" when there's nothing to judge (blank page, plain text).
 - nudity: true if anyone is shown with exposed genitals, buttocks or female nipples.
-- sexual: true if the picture shows sexual activity or is plainly sexual or erotic in intent.
+- sexual: true if the picture shows sexual activity, or is explicit or erotic in a way made mainly to arouse (pornographic). Artistic nudes, life drawing and figure studies are not sexual, even with full nudity.
 - minor: "sexual" if anyone who looks under 18 (including child-like or youthful-looking drawn characters, whatever their stated age) is shown in a sexual or sexualised way: sexual activity, sexual posing, or a focus on their genitals or body. "nude" if someone who looks under 18 is nude but not sexualised (for example a classical cherub). Otherwise "none". When in doubt between "none" and the others, don't choose "none".
 - unsure: true if you can't judge any of the above with confidence.
 - reason: one short sentence a moderator can read, describing what you see without graphic detail.
@@ -61,7 +63,7 @@ const SCHEMA = {
 } as const;
 
 interface Verdict { medium: 'drawing' | 'photo' | 'mixed' | 'none'; nudity: boolean; sexual: boolean; minor: 'none' | 'nude' | 'sexual'; unsure: boolean; reason: string }
-type Outcome = 'ok' | 'mature' | 'photo' | 'hold' | 'child' | 'avatar';
+type Outcome = 'ok' | 'mature' | 'photo' | 'explicit' | 'hold' | 'child' | 'avatar';
 
 /** Claude's reading of the picture; null when it declines to look at it. */
 async function classify(jpeg: Buffer): Promise<Verdict | null> {
@@ -90,7 +92,8 @@ function decide(v: Verdict | null, avatar: boolean): Outcome {
   if (!explicit) return 'ok';
   if (avatar) return 'avatar';
   if (v.medium === 'photo' || v.medium === 'mixed') return 'photo';
-  if (v.unsure && v.medium !== 'drawing') return 'hold';
+  if (v.unsure && (v.medium !== 'drawing' || v.sexual)) return 'hold';
+  if (v.sexual) return 'explicit';
   return 'mature';
 }
 
@@ -192,7 +195,7 @@ async function check(a: Admin, uid: string, body: { path?: string; kind?: string
   }
   const outcome = decide(v, kind === 'avatar');
 
-  if (outcome === 'photo' || outcome === 'avatar') { await file.delete({ ignoreNotFound: true }); return json(200, { ok: false, outcome }); }
+  if (outcome === 'photo' || outcome === 'explicit' || outcome === 'avatar') { await file.delete({ ignoreNotFound: true }); return json(200, { ok: false, outcome }); }
   if (outcome === 'hold' || outcome === 'child') { await holdBack(a, uid, path, outcome, v, kind === 'page' ? bookId : ''); return json(200, { ok: false, outcome: 'hold' }); }
 
   if (outcome === 'mature' && v) await markMature(a, bookId, uid, v);

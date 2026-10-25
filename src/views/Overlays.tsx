@@ -237,7 +237,7 @@ export function Manager({ v }: { v: V }) {
                     </div>
                   </Row>
                   {v.mtShow && (
-                    <Row label="Mature" note={v.mtLock ? 'Labelled by the upload check because a drawing shows nudity or sexual content. Write to us if you think that’s wrong.' : 'Label it if it has drawn nudity or sexual content. Mature sketchbooks are kept out of Explore and lists for people who haven’t chosen to see them.'}>
+                    <Row label="Mature" note={v.mtLock ? 'Labelled by the upload check because a drawing shows nudity. Write to us if you think that’s wrong.' : 'Label it if it has drawn nudity. Mature sketchbooks are kept out of Explore and lists for people who haven’t chosen to see them.'}>
                       <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 14, cursor: v.mtLock ? 'not-allowed' : 'pointer', opacity: v.mtLock ? 0.7 : 1 }}>
                         <input type="checkbox" checked={v.mtBook} disabled={v.mtLock} onChange={v.mtBookToggle} style={{ width: 18, height: 18, accentColor: MARK }} />
                         Mature sketchbook

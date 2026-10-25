@@ -50,7 +50,7 @@ function Privacy() {
           <><b>Your account:</b> your email address and a password, held by Firebase Authentication (Google). Your password is never visible to us, and your email is never shown on the site.</>,
           <><b>Your profile:</b> name, handle, bio, location, website, social links, a contact email (if you add one) and photo. These are public.</>,
           <><b>Your sketchbooks:</b> page images, drawings and typed text you add, covers, captions, dates, mediums and tags. Public sketchbooks can be seen by anyone. Link-only sketchbooks (Plus) don’t appear in Explore or on your profile, but anyone with the link can open them. Private ones can be seen only by you and the people you’ve shared that sketchbook with.</>,
-          <><b>Upload checks:</b> every picture you upload (pages, covers, profile pictures) is checked automatically before anyone else can see it, for photos with nudity or sexual content and for anything that sexualises children. We keep the result only as a Mature label on the sketchbook, or, for a picture that’s held back, the picture and a one-line description in private storage that only our moderators can open (see How long we keep it).</>,
+          <><b>Upload checks:</b> every picture you upload (pages, covers, profile pictures) is checked automatically before anyone else can see it, for nudity, sexually explicit content and anything that sexualises children. We keep the result only as a Mature label on the sketchbook, or, for a picture that’s held back, the picture and a one-line description in private storage that only our moderators can open (see How long we keep it).</>,
           <><b>Shared sketchbooks:</b> when you share a sketchbook (with one person, or up to five with Plus), everyone in it can see its pages and the names and handles of the others in it, and can add, caption and change pages. Pages someone adds stay in the sketchbook if they leave or are removed.</>,
           <><b>Messages:</b> the messages you send and receive, so the two people in a conversation can read them. Nobody else can, including us, unless a message is reported: then its text is sent to our moderators with the report. If you delete your account, messages you sent stay in the other person’s conversation.</>,
           <><b>Activity:</b> who you follow, which sketchbooks you like and save, who you block, your notifications, the reports you file, and a daily count of new conversations you start (to prevent spam). Follows and likes are visible to others; saved sketchbooks, blocks and reports are private.</>,
@@ -110,15 +110,15 @@ function Terms() {
           'Uploading work that isn’t yours, or that you don’t have the right to share.',
           'Harassment, hate, threats or content that targets someone, in sketchbooks, profiles or messages.',
           'Anything that sexualises children, drawn or not. This includes drawn, painted or computer-made images, and we report it to the police or the Internet Watch Foundation.',
-          'Photos (or photo-real images) with nudity or sexual content. Drawings with nudity or sexual content of adults are allowed, labelled Mature (see below).',
+          'Photos (or photo-real images) with nudity or sexual content, and sexually explicit pictures of any kind. Drawings with nudity of adults are allowed, labelled Mature (see below).',
           'Sexual messages to anyone who hasn’t asked for them, or any illegal content.',
           'Spam, scams, impersonation, or using messages to advertise or contact people in bulk.',
           'Automated use of the site, or trying to break, overload or get around its security.',
         ]} />
       </Sec>
       <Sec title="Mature work">
-        <P>Figure drawing and art with nudity are welcome. Sketchbooks with drawn nudity or sexual content of adults must be labelled Mature, from the sketchbook’s Pages screen. Mature sketchbooks are kept out of Explore and other people’s profiles, and only open for signed-in people who say they’re 18 or over and choose to see them in Account settings. Profile pictures can’t show nudity.</P>
-        <P>Every upload is checked automatically before it’s published. Photos with nudity or sexual content are refused, drawings the check finds with nudity or sexual content are labelled Mature for you (only moderators can take that label off), and anything it can’t judge is held back for a moderator. The check can get things wrong; if it has, <Contact />.</P>
+        <P>Figure drawing and art with nudity are welcome. Sketchbooks with drawn nudity of adults must be labelled Mature, from the sketchbook’s Pages screen. Mature sketchbooks are kept out of Explore and other people’s profiles, and only open for signed-in people who say they’re 18 or over and choose to see them in Account settings. Profile pictures can’t show nudity.</P>
+        <P>Every upload is checked automatically before it’s published. Photos with nudity or sexual content and sexually explicit drawings are refused, drawings the check finds with nudity are labelled Mature for you (only moderators can take that label off), and anything it can’t judge is held back for a moderator. The check can get things wrong; if it has, <Contact />.</P>
       </Sec>
       <Sec title="Messages">
         <P>Messages from people who don’t follow you arrive as requests you can accept, decline or ignore. You can block anyone, and report any message; a reported message is shared with our moderators so they can review it.</P>
