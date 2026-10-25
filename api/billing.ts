@@ -59,11 +59,13 @@ export async function POST(req: Request) {
       // On Fletora's page when the site has a publishable key: Fletora's own form with Stripe's card fields
       // (elements; `custom` in older API versions), else Stripe's whole form embedded (embedded_page / embedded),
       // else Stripe's own page below.
+      // Why each mode was refused goes back too; the page shows it in test mode only.
+      const refused: string[] = [];
       if (body.embedded) for (const ui_mode of ['elements', 'custom', 'embedded_page', 'embedded']) {
         try {
           const s = await stripe('POST', 'checkout/sessions', { ...base, ui_mode, return_url: back });
-          if (s.client_secret) return json(200, { clientSecret: s.client_secret, ui: ui_mode === 'elements' || ui_mode === 'custom' ? 'elements' : 'embedded' });
-        } catch (e) { console.warn('checkout', ui_mode, (e as Error).message); }
+          if (s.client_secret) return json(200, { clientSecret: s.client_secret, ui: ui_mode === 'elements' || ui_mode === 'custom' ? 'elements' : 'embedded', refused });
+        } catch (e) { console.warn('checkout', ui_mode, (e as Error).message); refused.push(`${ui_mode}: ${(e as Error).message}`); }
       }
       const s = await stripe('POST', 'checkout/sessions', { ...base, success_url: back, cancel_url: `${here}/settings` });
       return json(200, { url: s.url });

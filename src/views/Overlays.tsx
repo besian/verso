@@ -327,6 +327,7 @@ function EmbeddedCheckout({ v }: { v: V }) {
         <button onClick={v.plBack} className="tap" style={{ ...linkBtn('rgba(var(--ink-rgb),.75)'), padding: '4px 0' }}>← Back</button>
         <span style={{ fontSize: 13, color: 'rgba(var(--ink-rgb),.65)' }}>{v.plSummary}</span>
       </div>
+      {v.plWhy.length > 0 && <span style={{ fontSize: 12, lineHeight: 1.45, color: MARK, overflowWrap: 'anywhere' }}>Test mode: Stripe refused Fletora’s own form. {v.plWhy.join(' · ')}</span>}
       {!ready && <span style={{ ...hint, textAlign: 'center', padding: '40px 0' }}>Loading secure checkout…</span>}
       {/* Stripe draws its own light form; a white card keeps it from looking pasted onto the paper (and works in dark mode). */}
       <div ref={box} style={{ minHeight: ready ? 0 : 1, background: '#fff', borderRadius: 4, overflow: 'hidden' }} />

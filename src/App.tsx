@@ -65,7 +65,7 @@ interface State {
   plus?: boolean; bill?: Billing | null; plusFor?: string | null; plusPlan?: 'month' | 'year'; plusBusy?: boolean; plusErr?: string;
   /** Checkout on our page: its session's client secret, whether it's our own form with Stripe's card fields
    *  ('elements') or Stripe's whole form ('embedded'), and the thank-you once it's paid. */
-  plusSecret?: string; plusUi?: 'elements' | 'embedded'; plusDone?: boolean;
+  plusSecret?: string; plusUi?: 'elements' | 'embedded'; plusDone?: boolean; plusWhy?: string[];
   /** The billing page in Settings: plan, card and receipts from Stripe, the change being confirmed, and a new card's setup. */
   bd?: BillingDetails | null; bdErr?: string; bdAsk?: 'cancel' | 'switch' | null; bdBusy?: boolean; cardSecret?: string | null;
   /** The open sketchbook's stats on the edit screen. */
@@ -1319,10 +1319,12 @@ export default class App extends Component<object, State> {
         this.setState({ plusBusy: true, plusErr: '' });
         try {
           const r = await api.checkout(s.plusPlan || 'year');
-          if (r.clientSecret) this.setState({ plusSecret: r.clientSecret, plusUi: r.ui || 'embedded', plusBusy: false }); else location.href = r.url || '';
+          if (r.clientSecret) this.setState({ plusSecret: r.clientSecret, plusUi: r.ui || 'embedded', plusWhy: r.refused || [], plusBusy: false }); else location.href = r.url || '';
         } catch (e) { this.setState({ plusErr: api.errMsg(e), plusBusy: false }); }
       },
-      plSecret: s.plusSecret || '', plUi: s.plusUi || 'embedded', plStripeKey: api.STRIPE_KEY, plDone: !!s.plusDone, plDark: !!s.dark,
+      plSecret: s.plusSecret || '', plUi: s.plusUi || 'embedded',
+      // Test mode only: why Stripe refused Fletora's own form, so it can be fixed.
+      plWhy: (s.plusSecret || '').startsWith('cs_test_') ? (s.plusWhy || []).filter(w => /^(elements|custom):/.test(w)) : [], plStripeKey: api.STRIPE_KEY, plDone: !!s.plusDone, plDark: !!s.dark,
       // Paid on our own form: thank them here and confirm it with the server (the session id leads its client secret).
       plPaid: () => { const id = (s.plusSecret || '').split('_secret_')[0]; this.setState({ plusSecret: '', plusDone: true }); this.confirmPlus(id); },
       plBack: () => this.setState({ plusSecret: '' }),

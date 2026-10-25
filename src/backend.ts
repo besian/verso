@@ -597,7 +597,7 @@ export async function isPlus(uid: string): Promise<boolean> {
 
 type BillingAction = 'checkout' | 'portal' | 'sync' | 'close' | 'details' | 'cancel' | 'resume' | 'switch' | 'card' | 'card-done';
 /** Calls api/billing: a Stripe page to go to (url), a checkout or card form for our page (clientSecret, ui), or data. */
-async function billing<T = { url?: string; clientSecret?: string; ui?: 'elements' | 'embedded'; plus?: boolean }>(action: BillingAction, extra: object = {}): Promise<T> {
+async function billing<T = { url?: string; clientSecret?: string; ui?: 'elements' | 'embedded'; plus?: boolean; refused?: string[] }>(action: BillingAction, extra: object = {}): Promise<T> {
   const u = need().auth.currentUser; if (!u) throw Object.assign(new Error('signed out'), { code: 'auth/no-current-user' });
   const r = await fetch('/api/billing', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + await u.getIdToken() }, body: JSON.stringify({ action, ...extra }) }).catch(() => null);
   const body = r && await r.json().catch(() => null) as (T & { error?: string }) | null;
