@@ -222,15 +222,16 @@ function ContactPage({ v }: { v: V }) {
   );
   return (
     <div style={screen}>
-      <div style={{ ...pagePad(mob, 64), display: 'flex', flexDirection: 'column', gap: mob ? 28 : 40, maxWidth: 1140 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 640 }}>
+      {/* Full width: on wide screens the help beside the form splits into columns rather than leaving space empty. */}
+      <div style={{ ...pagePad(mob, 64), display: 'flex', flexDirection: 'column', gap: mob ? 28 : 40, minHeight: '100%' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 760 }}>
           <span style={label(MARK)}>Contact</span>
           <h1 style={{ margin: 0, ...serif(mob ? 48 : 76, .95, '-.025em') }}>Get in <em style={{ color: MARK }}>touch.</em></h1>
           <p style={{ margin: 0, fontSize: mob ? 16 : 17, lineHeight: 1.55, color: MUTED }}>Questions, problems, complaints or appeals: a person reads every message and replies within 2 working days.</p>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: mob ? 'minmax(0,1fr)' : 'minmax(0,1.4fr) minmax(0,1fr)', gap: mob ? 36 : 64, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: mob ? 'minmax(0,1fr)' : 'minmax(0,1.2fr) minmax(0,1fr)', gap: mob ? 36 : 64, alignItems: 'start' }}>
           {form}
-          <aside style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+          <aside style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,360px),1fr))', gap: '22px 40px', alignItems: 'start' }}>
             <Help title="Email us">
               <a href={`mailto:${contact}`} className={hoverText} style={{ ...serif(24, 1.1), color: INK, textDecoration: 'none', borderBottom: `1px solid ${INK}`, alignSelf: 'flex-start' }}>{contact}</a>
               <span style={{ color: MUTED }}>Privacy and data requests are answered within one month at most.</span>
