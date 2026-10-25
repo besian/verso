@@ -1764,7 +1764,7 @@ export default class App extends Component<object, State> {
     return {
       ctKind: c.kind, ctEmail: c.email, ctText: c.text, ctLink: c.link, ctHp: c.hp, ctBusy: !!c.busy, ctErr: c.err || '', ctDone: !!c.sentTo, ctSentTo: c.sentTo || '',
       ctNeedsLink: ['complaint', 'appeal', 'bug', 'report'].includes(c.kind), ctHint: HINTS[c.kind] || 'How can we help?',
-      onCtKind: set('kind'), onCtEmail: set('email'), onCtText: set('text'), onCtLink: set('link'), onCtHp: set('hp'),
+      setCtKind: (k: string) => this.setState(st => ({ ct: { ...(st.ct || c), kind: k, err: '' } })), onCtEmail: set('email'), onCtText: set('text'), onCtLink: set('link'), onCtHp: set('hp'),
       ctAgain: () => this.setState({ ct: { ...c, text: '', link: '', sentTo: undefined } }),
       ctSend: async (e: { preventDefault(): void }) => {
         e.preventDefault(); if (c.busy) return;

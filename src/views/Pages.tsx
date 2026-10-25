@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { V } from '../App';
 import { hover } from '../pseudo';
 import { INK, MARK, MUTED, PAPER, SANS, label, pagePad, serif } from '../theme';
-import { Notice, SelectField, TextArea, TextField } from './Overlays';
+import { Notice, TextArea, TextField } from './Overlays';
 import { BOOKS_FREE, INK_FREE, PAGES_FREE, PRICE } from '../plus';
 
 const screen: CSSProperties = { position: 'absolute', inset: '0 0 var(--tabbar, 0px) 0', zIndex: 4, background: PAPER, overflowX: 'hidden', overflowY: 'auto' };
@@ -162,62 +162,101 @@ function Terms() {
 }
 
 export function Legal({ v }: { v: V }) {
-  const doc: 'privacy' | 'terms' | 'contact' = v.legalDoc, tab = (k: typeof doc, name: string, open: () => void) => (
-    <button onClick={open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(doc === k ? INK : undefined), borderBottom: doc === k ? `1px solid ${INK}` : 'none' }}>{name}</button>
+  if (v.legalDoc === 'contact') return <ContactPage v={v} />;
+  const terms = v.legalDoc === 'terms', tab = (on: boolean, name: string, open: () => void) => (
+    <button onClick={open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(on ? INK : undefined), borderBottom: on ? `1px solid ${INK}` : 'none' }}>{name}</button>
   );
   return (
-    <Page v={v} kicker="fletora." title={doc === 'terms' ? <>Terms of <em>use</em></> : doc === 'contact' ? <>Get in <em>touch</em></> : <>Privacy <em>policy</em></>}>
-      <div style={{ display: 'flex', gap: 20, ...label() }}>
-        {tab('privacy', 'Privacy', v.openPrivacy)}{tab('terms', 'Terms', v.openTerms)}{tab('contact', 'Contact', v.openContact)}
-      </div>
-      {doc === 'terms' ? <Terms /> : doc === 'contact' ? <ContactUs v={v} /> : <Privacy />}
+    <Page v={v} kicker="fletora." title={terms ? <>Terms of <em>use</em></> : <>Privacy <em>policy</em></>}>
+      <div style={{ display: 'flex', gap: 20, ...label() }}>{tab(!terms, 'Privacy', v.openPrivacy)}{tab(terms, 'Terms', v.openTerms)}</div>
+      {terms ? <Terms /> : <Privacy />}
     </Page>
   );
 }
 
-function ContactUs({ v }: { v: V }) {
-  const send: CSSProperties = { height: 48, padding: '0 26px', border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 15px ${SANS}`, cursor: v.ctBusy ? 'progress' : 'pointer', alignSelf: 'flex-start', opacity: v.ctBusy ? 0.6 : 1 };
+/** One block of quick help beside the Contact form. */
+function Help({ title, children, mark }: { title: string; children: ReactNode; mark?: boolean }) {
   return (
-    <>
-      <P>Email <a href={`mailto:${contact}`}>{contact}</a>, or send us a message below. We reply within 2 working days (privacy requests within one month at most).</P>
-      <Sec title="Send a message">
-        {v.ctDone
-          ? <><P>Thanks, it’s on its way. We’ll reply to <b>{v.ctSentTo}</b>.</P><button onClick={v.ctAgain} style={{ ...send, background: 'none', color: INK, border: `1.5px solid ${INK}` }}>Send another</button></>
-          : (
-            <form onSubmit={v.ctSend} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 560 }}>
-              <SelectField label="What’s it about?" value={v.ctKind} onChange={v.onCtKind} options={CONTACT_KINDS} />
-              <TextField label="Your email" type="email" autoComplete="email" value={v.ctEmail} onChange={v.onCtEmail} placeholder="you@example.com" />
-              {v.ctNeedsLink && <TextField label="Link (optional)" value={v.ctLink} onChange={v.onCtLink} placeholder="The sketchbook, profile or page it’s about" />}
-              <TextArea label="Message" value={v.ctText} onChange={v.onCtText} maxLength={4000} placeholder={v.ctHint} />
-              {/* Hidden from people; bots fill it in. */}
-              <input name="website" value={v.ctHp} onChange={v.onCtHp} tabIndex={-1} autoComplete="off" aria-hidden="true" style={{ position: 'absolute', left: -9999, width: 1, height: 1, opacity: 0 }} />
-              <Notice err={v.ctErr} />
-              <button type="submit" disabled={v.ctBusy} className={hover(`background:${MARK}`)} style={send}>{v.ctBusy ? 'Sending…' : 'Send message'}</button>
-            </form>
-          )}
-      </Sec>
-      <Sec title="Report something on fletora.">
-        <P>The quickest way is <b>Report</b> in the ⋯ menu on the sketchbook, profile or message: it goes straight to our moderators with what you’re reporting attached. You can also use the form above with a link.</P>
-      </Sec>
-      <Sec title="Complaints and appeals">
-        <P>Tell us about anything that’s gone wrong: content or a person on fletora., a decision we made about your account or work, how we dealt with a report, or the site itself. Choose <b>A complaint about Fletora</b> or <b>Appeal a moderation decision</b> above.</P>
-        <Ul items={[
-          'We confirm we’ve received it within 2 working days.',
-          'You get an answer within 7 days, with the reason for it.',
-          'An appeal is looked at again, by a different moderator where we can. If we got it wrong, we put your work or account back.',
-          'If you’re unhappy with how we’ve handled your data, you can also complain to the Information Commissioner’s Office (ico.org.uk).',
-        ]} />
-      </Sec>
-      <Sec title="A child at risk">
-        <P>If a child is in immediate danger, call 999. To report child sexual abuse images anywhere online, use the Internet Watch Foundation (report.iwf.org.uk). On fletora., choose <b>Report</b> and <b>A child may be at risk</b>: those reports reach us straight away.</P>
-      </Sec>
-      <Sec title="Plus and billing">
-        <P>Cancel, change plan, update your card and see receipts in Account settings → Plan. Stripe takes the payments as merchant of record. For anything else about Plus, including refunds, choose <b>Plus and billing</b> above.</P>
-      </Sec>
-      <Sec title="Post">
-        <P>fletora.<br />{ADDRESS}</P>
-      </Sec>
-    </>
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: mark ? '14px 16px' : '18px 0 0', borderTop: mark ? 'none' : '1px solid rgba(var(--ink-rgb),.2)', ...(mark ? { background: 'rgba(173,73,58,.06)', borderLeft: `2px solid ${MARK}` } : {}) }}>
+      <span style={label(mark ? MARK : undefined)}>{title}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 14, lineHeight: 1.55, color: INK, textWrap: 'pretty' } as CSSProperties}>{children}</div>
+    </section>
+  );
+}
+
+function ContactPage({ v }: { v: V }) {
+  const mob = !v.notMob;
+  const send: CSSProperties = { height: 48, padding: '0 26px', border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 15px ${SANS}`, cursor: v.ctBusy ? 'progress' : 'pointer', alignSelf: 'flex-start', opacity: v.ctBusy ? 0.6 : 1 };
+  const topic = (on: boolean): CSSProperties => ({ height: 36, padding: '0 14px', borderRadius: 18, border: `1px solid ${on ? INK : 'rgba(var(--ink-rgb),.25)'}`, background: on ? INK : 'transparent', color: on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' });
+  const step = (n: number, text: ReactNode) => (
+    <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
+      <span style={{ ...serif(20, 1), color: MARK, minWidth: 14 }}>{n}</span><span>{text}</span>
+    </div>
+  );
+  const form = v.ctDone ? (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 22, borderTop: `1px solid ${INK}` }}>
+      <h2 style={{ margin: 0, ...serif(mob ? 30 : 38, 1.05) }}>Thanks, it’s <em style={{ color: MARK }}>on its way.</em></h2>
+      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: MUTED }}>We’ll reply to <b style={{ color: INK, fontWeight: 600 }}>{v.ctSentTo}</b> within 2 working days.</p>
+      <button onClick={v.ctAgain} style={{ ...send, background: 'none', color: INK, border: `1.5px solid ${INK}` }}>Send another message</button>
+    </div>
+  ) : (
+    <form onSubmit={v.ctSend} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 18, paddingTop: 22, borderTop: `1px solid ${INK}` }}>
+      <h2 style={{ margin: 0, ...serif(28, 1.1) }}>Send a message</h2>
+      <div role="radiogroup" aria-label="What’s it about?" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <span style={{ fontSize: 13, color: 'rgba(var(--ink-rgb),.75)' }}>What’s it about?</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {CONTACT_KINDS.map(([k, name]) => <button key={k} type="button" role="radio" aria-checked={v.ctKind === k} onClick={() => v.setCtKind(k)} className={v.ctKind === k ? undefined : hover('border-color:rgba(var(--ink-rgb),.6)')} style={topic(v.ctKind === k)}>{name}</button>)}
+        </div>
+      </div>
+      <TextField label="Your email" type="email" autoComplete="email" value={v.ctEmail} onChange={v.onCtEmail} placeholder="you@example.com" />
+      {v.ctNeedsLink && <TextField label="Link (optional)" value={v.ctLink} onChange={v.onCtLink} placeholder="The sketchbook, profile or page it’s about" />}
+      <TextArea label="Message" value={v.ctText} onChange={v.onCtText} maxLength={4000} placeholder={v.ctHint} />
+      {/* Hidden from people; bots fill it in. */}
+      <input name="website" value={v.ctHp} onChange={v.onCtHp} tabIndex={-1} autoComplete="off" aria-hidden="true" style={{ position: 'absolute', left: -9999, width: 1, height: 1, opacity: 0 }} />
+      <Notice err={v.ctErr} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px 20px', flexWrap: 'wrap' }}>
+        <button type="submit" disabled={v.ctBusy} className={hover(`background:${MARK}`)} style={send}>{v.ctBusy ? 'Sending…' : 'Send message'}</button>
+        <span style={{ fontSize: 12, color: MUTED }}>We use what you send only to reply. <button type="button" onClick={v.openPrivacy} className={hoverText} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${MUTED}`, background: 'none', color: MUTED, font: `500 12px ${SANS}`, cursor: 'pointer' }}>Privacy policy</button></span>
+      </div>
+    </form>
+  );
+  return (
+    <div style={screen}>
+      <div style={{ ...pagePad(mob, 64), display: 'flex', flexDirection: 'column', gap: mob ? 28 : 40, maxWidth: 1140 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 640 }}>
+          <span style={label(MARK)}>Contact</span>
+          <h1 style={{ margin: 0, ...serif(mob ? 48 : 76, .95, '-.025em') }}>Get in <em style={{ color: MARK }}>touch.</em></h1>
+          <p style={{ margin: 0, fontSize: mob ? 16 : 17, lineHeight: 1.55, color: MUTED }}>Questions, problems, complaints or appeals: a person reads every message and replies within 2 working days.</p>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: mob ? 'minmax(0,1fr)' : 'minmax(0,1.4fr) minmax(0,1fr)', gap: mob ? 36 : 64, alignItems: 'start' }}>
+          {form}
+          <aside style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+            <Help title="Email us">
+              <a href={`mailto:${contact}`} className={hoverText} style={{ ...serif(24, 1.1), color: INK, textDecoration: 'none', borderBottom: `1px solid ${INK}`, alignSelf: 'flex-start' }}>{contact}</a>
+              <span style={{ color: MUTED }}>Privacy and data requests are answered within one month at most.</span>
+            </Help>
+            <Help title="Report something">
+              <span>The fastest way is <b style={{ fontWeight: 600 }}>Report</b> in the ⋯ menu on the sketchbook, profile or message. It goes straight to our moderators with what you’re reporting attached.</span>
+            </Help>
+            <Help title="How complaints and appeals work">
+              {step(1, 'We confirm we’ve received it within 2 working days.')}
+              {step(2, 'You get an answer within 7 days, with the reason.')}
+              {step(3, 'Appeals are looked at again, by a different moderator where we can. If we got it wrong, we put things back.')}
+              <span style={{ color: MUTED }}>Unhappy with how we’ve handled your data? You can also complain to the ICO (ico.org.uk).</span>
+            </Help>
+            <Help title="A child at risk" mark>
+              <span>In immediate danger, call <b style={{ fontWeight: 600 }}>999</b>. Report child sexual abuse images anywhere online to the IWF at report.iwf.org.uk. On fletora., choose <b style={{ fontWeight: 600 }}>Report</b> → <b style={{ fontWeight: 600 }}>A child may be at risk</b>: it reaches us straight away.</span>
+            </Help>
+            <Help title="Plus and billing">
+              <span>Cancel, change plan, update your card and get receipts in Account settings → Plan. For refunds or anything else, choose <b style={{ fontWeight: 600 }}>Plus and billing</b> in the form.</span>
+            </Help>
+            <Help title="Post">
+              <span>fletora.<br />{ADDRESS}</span>
+            </Help>
+          </aside>
+        </div>
+      </div>
+    </div>
   );
 }
 
