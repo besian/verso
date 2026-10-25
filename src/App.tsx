@@ -2129,8 +2129,9 @@ export default class App extends Component<object, State> {
       onCaption: (e: ChangeEvent<HTMLInputElement>) => setNote(u, { c: e.target.value.slice(0, 140) }),
       onDate: (e: ChangeEvent<HTMLInputElement>) => setNote(u, { d: e.target.value }),
       edit: () => this.startEdit([images[i]], i), adjust: () => this.startEdit([images[i]], i, undefined, 'adjust'), write: () => this.startEdit([images[i]], i, undefined, 'write'), remove: () => { const p = partner(u, sp); this.setImages(images.filter((x, k) => k !== i && x !== p)); },
-      left: () => { this.movePage(i, i - 1); if (s.mgPage === i && i > 0) this.setState({ mgPage: i - 1 }); },
-      right: () => { this.movePage(i, i + 1); if (s.mgPage === i && i < images.length - 1) this.setState({ mgPage: i + 1 }); },
+      // The open page follows the move (a spread moves two or three places, past any blank page).
+      left: () => { this.movePage(i, i - 1); if (s.mgPage === i) this.setState(st => ({ mgPage: Math.max(0, st.images.indexOf(u)) })); },
+      right: () => { this.movePage(i, i + 1); if (s.mgPage === i) this.setState(st => ({ mgPage: Math.max(0, st.images.indexOf(u)) })); },
       dragStart: (e: DragEvent) => { this.dragIdx = i; e.dataTransfer.effectAllowed = 'move'; },
       dragOver: (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); },
       drop: (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); if (e.dataTransfer.files?.length) return this.addFiles(e.dataTransfer.files); if (this.dragIdx != null) this.movePage(this.dragIdx, i); this.dragIdx = null; },
