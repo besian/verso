@@ -1,4 +1,5 @@
 import { Component, createRef } from 'react';
+import { flushSync } from 'react-dom';
 import type { ChangeEvent, DragEvent, MouseEvent, PointerEvent, WheelEvent } from 'react';
 import { CONFIG, GRID_WIDTH, MAX_MEDIUMS, MAX_TAGS, MEDIUMS, PALETTE, SHAPES, mediumKey, tagSlug } from './data';
 import type { Account, ArchiveEntry, Book, OtherBook, PageNote, Shape, ShapeKey } from './data';
@@ -194,6 +195,10 @@ export default class App extends Component<object, State> {
   unAuth?: () => void; signingUp = false;
   // Book sync: books with unsaved changes, one promise chain per book, and the file URLs last written for each.
   dirty = new Set<string>(); syncT?: ReturnType<typeof setTimeout>; syncQ = new Map<string, Promise<void>>(); synced = new Map<string, string[]>();
+
+  /** Animation frames draw their state straight away: React would otherwise apply an update made in a frame a
+   *  moment later, sometimes merging two frames into one, which shows as a lag and then a jump (zooming out). */
+  frameState(patch: Partial<State>) { flushSync(() => this.setState(patch as State)); }
 
   // ---------- lifecycle ----------
   onResize = () => this.setState({ vw: window.innerWidth || 1200, vh: window.innerHeight || 800 });
@@ -826,7 +831,7 @@ export default class App extends Component<object, State> {
       const dur = 520 + 140 * Math.min(3, Math.abs(j - from)), t0 = performance.now();
       const tick = (now: number) => {
         const t = Math.min(1, (now - t0) / dur), e = t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-        if (t < 1) { this.setState({ car: from + (j - from) * e, swT: t }); this.raf = requestAnimationFrame(tick); }
+        if (t < 1) { this.frameState({ car: from + (j - from) * e, swT: t }); this.raf = requestAnimationFrame(tick); }
         else this.setState({ switching: false, car: j, active: j, images: this.state.books[j].images, p: 0, swT: 0 });
       };
       this.raf = requestAnimationFrame(tick);
@@ -964,7 +969,7 @@ export default class App extends Component<object, State> {
     const step = (now: number) => {
       t0 = t0 || now; const to = this.target, k = Math.min(1, (now - t0) / dur), e = 1 - (1 - k) * (1 - k);
       if (k >= 1 || dist < 0.002) { this.tweenAt = 0; this.setState({ p: to }); onDone?.(); return; }
-      this.tweenAt = now; this.setState({ p: from + (to - from) * e }); this.raf = requestAnimationFrame(step);
+      this.tweenAt = now; this.frameState({ p: from + (to - from) * e }); this.raf = requestAnimationFrame(step);
     };
     this.raf = requestAnimationFrame(step);
   }
@@ -1016,7 +1021,7 @@ export default class App extends Component<object, State> {
     if (this.state.switching) return;
     this.setState({ fside: side }); cancelAnimationFrame(this.sraf);
     const from = this.state.fsx || 0, to = side === 'L' ? 1 : 0; let t0 = 0;
-    const tick = (now: number) => { t0 = t0 || now; const t = Math.min(1, (now - t0) / FOCUS_SHIFT_MS), e = 1 - Math.pow(1 - t, 3); this.setState({ fsx: from + (to - from) * e }); if (t < 1) this.sraf = requestAnimationFrame(tick); };
+    const tick = (now: number) => { t0 = t0 || now; const t = Math.min(1, (now - t0) / FOCUS_SHIFT_MS), e = 1 - Math.pow(1 - t, 3); this.frameState({ fsx: from + (to - from) * e }); if (t < 1) this.sraf = requestAnimationFrame(tick); };
     if (this.state.focus) this.sraf = requestAnimationFrame(tick); else this.setState({ fsx: to });
     if (Math.abs(this.state.p - p) > 0.01) { this.turnTo(p); this.animate(); }
     this.setFocus(true);
@@ -1032,7 +1037,7 @@ export default class App extends Component<object, State> {
     const tick = (now: number) => {
       t0 = t0 || now; const t = Math.min(1, (now - t0) / dur);
       const e = on ? 1 - Math.pow(1 - t, 3) : t < .5 ? 4 * t * t * t : 1 - Math.pow(2 - 2 * t, 3) / 2;
-      this.setState({ fz: from + (to - from) * e }); if (t < 1) this.fraf = requestAnimationFrame(tick);
+      this.frameState({ fz: from + (to - from) * e }); if (t < 1) this.fraf = requestAnimationFrame(tick);
     };
     this.fraf = requestAnimationFrame(tick);
   }
