@@ -93,7 +93,7 @@ export function Explore({ v }: { v: V }) {
       <div style={{ maxWidth: 'none', height: v.exInnerH, minHeight: '100%', boxSizing: 'border-box', margin: '0 auto', padding: `${v.exPadT}px ${v.exPadX}px 28px`, display: 'flex', flexDirection: 'column', gap: v.exGap }}>
         {v.exGrid && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', paddingBottom: 18, borderBottom: `1px solid ${INK}` }}>
-            <h1 style={{ margin: 0, ...serif(v.exH1, .95, '-.02em') }}>The <em>archive</em></h1>
+            <h1 style={{ margin: 0, ...serif(v.exH1, .95, '-.02em') }}><em>Explore</em></h1>
             <span style={label()}>{v.exCountLbl}</span>
           </div>
         )}
@@ -169,8 +169,8 @@ export function Explore({ v }: { v: V }) {
         )}
         {v.exNone && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, textAlign: 'center', fontSize: 14, color: 'rgba(var(--ink-rgb),.7)' }}>
-            {v.exLoading ? 'Opening the archive…'
-              : v.exEmpty ? <><span style={serif(34)}>The archive is <em style={{ color: MARK }}>empty.</em></span><span>No one has shared a sketchbook yet. Yours could be the first.</span></>
+            {v.exLoading ? 'Opening sketchbooks…'
+              : v.exEmpty ? <><span style={serif(34)}>Nothing here <em style={{ color: MARK }}>yet.</em></span><span>No one has shared a sketchbook yet. Yours could be the first.</span></>
               : v.exNoneLbl}
           </div>
         )}

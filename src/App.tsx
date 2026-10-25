@@ -4,7 +4,7 @@ import { CONFIG, GRID_WIDTH, MAX_MEDIUMS, MAX_TAGS, MEDIUMS, PALETTE, SHAPES, me
 import type { Account, ArchiveEntry, Book, OtherBook, PageNote, Shape, ShapeKey } from './data';
 import * as api from './backend';
 import type { AuthUser, Billing, BillingDetails, BookDoc, Chat, Msg, Notif, Person, Report, Saved, Stats, ViewSource } from './backend';
-import { BOOKS_FREE, PAGES_FREE, PAGES_PLUS, PERKS, PRICE, REASONS, YEAR_SAVING } from './plus';
+import { BOOKS_FREE, PAGES_FREE, PAGES_PLUS, PAGE_H, PAGE_H_PLUS, PERKS, PRICE, REASONS, YEAR_SAVING } from './plus';
 import * as store from './storage';
 import * as sound from './sound';
 import * as themeMode from './themeMode';
@@ -26,7 +26,7 @@ import Stage from './views/Stage';
 import { AuthPage, BillingPage, Explore, HomeScreen, Profile, Settings } from './views/Screens';
 import { Admin, AuthAction, Legal, NotFound } from './views/Pages';
 import { Messages } from './views/Messages';
-import { ArchiveModal, CardModal, CollectionModal, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
+import { ArchiveModal, AskModal, CardModal, CollectionModal, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
 
 export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound' | 'action' | 'messages' | 'billing';
 /** A report with what it points at, for the moderation page. */
@@ -63,6 +63,10 @@ interface State {
   /** Fletora Plus: whether you have it (undefined until known), your plan details, and the upgrade sheet
    *  (open when plusFor isn't null; its value says why it opened, see REASONS). */
   plus?: boolean; bill?: Billing | null; myGift?: api.PlusInfo | null;
+  /** Making a PDF of the open sketchbook: how far along ('3/40'). */
+  pdfBusy?: string;
+  /** A question asked in Fletora's own dialog before something that can't easily be undone. */
+  ask?: { title: string; text: string; yes: string; danger?: boolean; run: () => void } | null;
   /** Moderators giving someone Plus: who, and while it's being saved. */
   giftFor?: { uid: string; name: string; gift: api.PlusInfo | null } | null; giftBusy?: boolean; plusFor?: string | null; plusPlan?: 'month' | 'year'; plusBusy?: boolean; plusErr?: string;
   /** Checkout on our page: its session's client secret, whether it's our own form with Stripe's card fields
@@ -190,6 +194,7 @@ export default class App extends Component<object, State> {
   onResize = () => this.setState({ vw: window.innerWidth || 1200, vh: window.innerHeight || 800 });
   onKey = (e: KeyboardEvent) => {
     const s = this.state;
+    if (e.key === 'Escape' && s.ask) return this.setState({ ask: null });
     if (e.key === 'Escape' && s.draft) return this.setState({ draft: null });
     if (e.key === 'Escape' && s.welcome) return this.setState({ welcome: false });
     if (e.key === 'Escape' && s.mode === 'auth') return this.closeAuth();
@@ -199,7 +204,7 @@ export default class App extends Component<object, State> {
       if (!s.edit && !s.managing && s.focus) return this.setFocus(false);
       if (s.edit) return this.setState({ edit: null });
       if (s.managing && s.mgPage != null) return this.setState({ mgPage: null });
-      if (s.managing && this.mgChanged() && !window.confirm('Discard your changes to this sketchbook?')) return;
+      if (s.managing && this.mgChanged()) return this.ask({ title: 'Discard your changes?', text: 'Your changes to this sketchbook won’t be saved.', yes: 'Discard', danger: true, run: () => this.setState({ managing: false }) });
       return this.setState({ managing: false });
     }
     const t = e.target as HTMLElement;
@@ -377,10 +382,12 @@ export default class App extends Component<object, State> {
     this.toast(on ? 'Saved to your profile' : 'Removed from Saved');
     api.setSaved(a.uid, item, on).catch(e => { console.error(e); this.toast('Couldn’t save that. Try again.'); });
   }
-  toggleBlock(uid: string, name: string) {
+  /** Asks in Fletora's own dialog; `run` happens only on yes. */
+  ask = (q: NonNullable<State['ask']>) => this.setState({ ask: q, more: null });
+  toggleBlock(uid: string, name: string, sure = false) {
     const a = this.state.acct; if (!a) return this.openJoin();
     const on = !(this.state.blocked || []).includes(uid), wasFollowing = (this.state.follows || []).includes(uid);
-    if (on && !window.confirm(`Block ${name}? Their sketchbooks will be hidden from you, and you’ll stop following them.`)) return;
+    if (on && !sure) return this.ask({ title: `Block ${name}?`, text: 'Their sketchbooks will be hidden from you, they can’t message you, and you’ll stop following them. They aren’t told.', yes: 'Block', danger: true, run: () => this.toggleBlock(uid, name, true) });
     this.setState(s => ({ blocked: on ? [...(s.blocked || []), uid] : (s.blocked || []).filter(x => x !== uid), follows: on ? s.follows.filter(x => x !== uid) : s.follows, more: null }), () => this.loadFollowFeed());
     this.toast(on ? `Blocked ${name}` : `Unblocked ${name}`);
     api.setBlocked(a.uid, uid, on, wasFollowing).catch(e => { console.error(e); this.toast('Couldn’t update that. Try again.'); });
@@ -826,9 +833,24 @@ export default class App extends Component<object, State> {
     const nb = [...books, { id: this.state.acct ? api.newBookId() : 'local-' + Date.now(), name: `sketchbook ${n + 1}`, color: PALETTE[n % PALETTE.length], images: [], shape, createdAt: Date.now() }];
     cancelAnimationFrame(this.raf); this.target = 0; this.setState({ books: nb, active: n, images: [], p: 0, managing: true, newPick: false }); this.persist(nb);
   }
-  deleteBook() {
+  /** Plus: the open sketchbook as a PDF download (made in the browser, see pdf.ts). */
+  async downloadPdf() {
+    const s = this.state, b = s.books[s.active]; if (!b || s.pdfBusy) return;
+    if (!s.plus) return this.openPlus('pdf');
+    if (!b.images.length) return this.toast('Add some pages first');
+    this.setState({ pdfBusy: `0/${b.images.length}` });
+    try {
+      const { makePdf } = await import('./pdf');
+      const blob = await makePdf(b.name, `by ${b.owner?.name || s.acct?.name || ''}`, b.images.map(u => ({ url: this.blobUrl(u), note: noteText(b.notes?.[u]) })),
+        (d, n) => this.setState({ pdfBusy: `${d}/${n}` }));
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${(b.name || 'sketchbook').replace(/[\\/:*?"<>|]+/g, ' ').trim()}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    } catch (e) { console.error('pdf', e); this.toast('Couldn’t make the PDF. Try again.'); }
+    finally { this.setState({ pdfBusy: '' }); }
+  }
+  deleteBook(sure = false) {
     const { books, active } = this.state;
-    if (!window.confirm(`Delete “${books[active].name}” and all its pages? This can’t be undone.`)) return;
+    if (!sure) return this.ask({ title: `Delete “${books[active].name}”?`, text: 'The sketchbook and all its pages are deleted for good. This can’t be undone.', yes: 'Delete', danger: true, run: () => this.deleteBook(true) });
     const gone = books[active], j = Math.max(0, active - 1);
     // Deleting the only sketchbook leaves a fresh blank one in its place.
     let nb = books.filter((_, k) => k !== active);
@@ -1058,10 +1080,14 @@ export default class App extends Component<object, State> {
     else { const [a, b] = pts; this.edPinch = { dist: Math.hypot(b.x - a.x, b.y - a.y) || 1, ang: Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, scale: e.scale, rot: e.rot, tx: e.tx, ty: e.ty }; }
   }
   setEd(patch: Partial<EditState>) { this.setState(s => ({ edit: { ...s.edit!, ...patch } })); }
-  /** Renders the framed image exactly as shown into a 1600px-tall page. */
+  /** Renders the framed image exactly as shown into a page 1600px tall, or with Plus up to 3200px when the photo
+   *  has that much detail in the frame (a phone photo usually does; a small image isn't blown up). */
   async applyEdit() {
     const e = this.state.edit, im = this.editImg; if (!e || !im || e.inkBusy) return;
-    const { fh } = this.frame(), { bw, bh } = this.baseSize(), avatar = e.target === 'avatar', outH = avatar ? 512 : 1600, outW = Math.round(outH * this.edAspect()), k = outH / fh, r = Math.PI / 180;
+    const { fh } = this.frame(), { bw, bh } = this.baseSize(), avatar = e.target === 'avatar';
+    const detail = e.nh && bh ? Math.round(fh * e.nh / (bh * e.scale)) : PAGE_H;
+    const outH = avatar ? 512 : !e.target && this.state.plus ? Math.max(PAGE_H, Math.min(PAGE_H_PLUS, detail)) : PAGE_H;
+    const outW = Math.round(outH * this.edAspect()), k = outH / fh, r = Math.PI / 180;
     const c = document.createElement('canvas'); c.width = outW; c.height = outH; const ctx = c.getContext('2d')!;
     ctx.fillStyle = '#f3efe6'; ctx.fillRect(0, 0, outW, outH);
     ctx.translate(outW / 2 + e.tx * k, outH / 2 + e.ty * k); ctx.rotate(e.rot * r); ctx.scale(e.scale, e.scale);
@@ -1426,7 +1452,9 @@ export default class App extends Component<object, State> {
         finally { this.setState({ dBusy: false }); }
       },
       pfCancel: () => this.setState({ draft: null, dErr: '' }), pfClose: (e: MouseEvent) => { if (e.target === e.currentTarget) this.setState({ draft: null }); },
-      signOut: async () => { if (!window.confirm('Sign out of your account?')) return; await api.signOut(); this.setState({ draft: null }); this.goMode('home'); },
+      signOut: () => this.ask({ title: 'Sign out?', text: 'You can sign back in any time with your email and password.', yes: 'Sign out', run: async () => { await api.signOut(); this.setState({ draft: null }); this.goMode('home'); } }),
+      // Fletora's own confirm dialog.
+      askQ: s.ask || null, askNo: () => this.setState({ ask: null }), askYes: () => { const q = s.ask; this.setState({ ask: null }); q?.run(); },
     };
   }
 
@@ -1674,9 +1702,10 @@ export default class App extends Component<object, State> {
         openOwner: () => this.openProfile({ uid: r.ownerId, name: r.ownerName, handle: r.ownerHandle }),
         hide: () => act(r.id + ':hide', () => api.setHidden(r.targetId, !r.hidden), l => l.map(x => x.targetId === r.targetId ? { ...x, hidden: !r.hidden } : x), r.hidden ? 'Sketchbook restored' : 'Sketchbook hidden'),
         ban: () => {
-          if (!r.banned && !window.confirm(`Suspend ${r.ownerName || 'this artist'}? Their public sketchbooks will be hidden and they won’t be able to publish or notify anyone until you lift it.`)) return;
-          act(r.id + ':ban', () => api.setBanned(r.ownerId, !r.banned), l => l.map(x => x.ownerId === r.ownerId ? { ...x, banned: !r.banned, hidden: x.kind === 'book' ? !r.banned : x.hidden } : x), r.banned ? 'Suspension lifted' : 'Artist suspended')
+          const go = () => act(r.id + ':ban', () => api.setBanned(r.ownerId, !r.banned), l => l.map(x => x.ownerId === r.ownerId ? { ...x, banned: !r.banned, hidden: x.kind === 'book' ? !r.banned : x.hidden } : x), r.banned ? 'Suspension lifted' : 'Artist suspended')
             .then(() => api.bannedUsers().then(banned => this.setState({ banned })));
+          if (r.banned) return go();
+          this.ask({ title: `Suspend ${r.ownerName || 'this artist'}?`, text: 'Their public sketchbooks will be hidden and they won’t be able to publish or notify anyone until you lift it.', yes: 'Suspend', danger: true, run: go });
         },
         dismiss: () => act(r.id + ':dismiss', () => api.dismissReport(r.id), l => l.filter(x => x.id !== r.id), 'Report dismissed'),
       })),
@@ -2103,6 +2132,7 @@ export default class App extends Component<object, State> {
       onName: (e: ChangeEvent<HTMLInputElement>) => this.updateBook({ name: e.target.value }),
       swatches: PALETTE.map(c => ({ key: c, c, ring: c === book.color ? `0 0 0 2px ${PAPER}, 0 0 0 4px ${INK}` : 'inset 0 0 0 1px rgba(var(--ink-rgb),.22)', pick: () => this.updateBook({ color: c }) })),
       deleteBook: () => this.deleteBook(),
+      mgPdf: () => this.downloadPdf(), mgPdfBusy: s.pdfBusy || '', mgPdfPlus: !!s.plus,
       ...(() => {
         // Sharing panel on the Pages screen.
         const b = book as Book, isCollab = !other && b.role === 'collab';
@@ -2116,10 +2146,10 @@ export default class App extends Component<object, State> {
           shInviteSend: (e?: { preventDefault(): void }) => { e?.preventDefault(); const a = s.acct, h = s.shDraft; if (!a || !h) return;
             this.share$(async () => ({ invite: await api.invite(a, { id: b.id, name: b.name }, h) }), `Invitation sent to @${h}`); },
           shCancel: () => this.share$(async () => { await api.cancelInvite(b.id); return { invite: null }; }, 'Invitation cancelled'),
-          shRemove: () => { if (!window.confirm(`Stop sharing “${b.name}” with ${b.collab?.name}? The pages they added stay in the sketchbook.`)) return;
-            this.share$(async () => { await api.endShare(b.id); return { collab: null }; }, 'Sharing stopped'); },
-          shLeave: () => { if (!window.confirm(`Leave “${b.name}”? It goes back to being only ${b.owner?.name}’s. The pages you added stay in it.`)) return;
-            this.share$(async () => { await api.endShare(b.id); this.setState(st => { const books = st.books.filter(x => x.id !== b.id), k = Math.max(0, Math.min(st.active, books.length - 1)); return { books, active: k, images: books[k]?.images || [], managing: false }; }); }, `You left “${b.name}”`); },
+          shRemove: () => this.ask({ title: `Stop sharing with ${b.collab?.name}?`, text: `They won’t be able to add pages to “${b.name}” any more. The pages they added stay in it.`, yes: 'Stop sharing', danger: true, run: () =>
+            this.share$(async () => { await api.endShare(b.id); return { collab: null }; }, 'Sharing stopped') }),
+          shLeave: () => this.ask({ title: `Leave “${b.name}”?`, text: `It goes back to being only ${b.owner?.name}’s. The pages you added stay in it.`, yes: 'Leave', danger: true, run: () =>
+            this.share$(async () => { await api.endShare(b.id); this.setState(st => { const books = st.books.filter(x => x.id !== b.id), k = Math.max(0, Math.min(st.active, books.length - 1)); return { books, active: k, images: books[k]?.images || [], managing: false }; }); }, `You left “${b.name}”`) }),
         };
       })(),
       W, H, leaves, stageRef: this.stageRef, fileRef: this.fileRef,
@@ -2224,6 +2254,7 @@ export default class App extends Component<object, State> {
         {v.plOpen && <PlusModal v={v} />}
         {v.isBilling && v.bdAsk && <PlanConfirm v={v} />}
         {v.gfOpen && <GiftModal v={v} />}
+        {v.askQ && <AskModal v={v} />}
         {v.isBilling && v.cardSecret && <CardModal v={v} />}
         <input ref={this.fileRef} type="file" accept="image/*" multiple onChange={v.onFiles} style={{ display: 'none' }} />
         {/* Phones: opens the camera straight away. */}

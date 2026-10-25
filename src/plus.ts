@@ -8,11 +8,16 @@ export const YEAR_SAVING = '29%';
 export const BOOKS_FREE = 10;
 export const PAGES_FREE = 60, PAGES_PLUS = 300;
 export const INK_FREE = 20, INK_PLUS = 500;
+/** Height pages are saved at (px): Plus keeps up to twice the detail. */
+export const PAGE_H = 1600, PAGE_H_PLUS = 3200;
 
 export const PERKS: [string, string][] = [
   ['Unlimited sketchbooks', `Free accounts have ${BOOKS_FREE}.`],
   [`Up to ${PAGES_PLUS} pages per sketchbook`, `Instead of ${PAGES_FREE}.`],
   [`${INK_PLUS} handwriting conversions a month`, `Instead of ${INK_FREE}.`],
+  ['Full-resolution pages', 'Photos keep up to twice the detail, for zooming into every line.'],
+  ['Download as PDF', 'Any of your sketchbooks as a PDF, to print or send.'],
+  ['Up to 5 people per sketchbook', 'Instead of one, to draw together.'],
   ['Link-only sketchbooks', 'Hidden from Explore and your profile, open to anyone you send the link to.'],
   ['Stats', 'Views, likes and saves for each sketchbook, and where visitors came from.'],
   ['Pin a sketchbook', 'Keep your best one first on your profile.'],
@@ -27,4 +32,6 @@ export const REASONS: Record<string, string> = {
   link: 'Link-only sketchbooks are part of Plus.',
   stats: 'Stats are part of Plus.',
   pin: 'Pinning a sketchbook is part of Plus.',
+  pdf: 'Downloading sketchbooks as PDFs is part of Plus.',
+  people: 'Drawing with more than one other person is part of Plus.',
 };

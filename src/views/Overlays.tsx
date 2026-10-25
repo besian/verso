@@ -211,12 +211,13 @@ export function Manager({ v }: { v: V }) {
 
           {v.mgTab === 'details' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 22, maxWidth: 640 }}>
-              {v.isCollab ? (
+              {v.isCollab ? (<>
                 <Row label="Shared with you">
                   <span style={{ fontSize: 14, lineHeight: 1.5 }}>This is {v.shOwner}’s sketchbook ({v.shOwnerHandle}). You can add, caption and change pages; {v.shOwner} looks after the rest.</span>
                   <button onClick={v.shLeave} disabled={v.shBusy} style={{ ...linkBtn(MARK), alignSelf: 'flex-start' }}>Leave sketchbook</button>
                 </Row>
-              ) : (
+                <PdfRow v={v} />
+              </>) : (
                 <>
                   <Row label="Cover">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -258,6 +259,7 @@ export function Manager({ v }: { v: V }) {
                       {!v.mgTagFull && <input value={v.tagDraft} onChange={v.onTagDraft} onKeyDown={v.onTagKey} onBlur={v.commitTag} placeholder={v.mgTags.length ? 'Add a tag' : 'Add tags'} aria-label="Add a tag" style={{ flex: 1, minWidth: 120, height: 30, border: 'none', outline: 'none', background: 'none', color: INK, font: `500 14px ${SANS}` }} />}
                     </div>
                   </Row>
+                  <PdfRow v={v} />
                   <button onClick={v.deleteBook} className={hover('text-decoration:underline')} style={{ ...linkBtn(MARK), alignSelf: 'flex-start', padding: '4px 0' }}>Delete this sketchbook</button>
                 </>
               )}
@@ -269,6 +271,17 @@ export function Manager({ v }: { v: V }) {
       </div>
       {pg && <PageSheet v={v} pg={pg} />}
     </div>
+  );
+}
+
+/** Download the sketchbook as a PDF (Plus). */
+function PdfRow({ v }: { v: V }) {
+  return (
+    <Row label="Download as PDF" note="A title page, then every page with its caption and date. Unsaved changes aren’t included until you Save.">
+      <button onClick={v.mgPdf} disabled={!!v.mgPdfBusy} className={hoverTint} style={{ ...ghostBtn, alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 14px', opacity: v.mgPdfBusy ? 0.7 : 1 }}>
+        {v.mgPdfBusy ? `Making PDF… ${v.mgPdfBusy}` : 'Download PDF'}{!v.mgPdfPlus && <PlusTag />}
+      </button>
+    </Row>
   );
 }
 
@@ -481,6 +494,21 @@ export function GiftModal({ v }: { v: V }) {
         </>
       )}
       <button onClick={v.gfClose} className="tap" style={{ ...linkBtn('rgba(var(--ink-rgb),.75)'), alignSelf: 'center', padding: 4 }}>Close</button>
+    </Modal>
+  );
+}
+
+/** Fletora's own "are you sure?" in place of the browser's. */
+export function AskModal({ v }: { v: V }) {
+  const q = v.askQ;
+  return (
+    <Modal onClose={e => { if (e.target === e.currentTarget) v.askNo(); }} pad={v.mModalPad} maxWidth={440} gap={16} z={50} shadow="0 30px 60px rgba(10,10,30,.35)">
+      <span role="heading" aria-level={2} style={{ ...heading, fontSize: 30, lineHeight: 1.1 }}>{q.title}</span>
+      <span style={{ fontSize: 15, lineHeight: 1.55 }}>{q.text}</span>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        <button onClick={v.askNo} autoFocus className={hoverTint} style={{ ...ghostBtn, height: 44, padding: '0 18px', fontSize: 14 }}>Cancel</button>
+        <button onClick={v.askYes} style={{ height: 44, padding: '0 20px', border: 'none', borderRadius: 2, background: q.danger ? MARK : INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer' }}>{q.yes}</button>
+      </div>
     </Modal>
   );
 }
