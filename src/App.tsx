@@ -464,7 +464,7 @@ export default class App extends Component<object, State> {
     if (me) want.set('pl:' + me, () => api.watch(['plus', me], d => {
       const on = api.plusOn(d), info = api.plusInfo(d);
       // Without Plus, link-only sketchbooks are private again (the server changes the stored ones).
-      this.setState(st => ({ plus: on, myGift: info.gift && on ? info : null, books: on ? st.books : st.books.map(b => b.linkOnly ? { ...b, linkOnly: false } : b) }));
+      this.setState(st => ({ plus: on, myGift: on ? info : null, books: on ? st.books : st.books.map(b => b.linkOnly ? { ...b, linkOnly: false } : b) }));
     }));
     if (me) want.set('bl:' + me, () => api.watch(['billing', me], d => this.setState({ bill: d ? { status: d.status || '', interval: d.interval || '', periodEnd: d.periodEnd || 0, renews: !!d.renews } : null })));
     const openChat = s.mode === 'messages' && s.chatOpen && (s.chats || []).some(c => c.id === s.chatOpen) ? s.chatOpen : null;
@@ -856,7 +856,7 @@ export default class App extends Component<object, State> {
         (d, n) => this.setState({ pdfBusy: `${d}/${n}` }));
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${(b.name || 'sketchbook').replace(/[\\/:*?"<>|]+/g, ' ').trim()}.pdf`;
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
-    } catch (e) { console.error('pdf', e); this.toast('Couldn’t make the PDF. Try again.'); }
+    } catch (e) { console.error('pdf', e); this.toast(`Couldn’t make the PDF (${(e as Error).message || 'unknown error'}). Try again.`); }
     finally { this.setState({ pdfBusy: '' }); }
   }
   deleteBook(sure = false) {
@@ -1568,10 +1568,12 @@ export default class App extends Component<object, State> {
       // Plan: free, or Plus with its renewal (or end) date and the Stripe billing portal.
       ...(() => {
         const b = s.bill, end = b?.periodEnd ? new Date(b.periodEnd).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+        // Plus from Fletora: given by a moderator, or turned on in Firebase by hand (no subscription behind it).
+        const live = ['active', 'trialing', 'past_due'].includes(b?.status || ''), gift = !!s.plus && !!s.myGift && (s.myGift.gift || (s.bill !== undefined && !live));
         return {
           acPlus: !!s.plus, acHasBilling: !!b,
-          acGift: !!s.myGift, acGiftLine: s.myGift ? (s.myGift.forever ? 'Fletora Plus, from Fletora. It’s yours for good, no payment needed.' : `Fletora Plus, from Fletora, until ${new Date(s.myGift.until).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}. No payment needed.`) : '',
-          acPlan: !s.plus ? 'You’re on the free plan.' : s.myGift ? 'Fletora Plus, from Fletora.' : `Fletora Plus${b?.interval ? ` · ${b.interval === 'year' ? 'yearly' : 'monthly'}` : ''}${end ? (b?.renews ? ` · renews ${end}` : ` · ends ${end}`) : ''}.`,
+          acGift: gift, acGiftLine: gift && s.myGift ? (s.myGift.forever || s.myGift.until > Date.UTC(2099, 0) ? 'Fletora Plus, from Fletora. It’s yours for good, no payment needed.' : `Fletora Plus, from Fletora, until ${new Date(s.myGift.until).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}. No payment needed.`) : '',
+          acPlan: !s.plus ? 'You’re on the free plan.' : gift ? 'Fletora Plus, from Fletora.' : `Fletora Plus${b?.interval ? ` · ${b.interval === 'year' ? 'yearly' : 'monthly'}` : ''}${end ? (b?.renews ? ` · renews ${end}` : ` · ends ${end}`) : ''}.`,
           acPastDue: b?.status === 'past_due',
           seePlus: () => this.openPlus(),
           manageBilling: () => run('billing', async () => { location.href = await api.billingPortal(); }),
@@ -1586,7 +1588,7 @@ export default class App extends Component<object, State> {
               finally { this.setState({ bdBusy: false }); }
             };
             return {
-              bdShow: !!b, bdReady: !!d, bdErr: s.bdErr || '',
+              bdShow: !!b && live, bdReady: !!d, bdErr: s.bdErr || '',
               bdPlan: d ? `${d.interval === 'year' ? 'Yearly' : 'Monthly'} · ${money(d.amount, d.currency)} a ${d.interval === 'year' ? 'year' : 'month'}` : '',
               bdNext: d ? (d.cancelling ? `Cancelled. You keep Plus until ${date(d.endsAt || d.periodEnd)}, and won’t be charged again.` : d.status === 'past_due' ? 'Your last payment didn’t go through. Update your card to keep Plus.' : `Renews on ${date(d.periodEnd)}.`) : '',
               // The dates behind it: started, this period, and cancelled / ends, or renews.

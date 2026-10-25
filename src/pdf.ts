@@ -13,20 +13,29 @@ const enc = (s: string) => {
 };
 const esc = (s: string) => s.replace(/[\\()]/g, m => '\\' + m).replace(/[\r\n]+/g, ' ');
 
-/** A page image as JPEG bytes with its size; other formats are re-encoded through a canvas. */
+const loadImg = (src: string, cors: boolean) => new Promise<HTMLImageElement>((res, rej) => {
+  const im = new Image(); if (cors) im.crossOrigin = 'anonymous';
+  im.onload = () => res(im); im.onerror = () => rej(new Error('couldn’t load a page image')); im.src = src;
+});
+
+/** A page image as JPEG bytes with its size. JPEGs go in as they are; anything else (or an image that can only
+ *  be loaded as a picture) is redrawn through a canvas. */
 async function jpeg(url: string): Promise<{ bytes: Uint8Array; w: number; h: number }> {
-  // Fetched fresh: a copy the browser kept from showing the page (as a background, without CORS) would be
-  // refused here, which is what broke PDFs of saved sketchbooks.
-  const r = await fetch(url, /^https?:/.test(url) ? { mode: 'cors', cache: 'reload' } : {});
-  if (!r.ok) throw new Error(`page image ${r.status}`);
-  const blob = await r.blob();
-  const bmp = await createImageBitmap(blob);
-  const { width: w, height: h } = bmp;
-  if (blob.type === 'image/jpeg') { bmp.close(); return { bytes: new Uint8Array(await blob.arrayBuffer()), w, h }; }
-  const c = document.createElement('canvas'); c.width = w; c.height = h;
-  const ctx = c.getContext('2d')!; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(bmp, 0, 0); bmp.close();
-  const out = await new Promise<Blob>(res => c.toBlob(b => res(b!), 'image/jpeg', 0.92));
-  return { bytes: new Uint8Array(await out.arrayBuffer()), w, h };
+  let blob: Blob | null = null;
+  try {
+    // Fetched fresh, so a copy the browser kept from showing the page can't get in the way.
+    const r = await fetch(url, /^https?:/.test(url) ? { mode: 'cors', cache: 'reload' } : {});
+    if (r.ok) blob = await r.blob();
+  } catch { /* fall back to loading it as a picture below */ }
+  const local = blob ? URL.createObjectURL(blob) : '';
+  try {
+    const im = await loadImg(local || url, !local), w = im.naturalWidth, h = im.naturalHeight;
+    if (blob && (blob.type === 'image/jpeg' || blob.type === 'image/jpg')) return { bytes: new Uint8Array(await blob.arrayBuffer()), w, h };
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const ctx = c.getContext('2d')!; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(im, 0, 0);
+    const out = await new Promise<Blob>((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('couldn’t redraw a page')), 'image/jpeg', 0.92));
+    return { bytes: new Uint8Array(await out.arrayBuffer()), w, h };
+  } finally { if (local) URL.revokeObjectURL(local); }
 }
 
 export async function makePdf(title: string, by: string, pages: PdfPage[], progress?: (done: number, all: number) => void): Promise<Blob> {
