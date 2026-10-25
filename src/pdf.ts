@@ -20,13 +20,16 @@ const loadImg = (src: string, cors: boolean) => new Promise<HTMLImageElement>((r
 
 /** A page image as JPEG bytes with its size. JPEGs go in as they are; anything else (or an image that can only
  *  be loaded as a picture) is redrawn through a canvas. */
-async function jpeg(url: string): Promise<{ bytes: Uint8Array; w: number; h: number }> {
+async function jpeg(url: string, token: string): Promise<{ bytes: Uint8Array; w: number; h: number }> {
   let blob: Blob | null = null;
-  try {
-    // Fetched fresh, so a copy the browser kept from showing the page can't get in the way.
-    const r = await fetch(url, /^https?:/.test(url) ? { mode: 'cors', cache: 'reload' } : {});
-    if (r.ok) blob = await r.blob();
-  } catch { /* fall back to loading it as a picture below */ }
+  const get = async (u: string, init: RequestInit) => { try { const r = await fetch(u, init); return r.ok && (r.headers.get('content-type') || '').startsWith('image/') ? await r.blob() : null; } catch { return null; } };
+  if (!/^https?:/.test(url)) blob = await get(url, {});
+  else {
+    // Straight from storage (fresh, so a copy the browser kept from showing the page can't get in the way);
+    // failing that, passed through fletora.studio (api/page-image), which some browsers need.
+    blob = await get(url, { mode: 'cors', cache: 'reload' })
+      || (token ? await get(`/api/page-image?u=${encodeURIComponent(url)}`, { headers: { authorization: 'Bearer ' + token } }) : null);
+  }
   const local = blob ? URL.createObjectURL(blob) : '';
   try {
     const im = await loadImg(local || url, !local), w = im.naturalWidth, h = im.naturalHeight;
@@ -38,7 +41,7 @@ async function jpeg(url: string): Promise<{ bytes: Uint8Array; w: number; h: num
   } finally { if (local) URL.revokeObjectURL(local); }
 }
 
-export async function makePdf(title: string, by: string, pages: PdfPage[], progress?: (done: number, all: number) => void): Promise<Blob> {
+export async function makePdf(title: string, by: string, pages: PdfPage[], progress?: (done: number, all: number) => void, token = ''): Promise<Blob> {
   const parts: Uint8Array[] = [], offsets: number[] = [];
   let size = 0;
   const put = (x: string | Uint8Array) => { const b = typeof x === 'string' ? enc(x) : x; parts.push(b); size += b.length; };
@@ -62,7 +65,7 @@ export async function makePdf(title: string, by: string, pages: PdfPage[], progr
   titlePage();
 
   for (let i = 0; i < pages.length; i++) {
-    const { bytes, w, h } = await jpeg(pages[i].url);
+    const { bytes, w, h } = await jpeg(pages[i].url, token);
     const note = (pages[i].note || '').trim(), strip = note ? 30 : 0, ih = Math.round(W * h / w), H = ih + strip;
     const p = next++, c = next++, im = next++;
     stream(im, `/Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode`, bytes);

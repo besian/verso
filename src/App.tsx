@@ -853,7 +853,7 @@ export default class App extends Component<object, State> {
     try {
       const { makePdf } = await import('./pdf');
       const blob = await makePdf(b.name, `by ${b.owner?.name || s.acct?.name || ''}`, b.images.map(u => ({ url: this.blobUrl(u), note: noteText(b.notes?.[u]) })),
-        (d, n) => this.setState({ pdfBusy: `${d}/${n}` }));
+        (d, n) => this.setState({ pdfBusy: `${d}/${n}` }), await api.idToken());
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${(b.name || 'sketchbook').replace(/[\\/:*?"<>|]+/g, ' ').trim()}.pdf`;
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
     } catch (e) { console.error('pdf', e); this.toast(`Couldn’t make the PDF (${(e as Error).message || 'unknown error'}). Try again.`); }
