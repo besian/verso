@@ -27,6 +27,18 @@ function Kicker() {
 
 /** Home page for everyone, sized to the window so it never scrolls: headline and actions,
  *  then a shelf of community sketchbooks along the bottom. */
+/** "fletora." in the headline, written in with an ink underline (see .ink-word in global.css). */
+function InkWord() {
+  return (
+    <em className="ink-word" style={{ color: MARK }}>
+      <span className="ink-text">fletora</span><span className="ink-dot">.</span>
+      <svg className="ink-line" viewBox="0 0 300 20" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M4 13 C 60 7, 120 16, 180 9 S 262 6, 296 11" pathLength={1} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      </svg>
+    </em>
+  );
+}
+
 export function HomeScreen({ v }: { v: V }) {
   const mob = v.hmMob, signedOut = v.isLanding;
   return (
@@ -34,7 +46,7 @@ export function HomeScreen({ v }: { v: V }) {
       {/* Spare height is shared between the headline block and the shelf, each centred in its half. */}
       <section style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: mob ? 18 : 'clamp(14px, 2.6vh, 26px)' }}>
         <Kicker />
-        <h1 style={{ margin: 0, maxWidth: 1100, font: `400 ${mob ? 'clamp(40px, 12vw, 56px)' : 'clamp(48px, min(8.5vw, 12vh), 132px)'}/.92 ${SERIF}`, letterSpacing: '-.03em', textWrap: 'balance' } as CSSProperties}>Every great idea starts <em style={{ color: MARK }}>somewhere.</em></h1>
+        <h1 style={{ margin: 0, maxWidth: 1100, font: `400 ${mob ? 'clamp(40px, 12vw, 56px)' : 'clamp(48px, min(8.5vw, 12vh), 132px)'}/.92 ${SERIF}`, letterSpacing: '-.03em', textWrap: 'balance' } as CSSProperties}>Every great idea starts in <InkWord /></h1>
         {!mob && <p style={{ margin: 0, maxWidth: 480, fontSize: 'clamp(15px, 2vh, 18px)', lineHeight: 1.5, color: MUTED, textWrap: 'pretty' } as CSSProperties}>A home for sketchbooks, unfinished thoughts, and the creative process. Share your pages. Discover someone else’s world.</p>}
         <div style={{ display: 'flex', flexDirection: mob ? 'column' : 'row', gap: mob ? 14 : 28, alignItems: 'center', justifyContent: 'center', marginTop: mob ? 4 : 2, width: mob ? '100%' : undefined }}>
           {signedOut
