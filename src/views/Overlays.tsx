@@ -1,4 +1,5 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { loadStripe } from '@stripe/stripe-js';
 import type { CSSProperties, ChangeEventHandler, MouseEventHandler, ReactNode } from 'react';
 import { Popover } from './Popover';
 import type { V } from '../App';
@@ -307,8 +308,38 @@ function StatsRow({ v }: { v: V }) {
   );
 }
 
-/** Fletora Plus: what it adds, monthly or yearly, then on to Stripe's checkout. */
+/** Stripe's checkout form, mounted inside the Plus sheet. Paying sends the browser on to /settings. */
+function EmbeddedCheckout({ v }: { v: V }) {
+  const box = useRef<HTMLDivElement>(null), [ready, setReady] = useState(false);
+  useEffect(() => {
+    let co: { destroy(): void } | null = null, gone = false;
+    loadStripe(v.plStripeKey)
+      .then(stripe => { if (!stripe) throw new Error('Stripe.js didn’t load'); return stripe.createEmbeddedCheckoutPage({ fetchClientSecret: () => Promise.resolve(v.plSecret) }); })
+      .then(c => { if (gone) return c.destroy(); co = c; c.mount(box.current!); setReady(true); })
+      .catch(e => { console.error('embedded checkout', e); if (!gone) v.plEmbedFailed(); });
+    return () => { gone = true; co?.destroy(); };
+  }, [v.plSecret]);
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+        <button onClick={v.plBack} className="tap" style={{ ...linkBtn('rgba(var(--ink-rgb),.75)'), padding: '4px 0' }}>← Back</button>
+        <span style={{ fontSize: 13, color: 'rgba(var(--ink-rgb),.65)' }}>{v.plSummary}</span>
+      </div>
+      {!ready && <span style={{ ...hint, textAlign: 'center', padding: '40px 0' }}>Loading secure checkout…</span>}
+      {/* Stripe draws its own light form; a white card keeps it from looking pasted onto the paper (and works in dark mode). */}
+      <div ref={box} style={{ minHeight: ready ? 0 : 1, background: '#fff', borderRadius: 4, overflow: 'hidden' }} />
+    </>
+  );
+}
+
+/** Fletora Plus: what it adds, monthly or yearly, then Stripe's checkout (in the sheet, or on Stripe's page). */
 export function PlusModal({ v }: { v: V }) {
+  if (v.plSecret) return (
+    // Clicking outside doesn't close it mid-payment; Back does.
+    <Modal onClose={() => {}} pad={v.notMob ? 24 : 12} maxWidth={640} gap={14} z={40} shadow="0 30px 60px rgba(10,10,30,.35)">
+      <EmbeddedCheckout v={v} />
+    </Modal>
+  );
   return (
     <Modal onClose={e => { if (e.target === e.currentTarget) v.plClose(); }} pad={v.mModalPad} maxWidth={520} gap={20} z={40} shadow="0 30px 60px rgba(10,10,30,.35)">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

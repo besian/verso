@@ -63,6 +63,8 @@ interface State {
   /** Fletora Plus: whether you have it (undefined until known), your plan details, and the upgrade sheet
    *  (open when plusFor isn't null; its value says why it opened, see REASONS). */
   plus?: boolean; bill?: Billing | null; plusFor?: string | null; plusPlan?: 'month' | 'year'; plusBusy?: boolean; plusErr?: string;
+  /** Stripe's checkout shown inside the Plus sheet (its session's client secret). */
+  plusSecret?: string;
   /** The open sketchbook's stats on the edit screen. */
   stats?: { id: string; s: Stats } | null;
   acErr?: string; acInfo?: string; acBusy?: string; verified?: boolean;
@@ -1295,14 +1297,25 @@ export default class App extends Component<object, State> {
       plPlan: s.plusPlan || 'year', plSetPlan: (k: 'month' | 'year') => this.setState({ plusPlan: k }),
       plPlans: ([['month', 'Monthly', `${PRICE.month} a month`], ['year', 'Yearly', `${PRICE.year} a year · save ${YEAR_SAVING}`]] as const).map(([k, l, n]) => ({ key: k, label: l, note: n })),
       plBusy: !!s.plusBusy, plErr: s.plusErr || '',
-      plClose: () => this.setState({ plusFor: null }),
+      plClose: () => this.setState({ plusFor: null, plusSecret: '' }),
+      // Checkout opens inside the sheet when it can, otherwise on Stripe's own page; both come back to /settings.
       plBuy: async () => {
         if (s.plusBusy) return;
         this.setState({ plusBusy: true, plusErr: '' });
-        // Off to Stripe's checkout page; it comes back to /settings.
-        try { location.href = await api.checkout(s.plusPlan || 'year'); }
+        try {
+          const r = await api.checkout(s.plusPlan || 'year');
+          if (r.clientSecret) this.setState({ plusSecret: r.clientSecret, plusBusy: false }); else location.href = r.url || '';
+        } catch (e) { this.setState({ plusErr: api.errMsg(e), plusBusy: false }); }
+      },
+      plSecret: s.plusSecret || '', plStripeKey: api.STRIPE_KEY,
+      plBack: () => this.setState({ plusSecret: '' }),
+      // Stripe.js couldn't load the embedded form (blocked, offline…): carry on with Stripe's own page.
+      plEmbedFailed: async () => {
+        this.setState({ plusSecret: '', plusBusy: true });
+        try { location.href = (await api.checkout(s.plusPlan || 'year', false)).url || ''; }
         catch (e) { this.setState({ plusErr: api.errMsg(e), plusBusy: false }); }
       },
+      plSummary: s.plusPlan === 'month' ? `Fletora Plus · ${PRICE.month} a month` : `Fletora Plus · ${PRICE.year} a year`,
       // First visit after joining: a short guide to how fletora works.
       welcomeOpen: !!s.welcome && !!a, welcomeName: (a?.name || '').split(' ')[0],
       welcomeStart: () => { this.setState({ welcome: false }); this.goMode('mine'); this.setState({ managing: true }); },

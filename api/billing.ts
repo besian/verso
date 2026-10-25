@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   let uid = '', email = '';
   try { const u = await auth.verifyIdToken((req.headers.get('authorization') || '').replace(/^Bearer /, '')); uid = u.uid; email = u.email || ''; }
   catch { return json(401, { error: 'sign-in' }); }
-  const body = await req.json().catch(() => ({})) as { action?: string; plan?: string };
+  const body = await req.json().catch(() => ({})) as { action?: string; plan?: string; embedded?: boolean };
   const billing = db.collection('billing').doc(uid), bill = (await billing.get()).data() || {};
 
   try {
@@ -41,13 +41,21 @@ export async function POST(req: Request) {
       if (plus?.on && plus.until > Date.now()) return json(409, { error: 'already-plus' });
       const price = await priceFor(plan);
       if (!price) return json(503, { error: 'no-price' });
-      const s = await stripe('POST', 'checkout/sessions', {
+      const base = {
         mode: 'subscription', line_items: [{ price, quantity: 1 }],
         ...(bill.customer ? { customer: bill.customer } : { customer_email: email || undefined }),
         client_reference_id: uid, metadata: { uid }, subscription_data: { metadata: { uid } },
         allow_promotion_codes: true, managed_payments: { enabled: true },
-        success_url: `${ORIGIN}/settings?plus=welcome`, cancel_url: `${ORIGIN}/settings`,
-      });
+      };
+      // Embedded in the Plus sheet when the site has a publishable key. Stripe's docs name the mode both
+      // embedded_page (newer) and embedded, so both are tried before falling back to Stripe's own page.
+      if (body.embedded) for (const ui_mode of ['embedded_page', 'embedded']) {
+        try {
+          const s = await stripe('POST', 'checkout/sessions', { ...base, ui_mode, return_url: `${ORIGIN}/settings?plus=welcome` });
+          if (s.client_secret) return json(200, { clientSecret: s.client_secret });
+        } catch (e) { console.warn('embedded checkout', ui_mode, (e as Error).message); }
+      }
+      const s = await stripe('POST', 'checkout/sessions', { ...base, success_url: `${ORIGIN}/settings?plus=welcome`, cancel_url: `${ORIGIN}/settings` });
       return json(200, { url: s.url });
     }
     if (body.action === 'portal') {

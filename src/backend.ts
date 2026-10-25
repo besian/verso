@@ -594,16 +594,18 @@ export async function isPlus(uid: string): Promise<boolean> {
   try { return plusOn((await getDoc(doc(need().db, 'plus', uid))).data() || null); } catch { return false; }
 }
 
-/** Calls api/billing; returns the Stripe page to go to (checkout or the billing portal). */
-async function billing(action: 'checkout' | 'portal' | 'close', plan?: 'month' | 'year'): Promise<string> {
+/** Calls api/billing: a Stripe page to go to (url), or a checkout to embed on ours (clientSecret). */
+async function billing(action: 'checkout' | 'portal' | 'close', extra: object = {}): Promise<{ url?: string; clientSecret?: string }> {
   const u = need().auth.currentUser; if (!u) throw Object.assign(new Error('signed out'), { code: 'auth/no-current-user' });
-  const r = await fetch('/api/billing', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + await u.getIdToken() }, body: JSON.stringify({ action, plan }) }).catch(() => null);
-  const body = r && await r.json().catch(() => null) as { url?: string; error?: string } | null;
+  const r = await fetch('/api/billing', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + await u.getIdToken() }, body: JSON.stringify({ action, ...extra }) }).catch(() => null);
+  const body = r && await r.json().catch(() => null) as { url?: string; clientSecret?: string; error?: string } | null;
   if (!r || !r.ok) throw Object.assign(new Error(body?.error || 'billing'), { code: 'billing/' + (body?.error || 'failed') });
-  return body?.url || '';
+  return body || {};
 }
-export const checkout = (plan: 'month' | 'year') => billing('checkout', plan);
-export const billingPortal = () => billing('portal');
+/** Stripe's publishable key: with it, checkout opens inside the Plus sheet instead of on Stripe's site. */
+export const STRIPE_KEY: string = env.VITE_STRIPE_PUBLISHABLE_KEY || '';
+export const checkout = (plan: 'month' | 'year', embedded = !!STRIPE_KEY) => billing('checkout', { plan, embedded });
+export const billingPortal = async () => (await billing('portal')).url || '';
 
 /** Where a view came from, for the owner's stats. */
 export type ViewSource = 'explore' | 'profile' | 'home' | 'link' | 'embed';

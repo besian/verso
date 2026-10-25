@@ -155,7 +155,9 @@ Setup (do it all in the **sandbox** first, then repeat in the live account):
 
 1. Product catalogue → Add product → name it exactly **Fletora Plus**, with two recurring prices: £7.00 monthly
    and £60.00 yearly. Under each price's tax settings choose **Inclusive** (UK prices are shown with VAT).
-2. Developers → API keys → Secret key → Vercel env var `STRIPE_SECRET_KEY`.
+2. Developers → API keys → Secret key → Vercel env var `STRIPE_SECRET_KEY`. Optional: the Publishable key → Vercel env var
+   `VITE_STRIPE_PUBLISHABLE_KEY`, so checkout opens inside the Plus sheet instead of on Stripe's page (if Stripe won't
+   embed it, people are sent to Stripe's page as before).
 3. Developers → Webhooks → Add endpoint → `https://fletora.studio/api/stripe-webhook`, with the events
    `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`,
    `customer.subscription.deleted`. Copy its signing secret → Vercel env var `STRIPE_WEBHOOK_SECRET`.
