@@ -14,7 +14,7 @@ function form(o: Record<string, unknown>, out = new URLSearchParams(), pre = '')
 export async function stripe<T = Record<string, any>>(method: 'GET' | 'POST' | 'DELETE', path: string, params: Record<string, unknown> = {}): Promise<T> {
   const q = form(params).toString(), get = method !== 'POST';
   const r = await fetch(`https://api.stripe.com/v1/${path}${get && q ? '?' + q : ''}`, {
-    method, headers: { authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`, 'content-type': 'application/x-www-form-urlencoded' }, body: get ? undefined : q,
+    method, headers: { authorization: `Bearer ${process.env.STRIPE_SECRET_KEY?.trim()}`, 'content-type': 'application/x-www-form-urlencoded' }, body: get ? undefined : q,
   });
   const body = await r.json() as T & { error?: { message?: string } };
   if (!r.ok) throw Object.assign(new Error(body.error?.message || `stripe ${r.status}`), { status: r.status });

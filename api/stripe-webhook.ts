@@ -24,10 +24,15 @@ function verified(raw: string, header: string, secret: string) {
 export function GET() { return json(405, { error: 'use POST' }); }
 
 export async function POST(req: Request) {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  // Trimmed: a space or line break pasted along with the secret would fail every signature.
+  const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
   if (!secret || !process.env.STRIPE_SECRET_KEY || !process.env.FIREBASE_SERVICE_ACCOUNT) return json(503, { error: 'not-configured' });
   const raw = await req.text();
-  if (!verified(raw, req.headers.get('stripe-signature') || '', secret)) return json(400, { error: 'bad-signature' });
+  if (!verified(raw, req.headers.get('stripe-signature') || '', secret)) {
+    // Shown in Stripe's delivery log: a wrong secret is the usual cause.
+    console.warn('webhook signature mismatch', { secretStart: secret.slice(0, 6), length: secret.length, signed: !!req.headers.get('stripe-signature') });
+    return json(400, { error: 'bad-signature', hint: secret.startsWith('whsec_') ? 'STRIPE_WEBHOOK_SECRET doesn’t match this endpoint’s signing secret' : 'STRIPE_WEBHOOK_SECRET should start with whsec_' });
+  }
   const ev = JSON.parse(raw) as { type: string; data: { object: Record<string, any> } }, o = ev.data.object;
   try {
     if (ev.type === 'checkout.session.completed' && o.mode === 'subscription') await syncCheckout(db(), o.id);
