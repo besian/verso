@@ -52,7 +52,6 @@ export function HomeScreen({ v }: { v: V }) {
             <span style={{ color: MUTED, whiteSpace: 'nowrap' }}>by {v.hmPick.artist} →</span>
           </button>
         )}
-        <LegalLinks v={v} />
       </section>
       <section style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10, paddingTop: mob ? 0 : 28 }}>
         <div style={{ overflow: 'hidden', paddingTop: 16 }}>
@@ -70,8 +69,13 @@ export function HomeScreen({ v }: { v: V }) {
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, ...label() }}>
           <span>{v.hmMixed ? (mob ? 'Artists you follow & more' : 'New from artists you follow and the community') : v.hmFollowing ? (mob ? 'From artists you follow' : 'New from artists you follow') : v.hmShelf.length ? (mob ? 'From the community' : 'From the community — open any book to leaf through it') : 'The shelf is empty — yours could be first'}</span>
-          {v.hmShelf.length > 0 && <button onClick={v.goExplore} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap', ...label(INK) }}>View all →</button>}
+          <span style={{ display: 'flex', alignItems: 'baseline', gap: 20 }}>
+            {!mob && <LegalLinks v={v} />}
+            {v.hmShelf.length > 0 && <button onClick={v.goExplore} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap', ...label(INK) }}>View all →</button>}
+          </span>
         </div>
+        {/* Phones have no room beside the caption, so the links get their own line. */}
+        {mob && <LegalLinks v={v} />}
       </section>
     </div>
   );
