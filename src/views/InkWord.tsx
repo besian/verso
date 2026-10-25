@@ -1,33 +1,74 @@
-// The home headline's last word, "fletora.", written by hand: each letter is one pen stroke from a single-line
-// script (Hershey Script, public domain, via hersheytext, MIT), smoothed into curves and drawn in writing order at
-// an even pen speed, then the full stop is dotted and a loose underline sketched. Styles: .ink-word in global.css.
+// The home headline's last word, "fletora.", in the headline's own italic, written as if by hand. Each letter is
+// shown through an invisible pen: one stroke, in the order and direction a hand writes that letter, fitted over the
+// real letter and drawn thick enough to cover it, so the letter appears as the pen moves. The strokes come from a
+// single-line script (Hershey Script, public domain, via hersheytext, MIT); a quick fill after each one catches any
+// edge the pen missed. Then the dot, and a loose underline. The plain word underneath keeps the layout and is what
+// screen readers read. Styles: .ink-word in global.css.
+import { useEffect, useId, useRef, useState } from 'react';
 import { MARK } from '../theme';
 
-const BOX = { x: -166, y: 98, w: 2744, h: 1120 }, BASELINE = 800;
-/** Each letter's stroke, with when it starts and how long it takes (seconds). */
-const LETTERS: { d: string; at: number; dur: number }[] = [
-  { d: 'M31.5 642 C52.6 615.8 126.6 527 158 485 C189.4 443 204.3 416.2 220 390 C235.7 363.8 241.3 354.2 252 328 C262.7 301.8 278.7 259.3 284 233 C289.3 206.7 289.3 185.8 284 170 C278.7 154.2 267.8 138 252 138 C236.2 138 204.7 154.2 189 170 C173.3 185.8 173.8 180.5 158 233 C142.3 285.5 120.8 395.8 94.5 485 C68.2 574.3 31.5 684.5 0 768.5 C-31.5 852.5 -73.5 936.4 -94.5 989 C-115.5 1041.6 -120.7 1057.8 -126 1084 C-131.2 1110.2 -131.2 1130.3 -126 1146 C-120.7 1161.7 -110.2 1178 -94.5 1178 C-78.7 1178 -47.2 1167 -31.5 1146 C-15.7 1125 -10.5 1114.9 0 1052 C10.5 989.1 21 810.5 31.5 768.5 C42 726.5 47.3 794.8 63 800 C78.8 805.3 105 805.3 126 800 C147 794.8 173.3 779 189 768.5 C204.7 758 204.2 758.1 220 737 C235.8 715.9 273.3 657.8 284 642', at: 0.35, dur: 0.58 }, // f
-  { d: 'M283.5 642 C294 626.3 320.3 590 346.5 548 C372.8 506 420.1 426.7 441 390 C461.9 353.3 461.5 354.2 472 328 C482.5 301.8 498.7 259.3 504 233 C509.3 206.7 509.3 185.8 504 170 C498.7 154.2 487.7 138 472 138 C456.3 138 425.7 154.2 410 170 C394.3 185.8 388.6 201.5 378 233 C367.4 264.5 357 301.2 346.5 359 C336 416.8 320.3 511.8 315 580 C309.8 648.3 309.8 731.8 315 768.5 C320.3 805.2 336 794.8 346.5 800 C357 805.3 362.3 805.3 378 800 C393.8 794.8 425.3 779 441 768.5 C456.7 758 456.2 758.1 472 737 C487.8 715.9 525.3 657.8 536 642', at: 0.93, dur: 0.36 }, // l
-  { d: 'M567 737 C577.5 731.8 614.2 716 630 705.5 C645.8 695 651.5 689.8 662 674 C672.5 658.3 687.8 632 693 611 C698.2 590 698.2 563.8 693 548 C687.8 532.2 672.5 521.3 662 516 C651.5 510.7 645.8 510.7 630 516 C614.2 521.3 582.8 532.2 567 548 C551.3 563.8 540.8 584.8 535.5 611 C530.3 637.3 530.3 679.3 535.5 705.5 C540.8 731.8 551.3 752.8 567 768.5 C582.8 784.3 609 794.8 630 800 C651 805.3 672 805.3 693 800 C714 794.8 740.2 779 756 768.5 C771.8 758 772.3 758.1 788 737 C803.7 715.9 839.7 657.8 850 642', at: 1.29, dur: 0.23 }, // e
-  { d: 'M850.5 642 C861 626.3 892.4 584.7 913.5 548 C934.6 511.3 966.4 443 977 422 M1071 138 C1039.5 232.6 913.5 600.4 882 705.5 C850.5 810.6 876.8 752.8 882 768.5 C887.3 784.3 897.7 794.8 913.5 800 C929.3 805.3 956.1 805.3 977 800 C997.9 794.8 1023.3 779 1039 768.5 C1054.7 758 1055.2 758.1 1071 737 C1086.8 715.9 1123.5 657.8 1134 642 M882 390 L1103 390', at: 1.52, dur: 0.34 }, // t
-  { d: 'M1323 516 C1312.7 516 1281.9 510.7 1261 516 C1240.1 521.3 1213.3 537.3 1197.5 548 C1181.7 558.7 1176.5 564.3 1166 580 C1155.5 595.7 1139.8 621.1 1134.5 642 C1129.3 662.9 1129.3 684.4 1134.5 705.5 C1139.8 726.6 1150.3 752.8 1166 768.5 C1181.8 784.3 1208 794.8 1229 800 C1250 805.3 1271 805.3 1292 800 C1313 794.8 1339.2 779 1355 768.5 C1370.8 758 1376.5 752.8 1387 737 C1397.5 721.3 1412.8 695 1418 674 C1423.2 653 1423.2 632 1418 611 C1412.8 590 1402.8 563.8 1387 548 C1371.2 532.2 1338.8 516 1323 516 C1307.2 516 1297.2 532.2 1292 548 C1286.8 563.8 1286.8 590 1292 611 C1297.2 632 1307.2 658.3 1323 674 C1338.8 689.8 1360.7 700.3 1387 705.5 C1413.3 710.8 1454.8 710.8 1481 705.5 C1507.2 700.3 1528.3 684.6 1544 674 C1559.7 663.4 1569.8 647.3 1575 642', at: 1.86, dur: 0.31 }, // o
-  { d: 'M1575.5 642 C1586 626.3 1622.8 574.2 1638.5 548 C1654.3 521.8 1664.8 485 1670 485 C1675.3 485 1654.3 537.5 1670 548 C1685.7 558.5 1743 542.7 1764 548 C1785 553.3 1790.7 564.3 1796 580 C1801.3 595.7 1801.3 615.8 1796 642 C1790.7 668.2 1769.3 715.9 1764 737 C1758.7 758.1 1758.7 758 1764 768.5 C1769.3 779 1785.3 794.8 1796 800 C1806.7 805.3 1812.3 805.3 1828 800 C1843.7 794.8 1874.3 779 1890 768.5 C1905.7 758 1906.2 758.1 1922 737 C1937.8 715.9 1974.5 657.8 1985 642', at: 2.17, dur: 0.2 }, // r
-  { d: 'M2269 611 C2263.8 600.5 2253.8 563.8 2238 548 C2222.2 532.2 2195 521.3 2174 516 C2153 510.7 2132.9 510.7 2112 516 C2091.1 521.3 2064.3 537.3 2048.5 548 C2032.7 558.7 2027.5 564.3 2017 580 C2006.5 595.7 1990.8 621.1 1985.5 642 C1980.3 662.9 1980.3 684.4 1985.5 705.5 C1990.8 726.6 2001.3 752.8 2017 768.5 C2032.8 784.3 2059 794.8 2080 800 C2101 805.3 2122 805.3 2143 800 C2164 794.8 2190.2 784.3 2206 768.5 C2221.8 752.8 2222.3 747.6 2238 705.5 C2253.7 663.4 2294.8 521.3 2300 516 C2305.2 510.8 2274.2 631.9 2269 674 C2263.8 716.1 2263.8 747.5 2269 768.5 C2274.2 789.5 2289.5 794.8 2300 800 C2310.5 805.3 2316.2 805.3 2332 800 C2347.8 794.8 2379.3 779 2395 768.5 C2410.7 758 2410.2 758.1 2426 737 C2441.8 715.9 2479.3 657.8 2490 642', at: 2.37, dur: 0.36 }, // a
+const WORD = 'fletora.';
+/** Each letter's pen stroke in its own 0..1 box, and how long it takes to write (seconds). */
+const PEN: { d: string; dur: number }[] = [
+  { d: 'M0.387 0.485 C0.437 0.459 0.613 0.374 0.688 0.334 C0.762 0.293 0.798 0.268 0.835 0.242 C0.873 0.217 0.886 0.208 0.911 0.183 C0.937 0.158 0.975 0.117 0.987 0.091 C1.000 0.066 1.000 0.046 0.987 0.031 C0.975 0.016 0.949 0.000 0.911 0.000 C0.874 0.000 0.799 0.016 0.761 0.031 C0.724 0.046 0.725 0.041 0.688 0.091 C0.650 0.142 0.599 0.248 0.537 0.334 C0.474 0.420 0.387 0.525 0.312 0.606 C0.237 0.687 0.137 0.768 0.087 0.818 C0.037 0.869 0.025 0.884 0.012 0.910 C0.000 0.935 0.000 0.954 0.012 0.969 C0.025 0.984 0.050 1.000 0.087 1.000 C0.125 1.000 0.200 0.989 0.237 0.969 C0.275 0.949 0.287 0.939 0.312 0.879 C0.337 0.818 0.362 0.647 0.387 0.606 C0.412 0.566 0.424 0.632 0.462 0.637 C0.499 0.642 0.562 0.642 0.612 0.637 C0.662 0.632 0.724 0.616 0.761 0.606 C0.799 0.596 0.798 0.596 0.835 0.576 C0.873 0.556 0.962 0.500 0.987 0.485', dur: 0.49 }, // f
+  { d: 'M0.000 0.755 C0.042 0.732 0.146 0.677 0.250 0.614 C0.354 0.551 0.541 0.433 0.624 0.378 C0.707 0.323 0.705 0.324 0.747 0.285 C0.788 0.245 0.852 0.182 0.873 0.142 C0.894 0.103 0.894 0.072 0.873 0.048 C0.852 0.024 0.809 0.000 0.747 0.000 C0.684 0.000 0.563 0.024 0.501 0.048 C0.439 0.072 0.416 0.095 0.374 0.142 C0.332 0.190 0.291 0.245 0.250 0.331 C0.208 0.418 0.146 0.560 0.125 0.662 C0.104 0.765 0.104 0.890 0.125 0.945 C0.146 1.000 0.208 0.984 0.250 0.992 C0.291 1.000 0.312 1.000 0.374 0.992 C0.437 0.984 0.562 0.961 0.624 0.945 C0.686 0.929 0.684 0.929 0.747 0.898 C0.809 0.866 0.958 0.779 1.000 0.755', dur: 0.3 }, // l
+  { d: 'M0.115 0.768 C0.148 0.751 0.262 0.697 0.312 0.661 C0.361 0.626 0.379 0.608 0.412 0.554 C0.445 0.501 0.493 0.412 0.509 0.340 C0.525 0.269 0.525 0.180 0.509 0.127 C0.493 0.073 0.445 0.036 0.412 0.018 C0.379 0.000 0.361 0.000 0.312 0.018 C0.262 0.036 0.164 0.073 0.115 0.127 C0.066 0.180 0.033 0.252 0.016 0.340 C0.000 0.430 0.000 0.572 0.016 0.661 C0.033 0.751 0.066 0.822 0.115 0.875 C0.164 0.929 0.246 0.964 0.312 0.982 C0.378 1.000 0.443 1.000 0.509 0.982 C0.575 0.964 0.657 0.911 0.706 0.875 C0.755 0.839 0.757 0.840 0.806 0.768 C0.855 0.697 0.968 0.499 1.000 0.446', dur: 0.19 }, // e
+  { d: 'M0.000 0.749 C0.037 0.726 0.148 0.664 0.222 0.610 C0.297 0.555 0.409 0.453 0.446 0.422 M0.778 0.000 C0.667 0.141 0.222 0.687 0.111 0.844 C0.000 1.000 0.093 0.914 0.111 0.937 C0.130 0.961 0.166 0.977 0.222 0.984 C0.278 0.992 0.372 0.992 0.446 0.984 C0.520 0.977 0.610 0.953 0.665 0.937 C0.720 0.922 0.722 0.922 0.778 0.891 C0.834 0.859 0.963 0.773 1.000 0.749 M0.111 0.375 L0.891 0.375', dur: 0.29 }, // t
+  { d: 'M0.435 0.018 C0.411 0.018 0.342 0.000 0.295 0.018 C0.249 0.036 0.188 0.090 0.153 0.127 C0.118 0.163 0.106 0.182 0.082 0.235 C0.059 0.289 0.024 0.375 0.012 0.446 C0.000 0.517 0.000 0.590 0.012 0.661 C0.024 0.733 0.047 0.822 0.082 0.875 C0.118 0.929 0.177 0.964 0.224 0.982 C0.271 1.000 0.318 1.000 0.365 0.982 C0.412 0.964 0.471 0.911 0.506 0.875 C0.542 0.839 0.555 0.822 0.578 0.768 C0.602 0.715 0.636 0.626 0.648 0.554 C0.659 0.483 0.659 0.412 0.648 0.340 C0.636 0.269 0.614 0.180 0.578 0.127 C0.543 0.073 0.470 0.018 0.435 0.018 C0.399 0.018 0.377 0.073 0.365 0.127 C0.353 0.180 0.353 0.269 0.365 0.340 C0.377 0.412 0.399 0.501 0.435 0.554 C0.470 0.608 0.519 0.644 0.578 0.661 C0.637 0.679 0.730 0.679 0.789 0.661 C0.848 0.644 0.895 0.590 0.930 0.554 C0.966 0.518 0.988 0.464 1.000 0.446', dur: 0.27 }, // o
+  { d: 'M0.000 0.490 C0.026 0.441 0.116 0.278 0.154 0.197 C0.192 0.115 0.218 0.000 0.231 0.000 C0.244 0.000 0.192 0.164 0.231 0.197 C0.269 0.229 0.409 0.180 0.460 0.197 C0.512 0.213 0.526 0.248 0.538 0.297 C0.551 0.346 0.551 0.408 0.538 0.490 C0.526 0.572 0.473 0.721 0.460 0.787 C0.447 0.853 0.447 0.852 0.460 0.885 C0.473 0.918 0.512 0.967 0.538 0.983 C0.565 1.000 0.578 1.000 0.617 0.983 C0.655 0.967 0.730 0.918 0.768 0.885 C0.806 0.852 0.808 0.853 0.846 0.787 C0.885 0.721 0.974 0.539 1.000 0.490', dur: 0.17 }, // r
+  { d: 'M0.566 0.340 C0.556 0.305 0.537 0.180 0.506 0.127 C0.475 0.073 0.421 0.036 0.380 0.018 C0.339 0.000 0.299 0.000 0.258 0.018 C0.217 0.036 0.165 0.090 0.134 0.127 C0.103 0.163 0.093 0.182 0.072 0.235 C0.051 0.289 0.021 0.375 0.010 0.446 C0.000 0.517 0.000 0.590 0.010 0.661 C0.021 0.733 0.041 0.822 0.072 0.875 C0.103 0.929 0.154 0.964 0.196 0.982 C0.237 1.000 0.278 1.000 0.319 0.982 C0.360 0.964 0.412 0.929 0.443 0.875 C0.474 0.822 0.475 0.804 0.506 0.661 C0.536 0.518 0.617 0.036 0.627 0.018 C0.637 0.000 0.577 0.411 0.566 0.554 C0.556 0.697 0.556 0.804 0.566 0.875 C0.577 0.946 0.607 0.964 0.627 0.982 C0.648 1.000 0.659 1.000 0.690 0.982 C0.721 0.964 0.783 0.911 0.814 0.875 C0.844 0.839 0.843 0.840 0.874 0.768 C0.905 0.697 0.979 0.499 1.000 0.446', dur: 0.3 }, // a
 ];
-const DOT = { x: 2508, y: 800, at: 2.85 }, LINE = { d: 'M64 905 C 734 880, 1334 935, 1934 895 S 2394 885, 2538 900', at: 3.2 };
-/** Height of the drawing in em, and how far it sits below the baseline, so its baseline meets the text's. */
-const H = 1.4, DROP = H * (BOX.y + BOX.h - BASELINE) / BOX.h;
+const START = 0.35, FILL = 0.14, DOT = 0.16;
+
+interface Glyph { c: string; x: number; box: { x: number; y: number; w: number; h: number }; pen?: string; at: number; dur: number }
 
 export function InkWord() {
+  const id = useId().replace(/:/g, ''), ref = useRef<HTMLElement>(null), base = useRef<HTMLSpanElement>(null);
+  const [m, setM] = useState<{ w: number; h: number; y: number; size: number; glyphs: Glyph[] } | null>(null);
+  useEffect(() => {
+    const measure = () => {
+      const e = ref.current, b = base.current; if (!e || !b) return;
+      const cs = getComputedStyle(e), size = parseFloat(cs.fontSize), y = b.offsetTop;
+      const ctx = document.createElement('canvas').getContext('2d'); if (!ctx) return;
+      ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      // Where the browser put each letter (its own spacing and kerning), and each letter's exact inked box.
+      const text = e.querySelector('.ink-ghost')?.firstChild, left = e.getBoundingClientRect().left, r = document.createRange();
+      if (!text) return;
+      let t = START; const glyphs: Glyph[] = [];
+      [...WORD].forEach((c, i) => {
+        r.setStart(text, i); r.setEnd(text, i + 1);
+        const x = r.getBoundingClientRect().left - left;
+        const k = ctx.measureText(c), pen = PEN[i];
+        const box = { x: x - k.actualBoundingBoxLeft, y: y - k.actualBoundingBoxAscent, w: k.actualBoundingBoxLeft + k.actualBoundingBoxRight, h: k.actualBoundingBoxAscent + k.actualBoundingBoxDescent };
+        const d = pen?.d.replace(/(-?[\d.]+) (-?[\d.]+)/g, (_, u, v) => (box.x + +u * box.w).toFixed(1) + ' ' + (box.y + +v * box.h).toFixed(1));
+        glyphs.push({ c, x, box, pen: d, at: t, dur: pen ? pen.dur : DOT }); t += pen ? pen.dur : DOT;
+      });
+      setM({ w: e.offsetWidth, h: e.offsetHeight, y, size, glyphs });
+    };
+    measure();
+    document.fonts?.ready.then(measure);
+    addEventListener('resize', measure);
+    return () => removeEventListener('resize', measure);
+  }, []);
+  const end = m ? m.glyphs[m.glyphs.length - 1].at + DOT : 0;
   return (
-    <em className="ink-word" style={{ color: MARK }}>
-      <span className="ink-sr">fletora.</span>
-      <svg viewBox={`${BOX.x} ${BOX.y} ${BOX.w} ${BOX.h}`} aria-hidden="true" style={{ height: H + 'em', width: H * BOX.w / BOX.h + 'em', verticalAlign: -DROP + 'em', overflow: 'visible' }}>
-        <g fill="none" stroke="currentColor" strokeWidth={38} strokeLinecap="round" strokeLinejoin="round">
-          {LETTERS.map((l, i) => <path key={i} className="ink-stroke" d={l.d} pathLength={1} style={{ animationDelay: l.at + 's', animationDuration: l.dur + 's' }} />)}
-          <path className="ink-under" d={LINE.d} pathLength={1} strokeWidth={22} style={{ animationDelay: LINE.at + 's' }} />
-        </g>
-        <circle className="ink-dot" cx={DOT.x} cy={DOT.y - 30} r={36} fill="currentColor" style={{ animationDelay: DOT.at + 's' }} />
+    <em ref={ref} className={'ink-word' + (m ? ' ink-on' : '')} style={{ color: MARK }}>
+      <span className="ink-ghost">{WORD}<span ref={base} className="ink-base" /></span>
+      {m && (
+        <svg className="ink-draw" width={m.w} height={m.h} viewBox={`0 0 ${m.w} ${m.h}`} aria-hidden="true">
+          <defs>
+            {m.glyphs.map((g, i) => (
+              <mask key={i} id={`${id}-${i}`} maskUnits="userSpaceOnUse" x={-m.w} y={-m.h} width={m.w * 3} height={m.h * 3}>
+                {g.pen && <path className="ink-pen" d={g.pen} pathLength={1} fill="none" stroke="#fff" strokeWidth={m.size * 0.26} strokeLinecap="round" strokeLinejoin="round" style={{ animationDelay: g.at + 's', animationDuration: g.dur + 's' }} />}
+                <rect className="ink-fill" x={g.box.x - 4} y={g.box.y - 4} width={g.box.w + 8} height={g.box.h + 8} fill="#fff" style={{ animationDelay: (g.pen ? g.at + g.dur * 0.8 : g.at) + 's', animationDuration: (g.pen ? FILL : DOT) + 's' }} />
+              </mask>
+            ))}
+          </defs>
+          {m.glyphs.map((g, i) => <text key={i} x={g.x} y={m.y} mask={`url(#${id}-${i})`}>{g.c}</text>)}
+        </svg>
+      )}
+      <svg className="ink-line" viewBox="0 0 300 20" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M4 13 C 60 7, 120 16, 180 9 S 262 6, 296 11" pathLength={1} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ animationDelay: end + 0.25 + 's' }} />
       </svg>
     </em>
   );
