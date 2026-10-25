@@ -9,7 +9,7 @@ export const ADDRESS = '45 Earls Court Square, London';
 const link: CSSProperties = { padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' };
 const hoverInk = hover(`color:${INK}`);
 
-/** The footer at the end of every scrolling page: who we are and where, and the Privacy, Terms and Contact links,
+/** The footer at the end of every scrolling page: the Privacy, Terms and Contact links,
  *  which have to be easy to reach from anywhere on the site. */
 export function SiteFooter({ v }: { v: V }) {
   return (
@@ -21,7 +21,7 @@ export function SiteFooter({ v }: { v: V }) {
       </nav>
       <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span style={{ ...serif(17, 1), color: INK }}>fletora<span style={{ color: MARK }}>.</span></span>
-        <span>© {new Date().getFullYear()} · {ADDRESS}</span>
+        <span>© {new Date().getFullYear()}</span>
       </span>
     </footer>
   );
