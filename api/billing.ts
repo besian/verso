@@ -16,6 +16,8 @@ const originOf = (req: Request) => {
   const o = req.headers.get('origin') || '';
   return /^https:\/\/(www\.)?fletora\.studio$/.test(o) || o === ORIGIN ? o : ORIGIN;
 };
+// Stripe's checkout form in Fletora's paper, red and square corners (all it lets a checkout change).
+const BRANDING = { display_name: 'Fletora', background_color: '#F4F1E9', button_color: '#AD493A', border_style: 'rectangular' };
 // The product in Stripe whose monthly and yearly prices are offered.
 const PRODUCT = process.env.STRIPE_PRODUCT_NAME || 'Fletora Plus';
 const json = (status: number, body: object) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -63,11 +65,14 @@ export async function POST(req: Request) {
       const refused: string[] = [];
       if (body.embedded) for (const ui_mode of ['elements', 'custom', 'embedded_page', 'embedded']) {
         try {
-          const s = await stripe('POST', 'checkout/sessions', { ...base, ui_mode, return_url: back });
+          // Stripe's form in Fletora's colours where it allows them; if those settings are refused, without them.
+          const s = await stripe('POST', 'checkout/sessions', { ...base, ui_mode, return_url: back, branding_settings: BRANDING })
+            .catch(() => stripe('POST', 'checkout/sessions', { ...base, ui_mode, return_url: back }));
           if (s.client_secret) return json(200, { clientSecret: s.client_secret, ui: ui_mode === 'elements' || ui_mode === 'custom' ? 'elements' : 'embedded', refused });
         } catch (e) { console.warn('checkout', ui_mode, (e as Error).message); refused.push(`${ui_mode}: ${(e as Error).message}`); }
       }
-      const s = await stripe('POST', 'checkout/sessions', { ...base, success_url: back, cancel_url: `${here}/settings` });
+      const page = { ...base, success_url: back, cancel_url: `${here}/settings` };
+      const s = await stripe('POST', 'checkout/sessions', { ...page, branding_settings: BRANDING }).catch(() => stripe('POST', 'checkout/sessions', page));
       return json(200, { url: s.url });
     }
     if (body.action === 'portal') {
