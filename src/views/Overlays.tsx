@@ -498,6 +498,21 @@ export function GiftModal({ v }: { v: V }) {
   );
 }
 
+/** Asks once before any analytics cookies are set (UK PECR); the choice can be changed in Settings → Your data. */
+export function ConsentBar({ v }: { v: V }) {
+  return (
+    <div role="region" aria-label="Analytics" style={{ position: 'absolute', left: 12, right: 12, bottom: 'calc(var(--tabbar, 0px) + 12px)', zIndex: 30, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+      <div style={{ pointerEvents: 'auto', maxWidth: 560, width: '100%', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: '10px 16px', flexWrap: 'wrap', padding: '12px 14px', background: PAPER, border: `1px solid ${INK}`, boxShadow: '0 12px 30px rgba(10,10,30,.18)', fontSize: 13, lineHeight: 1.45 }}>
+        <span style={{ flex: '1 1 260px' }}>Can fletora. use anonymous analytics (cookies) to see how the site is used? Nothing is shared for advertising. <button onClick={v.openPrivacy} style={{ ...linkBtn(INK), font: `500 13px ${SANS}`, textDecoration: 'underline' }}>Privacy</button></span>
+        <span style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => v.anChoose(false)} className={hoverTint} style={{ ...ghostBtn, height: 36, padding: '0 14px' }}>No thanks</button>
+          <button onClick={() => v.anChoose(true)} style={{ height: 36, padding: '0 16px', border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Allow</button>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /** Fletora's own "are you sure?" in place of the browser's. */
 export function AskModal({ v }: { v: V }) {
   const q = v.askQ;

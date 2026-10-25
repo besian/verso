@@ -8,3 +8,6 @@ export function saveHints(n: number) { try { localStorage.setItem('sb-hints', St
 export type Theme = 'light' | 'dark';
 export function loadTheme(): Theme { try { return localStorage.getItem('sb-theme') === 'dark' ? 'dark' : 'light'; } catch { return 'light'; } }
 export function saveTheme(t: Theme) { try { localStorage.setItem('sb-theme', t); } catch { /* storage unavailable */ } }
+/** Analytics consent: 'yes', 'no', or null when not asked yet. */
+export function loadAnalytics(): 'yes' | 'no' | null { try { const v = localStorage.getItem('sb-analytics'); return v === 'yes' || v === 'no' ? v : null; } catch { return null; } }
+export function saveAnalytics(v: 'yes' | 'no') { try { localStorage.setItem('sb-analytics', v); } catch { /* storage unavailable */ } }

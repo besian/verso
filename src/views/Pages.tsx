@@ -55,17 +55,18 @@ function Privacy() {
           <><b>Activity:</b> who you follow, which sketchbooks you like and save, who you block, your notifications, the reports you file, and a daily count of new conversations you start (to prevent spam). Follows and likes are visible to others; saved sketchbooks, blocks and reports are private.</>,
           <><b>Stats:</b> how many times each sketchbook is viewed and saved, and which part of the site views came from (Explore, a profile, a shared link…). These are counts only, not who viewed it, and only the sketchbook’s owner can see them.</>,
           <><b>Fletora Plus:</b> if you subscribe, Stripe collects your payment details and billing address; we never see your full card number. We keep whether you have Plus, your plan, when it renews and your Stripe customer reference, and show you your payments, the card each used and receipts from Stripe. Whether an account has Plus is public (it shows a Plus mark). Plus may also be given free by Fletora, which we record the same way.</>,
-          <><b>On your device:</b> small settings such as light or dark theme, page sounds and which tips you’ve seen, kept in your browser’s storage. If analytics is turned on, Google Analytics for Firebase also records anonymous usage such as pages viewed, device type and approximate location.</>,
+          <><b>On your device:</b> small settings such as light or dark theme, page sounds and which tips you’ve seen, kept in your browser’s storage. Google Analytics for Firebase records anonymous usage (pages viewed, device type, approximate location) only if you choose Allow when asked; you can change that any time in Account settings → Your data, and choosing No removes its cookies.</>,
         ]} />
       </Sec>
       <Sec title="Why we use it">
-        <P>To run your account and show your work, and to provide Plus if you subscribe (our agreement with you); to keep fletora. safe, prevent spam and act on reports (our legitimate interest in a safe community); and, only if it’s turned on, anonymous analytics to improve the site.</P>
+        <P>To run your account and show your work, and to provide Plus if you subscribe (our agreement with you); to keep fletora. safe, prevent spam and act on reports (our legitimate interest in a safe community); and anonymous analytics to improve the site, only if you’ve agreed to it (your consent, which you can withdraw).</P>
       </Sec>
       <Sec title="Who processes it">
         <P>Data is stored with Google Firebase (Authentication, Cloud Firestore and Cloud Storage), and the site is served by Vercel. Account emails (confirming your address, resetting your password) are sent through Resend, which receives your email address for that purpose; replies to them reach our inbox on Google Workspace. When you use Write to convert handwriting, an image of just that handwriting is sent to Anthropic’s Claude to read it; it isn’t used to train their models. When you download a sketchbook as a PDF, the PDF is made in your browser; its page images may pass through our server on Vercel on the way, and aren’t kept there. Payments for Plus are handled by Stripe, which sells the subscription to you as merchant of record and processes your payment details under its own privacy policy. These services may store data outside the UK, including in the United States, under their own terms, privacy policies and data protection safeguards. We don’t sell your data or use it for advertising.</P>
       </Sec>
       <Sec title="How long we keep it">
-        <P>For as long as you have an account. When you delete your account, your profile, handle, follows, saved list, notifications and every sketchbook with its images are removed straight away; any copies our providers keep for a short time are deleted under their own retention rules. Reports are kept until they’re dealt with. Stripe keeps records of payments for as long as tax law requires.</P>
+        <P>For as long as you have an account. When you delete your account, your profile, handle, follows, followers, saved list, blocks, notifications, every sketchbook with its images and stats, your Plus and billing records, and the counts we keep to prevent abuse (new conversations a day, handwriting conversions, emails sent) are removed straight away, and any subscription is cancelled. You leave sketchbooks others shared with you; pages you added there stay in them. Messages you sent stay in the other person’s conversation. Copies our providers keep for a short time (such as backups) are deleted under their own retention rules.</P>
+        <P>Reports are kept until a moderator has dealt with them, then deleted; for serious cases we keep a short note of what was reported and what we did, without the content itself. Stripe keeps records of payments for as long as tax law requires.</P>
       </Sec>
       <Sec title="Your choices and rights">
         <Ul items={[
@@ -73,9 +74,14 @@ function Privacy() {
           'Download any of your sketchbooks as a PDF (Plus), or leave a sketchbook someone shared with you.',
           'Edit or remove your profile details at any time, and block anyone from messaging you.',
           'Delete your account from Account settings. This permanently removes your profile, handle, follows, saved list, notifications, and every sketchbook with all its images.',
-          'You can ask for a copy of your data, ask us to correct or delete it, or object to how we use it. If you’re unhappy with how we handle your data, you can complain to the Information Commissioner’s Office (ico.org.uk) or your local data protection authority.',
+          'Download a copy of everything we hold about your account from Account settings → Your data → Download my data.',
+          'You can also ask us for a copy of your data, to correct or delete it, to restrict or object to how we use it, or to move it elsewhere. We reply within one month (we may need to confirm it’s you first). If you’re unhappy with how we handle your data, you can complain to the Information Commissioner’s Office (ico.org.uk) or your local data protection authority.',
+          'Turn anonymous analytics on or off in Account settings → Your data.',
           'Browsers let you block or clear cookies and site storage.',
         ]} />
+      </Sec>
+      <Sec title="Keeping it safe">
+        <P>Access to your data is limited by security rules on our database, so only the people who should see something can. Passwords are handled by Firebase and never seen by us, and card details only by Stripe. If a breach ever put your data at risk, we’d report it to the ICO within 72 hours where the law requires, and tell you without delay if it’s likely to affect you.</P>
       </Sec>
       <Sec title="Children">
         <P>fletora. isn’t meant for children under 13, and they shouldn’t create an account. If you think a child under 13 has an account, please tell us and we’ll remove it.</P>

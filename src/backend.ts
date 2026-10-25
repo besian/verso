@@ -3,7 +3,9 @@
 // they're missing the app still runs, signed out and without community books.
 import { initializeApp } from 'firebase/app';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
-import { getAnalytics, isSupported as analyticsSupported } from 'firebase/analytics';
+import { getAnalytics, isSupported as analyticsSupported, setAnalyticsCollectionEnabled } from 'firebase/analytics';
+import type { Analytics } from 'firebase/analytics';
+import { loadAnalytics } from './storage';
 import {
   EmailAuthProvider, applyActionCode, checkActionCode, confirmPasswordReset, connectAuthEmulator, verifyPasswordResetCode, createUserWithEmailAndPassword, deleteUser, getAuth, onAuthStateChanged,
   reauthenticateWithCredential, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut as fbSignOut,
@@ -37,6 +39,23 @@ const auth = app ? getAuth(app) : null;
 const db = app ? getFirestore(app) : null;
 const storage = app ? getStorage(app) : null;
 
+/** Anonymous usage analytics: offered only when a measurement ID is set, and run only with consent (UK PECR). */
+export const analyticsOffered = !!(app && config.measurementId && env.VITE_FIREBASE_EMULATORS !== '1');
+let analytics: Analytics | null = null;
+function startAnalytics() {
+  if (!app || !config.measurementId) return;
+  if (analytics) return setAnalyticsCollectionEnabled(analytics, true);
+  analyticsSupported().then(ok => { if (ok) analytics = getAnalytics(app); }).catch(() => {});
+}
+/** Saves the visitor's choice: starts analytics, or stops it and removes its cookies. */
+export function analyticsConsent(on: boolean) {
+  if (on) return startAnalytics();
+  if (analytics) setAnalyticsCollectionEnabled(analytics, false);
+  for (const c of document.cookie.split(';').map(x => x.split('=')[0].trim()).filter(n => /^_ga/.test(n)))
+    for (const domain of ['', location.hostname, '.' + location.hostname.replace(/^www\./, '')])
+      document.cookie = `${c}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/${domain ? '; domain=' + domain : ''}`;
+}
+
 if (app && env.VITE_FIREBASE_EMULATORS === '1') {
   connectAuthEmulator(auth!, 'http://127.0.0.1:9099', { disableWarnings: true });
   connectFirestoreEmulator(db!, '127.0.0.1', 8080);
@@ -46,7 +65,8 @@ if (app && env.VITE_FIREBASE_EMULATORS === '1') {
   if (env.VITE_FIREBASE_APPCHECK_KEY) {
     try { initializeAppCheck(app, { provider: new ReCaptchaV3Provider(env.VITE_FIREBASE_APPCHECK_KEY), isTokenAutoRefreshEnabled: true }); } catch (e) { console.warn('App Check', e); }
   }
-  if (config.measurementId) analyticsSupported().then(ok => { if (ok) getAnalytics(app); }).catch(() => {});
+  // Analytics (cookies) only once the visitor has agreed; see analyticsConsent above.
+  if (config.measurementId && loadAnalytics() === 'yes') startAnalytics();
 }
 
 class NotConfigured extends Error { code = 'not-configured'; }
@@ -838,11 +858,46 @@ async function removeFolder(path: string) {
   await Promise.all([...r.items.map(i => deleteObject(i).catch(() => {})), ...r.prefixes.map(p => removeFolder(p.fullPath))]);
 }
 
+/** Everything Fletora holds about the signed-in person, as one JSON file (the right of access, self-serve).
+ *  Page images are listed by address; they can be opened or downloaded from there. */
+export async function exportMyData(acct: Account): Promise<Blob> {
+  const { db: d } = need(), uid = acct.uid;
+  const all = async (path: string[]) => (await getDocs(collection(d, path[0], ...path.slice(1))).catch(() => null))?.docs.map(x => ({ id: x.id, ...x.data() })) || [];
+  const one = async (path: string[]) => { const s = await getDoc(doc(d, path[0], ...path.slice(1))).catch(() => null); return s?.exists() ? s.data() : null; };
+  const [profile, books, following, followers, saved, blocked, notifications, plus, billingDoc, chats] = await Promise.all([
+    one(['users', uid]), userBooks(uid), all(['users', uid, 'following']), all(['users', uid, 'followers']), all(['users', uid, 'saved']),
+    all(['users', uid, 'blocked']), all(['users', uid, 'notifications']), one(['plus', uid]), one(['billing', uid]),
+    getDocs(query(collection(d, 'chats'), where('members', 'array-contains', uid))).then(s => s.docs).catch(() => []),
+  ]);
+  const own = books.filter(b => b.ownerId === uid);
+  const stats = Object.fromEntries(await Promise.all(own.map(async b => [b.id, await one(['stats', b.id])] as const)));
+  const conversations = await Promise.all(chats.map(async c => {
+    const m = await getDocs(query(collection(d, 'chats', c.id, 'messages'), orderBy('at'))).catch(() => null);
+    const cd = c.data();
+    return { id: c.id, with: (cd.members || []).filter((x: string) => x !== uid).map((x: string) => ({ uid: x, ...(cd.info?.[x] || {}) })), status: cd.status,
+      messages: m?.docs.map(x => { const v = x.data(); return { from: v.from === uid ? 'you' : v.from, text: v.text, at: ms(v.at) }; }) || [] };
+  }));
+  const out = {
+    about: 'Everything fletora.studio holds about your account, as of the date below. Page images are linked by address.',
+    exportedAt: new Date().toISOString(),
+    account: { uid, email: acct.email, ...profile },
+    sketchbooks: books.map(b => ({ id: b.id, yours: b.ownerId === uid, name: b.name, visibility: b.hidden ? 'hidden by moderators' : b.linkOnly ? 'link only' : b.isPublic ? 'public' : 'private',
+      createdAt: b.createdAt, updatedAt: b.updatedAt, mediums: b.mediums, tags: b.tags, cover: b.cover,
+      pages: b.pages.map((u, i) => ({ image: u, caption: b.captions[i] || '', date: b.dates[i] || '' })),
+      sharedWith: b.collabs.map(m => m.handle), invited: b.invites.map(m => m.handle), stats: stats[b.id] || null })),
+    following, followers, saved, blocked, notifications, conversations,
+    plus: plus || null, billing: billingDoc || null,
+  };
+  return new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+}
+
 /** Deletes everything the user owns (books, images, follows, handle, profile), then the account itself.
  *  A Plus subscription is cancelled first, so nothing is charged after the account is gone. */
 export async function deleteAccount(pw: string, acct: Account, subscribed = false) {
   const u = await reauth(pw), { db: d } = need();
-  if (subscribed) await billing('close');
+  // The server cancels any subscription and removes the records only it can (counts, stats, Plus). With a
+  // subscription it must succeed, so nobody is charged after deleting; otherwise it's best effort.
+  if (subscribed) await billing('close'); else await billing('close').catch(e => console.warn('account clean-up', e));
   const books = await getDocs(query(collection(d, 'books'), where('ownerId', '==', acct.uid)));
   // Leave sketchbooks shared with this account, and turn down open invitations.
   const q = (f: QueryConstraint) => getDocs(query(collection(d, 'books'), f)).then(s => s.docs.map(x => x.id)).catch(() => [] as string[]);

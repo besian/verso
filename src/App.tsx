@@ -27,7 +27,7 @@ import Stage from './views/Stage';
 import { AuthPage, BillingPage, Explore, HomeScreen, Profile, Settings } from './views/Screens';
 import { Admin, AuthAction, Legal, NotFound } from './views/Pages';
 import { Messages } from './views/Messages';
-import { ArchiveModal, AskModal, CardModal, CollectionModal, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
+import { ArchiveModal, AskModal, CardModal, ConsentBar, CollectionModal, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
 
 export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound' | 'action' | 'messages' | 'billing';
 /** A report with what it points at, for the moderation page. */
@@ -64,6 +64,8 @@ interface State {
   /** Fletora Plus: whether you have it (undefined until known), your plan details, and the upgrade sheet
    *  (open when plusFor isn't null; its value says why it opened, see REASONS). */
   plus?: boolean; bill?: Billing | null; myGift?: api.PlusInfo | null;
+  /** Analytics consent ('yes' / 'no', or null when not asked yet; only asked when analytics is set up). */
+  analytics?: 'yes' | 'no' | null;
   /** Making a PDF of the open sketchbook: how far along ('3/40'). */
   pdfBusy?: string;
   /** A question asked in Fletora's own dialog before something that can't easily be undone. */
@@ -171,7 +173,7 @@ export default class App extends Component<object, State> {
   state: State = {
     acct: null, follows: [],
     books: [localBook()], active: 0, managing: false, images: [], p: 0, zoom: 1,
-    vw: window.innerWidth || 1200, vh: window.innerHeight || 800, soundOn: sound.soundOn(), dark: themeMode.isDark(),
+    vw: window.innerWidth || 1200, vh: window.innerHeight || 800, soundOn: sound.soundOn(), dark: themeMode.isDark(), analytics: store.loadAnalytics(),
   };
 
   // Animation and gesture bookkeeping (not rendered directly).
@@ -1464,6 +1466,10 @@ export default class App extends Component<object, State> {
       },
       pfCancel: () => this.setState({ draft: null, dErr: '' }), pfClose: (e: MouseEvent) => { if (e.target === e.currentTarget) this.setState({ draft: null }); },
       signOut: () => this.ask({ title: 'Sign out?', text: 'You can sign back in any time with your email and password.', yes: 'Sign out', run: async () => { await api.signOut(); this.setState({ draft: null }); this.goMode('home'); } }),
+      // Analytics consent: a small bar until they choose, and a setting under Your data.
+      anOffered: api.analyticsOffered, anOn: s.analytics === 'yes', anAsk: api.analyticsOffered && !s.analytics && !s.embed,
+      anChoose: (yes: boolean) => { store.saveAnalytics(yes ? 'yes' : 'no'); api.analyticsConsent(yes); this.setState({ analytics: yes ? 'yes' : 'no' }); },
+      anToggle: () => { const yes = s.analytics !== 'yes'; store.saveAnalytics(yes ? 'yes' : 'no'); api.analyticsConsent(yes); this.setState({ analytics: yes ? 'yes' : 'no' }); },
       // Fletora's own confirm dialog.
       askQ: s.ask || null, askNo: () => this.setState({ ask: null }), askYes: () => { const q = s.ask; this.setState({ ask: null }); q?.run(); },
     };
@@ -1562,6 +1568,13 @@ export default class App extends Component<object, State> {
       changePassword: (e?: { preventDefault(): void }) => { e?.preventDefault();
         if ((f.pwNew || '').length < 6) return this.setState({ acErr: 'Choose a new password of at least 6 characters.' });
         run('password', async () => { await api.changePassword(f.pwOld || '', f.pwNew || ''); this.setState(st => ({ ac: { ...st.ac, pwOld: '', pwNew: '' } })); return 'Your password has been changed.'; }); },
+      exportData: () => run('export', async () => {
+        if (!a) return;
+        const blob = await api.exportMyData(a), link = document.createElement('a');
+        link.href = URL.createObjectURL(blob); link.download = `fletora-data-${a.handle}-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+        return 'Your data is downloading as a file you can open in any text editor.';
+      }),
       deleteAccount: (e?: { preventDefault(): void }) => { e?.preventDefault(); if (!a) return;
         if ((f.delHandle || '').replace(/^@/, '').toLowerCase() !== a.handle) return this.setState({ acErr: `Type your handle, ${a.handle}, to confirm.` });
         run('delete', async () => { await api.deleteAccount(f.pwDel || '', a, !!s.bill); this.setState({ ac: {} }); this.goMode('home'); }); },
@@ -2286,6 +2299,7 @@ export default class App extends Component<object, State> {
         {v.isBilling && v.bdAsk && <PlanConfirm v={v} />}
         {v.gfOpen && <GiftModal v={v} />}
         {v.askQ && <AskModal v={v} />}
+        {v.anAsk && <ConsentBar v={v} />}
         {v.isBilling && v.cardSecret && <CardModal v={v} />}
         <input ref={this.fileRef} type="file" accept="image/*" multiple onChange={v.onFiles} style={{ display: 'none' }} />
         {/* Phones: opens the camera straight away. */}

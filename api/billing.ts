@@ -7,7 +7,8 @@
 // Needs STRIPE_SECRET_KEY and FIREBASE_SERVICE_ACCOUNT in Vercel.
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { FieldPath, getFirestore } from 'firebase-admin/firestore';
+import { createHash } from 'node:crypto';
 import { stripe } from './_lib/stripe.js';
 import { syncCheckout, syncSubscription } from './_lib/plus.js';
 
@@ -159,9 +160,19 @@ export async function POST(req: Request) {
       return json(200, { plus: await syncCheckout(db, body.session!, uid) });
     }
     if (body.action === 'close') {
-      // Deleting the account: end the subscription now (no further charges) and forget the billing link.
-      if (bill.sub) await stripe('DELETE', `subscriptions/${bill.sub}`).catch(e => { if ((e as { status?: number }).status !== 404) throw e; });
-      await Promise.all([billing.delete(), db.collection('plus').doc(uid).delete()]);
+      // Deleting the account: end any subscription now (no further charges), then remove the records only the
+      // server can: Plus and billing, handwriting and email counts, counters, and stats for the person's
+      // sketchbooks. Runs before the app deletes the rest (it needs their sketchbooks to find the stats).
+      if (bill.sub && ['active', 'trialing', 'past_due', 'incomplete'].includes(bill.status || 'active'))
+        await stripe('DELETE', `subscriptions/${bill.sub}`).catch(e => { if ((e as { status?: number }).status !== 404) throw e; });
+      const [books, ink] = await Promise.all([
+        db.collection('books').where('ownerId', '==', uid).get(),
+        db.collection('inkLog').where(FieldPath.documentId(), '>=', uid + '_').where(FieldPath.documentId(), '<', uid + '_\uf8ff').get(),
+      ]);
+      const refs = [billing, db.collection('plus').doc(uid), db.collection('chatLimits').doc(uid), db.collection('userCounts').doc(uid),
+        ...(email ? [db.collection('mailLog').doc(createHash('sha256').update(email.toLowerCase()).digest('hex'))] : []),
+        ...ink.docs.map(d => d.ref), ...books.docs.flatMap(b => [db.collection('stats').doc(b.id), db.collection('bookCounts').doc(b.id)])];
+      for (let i = 0; i < refs.length; i += 400) { const batch = db.batch(); refs.slice(i, i + 400).forEach(r => batch.delete(r)); await batch.commit(); }
       return json(200, { ok: true });
     }
     return json(400, { error: 'bad-request' });
