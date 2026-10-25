@@ -52,3 +52,15 @@ input[type="date"] { color-scheme: inherit; }
   .ink-word.ink-on .ink-ghost { color: inherit; }
   .ink-word .ink-line path { animation: none !important; opacity: .75; stroke-dashoffset: 0; }
 }
+
+/* Privacy policy and Terms (src/views/Pages.tsx): on wide screens the list of sections sits down the left, sticky,
+   and the sections fill the rest of the width in columns, packed with no gaps; phones get one column and no list. */
+.legal-wrap { display: grid; grid-template-columns: minmax(0, 1fr); gap: 56px; align-items: start; }
+.legal-nav { display: none; }
+.legal-cards { column-width: 400px; column-gap: 48px; }
+.legal-cards > section { break-inside: avoid; margin-bottom: 36px; }
+.legal-intro { column-span: all; margin-bottom: 36px !important; }
+@media (min-width: 1100px) {
+  .legal-wrap { grid-template-columns: 210px minmax(0, 1fr); }
+  .legal-nav { display: flex; flex-direction: column; gap: 10px; position: sticky; top: 24px; }
+}

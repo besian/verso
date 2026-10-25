@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { V } from '../App';
 import { hover } from '../pseudo';
@@ -34,22 +35,25 @@ function Page({ v, kicker, title, children }: { v: V; kicker: string; title: Rea
 }
 
 const prose: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 14, fontSize: 15, lineHeight: 1.6, color: INK, textWrap: 'pretty' } as CSSProperties;
+const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 function Sec({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section style={{ ...prose, paddingTop: 18, borderTop: '1px solid rgba(var(--ink-rgb),.25)' }}>
+    <section id={slug(title)} data-sec={title} style={{ ...prose, paddingTop: 18, borderTop: '1px solid rgba(var(--ink-rgb),.25)', scrollMarginTop: 24 }}>
       <h2 style={{ margin: 0, ...serif(26, 1.15) }}>{title}</h2>
       {children}
     </section>
   );
 }
 const P = ({ children }: { children: ReactNode }) => <p style={{ margin: 0 }}>{children}</p>;
+/** The opening line of the Privacy policy and Terms, across the full width above the sections. */
+const Intro = ({ children }: { children: ReactNode }) => <p className="legal-intro" style={{ margin: 0, fontSize: 17, lineHeight: 1.55, color: MUTED }}>{children}</p>;
 const Ul = ({ items }: { items: ReactNode[] }) => <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>{items.map((x, i) => <li key={i}>{x}</li>)}</ul>;
 const Contact = () => <>email <a href={`mailto:${contact}`}>{contact}</a> or use the Contact page</>;
 
 function Privacy() {
   return (
     <>
-      <P>fletora. is a place to share sketchbooks, run by Besian Morina. This page explains what we store about you, why, who can see it, how long we keep it, and your rights. Last updated {UPDATED}.</P>
+      <Intro>fletora. is a place to share sketchbooks, run by Besian Morina. This page explains what we store about you, why, who can see it, how long we keep it, and your rights. Last updated {UPDATED}.</Intro>
       <Sec title="What we store">
         <Ul items={[
           <><b>Your account:</b> your email address and a password, held by Firebase Authentication (Google). Your password is never visible to us, and your email is never shown on the site.</>,
@@ -103,7 +107,7 @@ function Privacy() {
 function Terms() {
   return (
     <>
-      <P>These terms cover using fletora., run by Besian Morina. By creating an account you agree to them. Last updated {UPDATED}.</P>
+      <Intro>These terms cover using fletora. By creating an account you agree to them. Last updated {UPDATED}.</Intro>
       <Sec title="Your account">
         <P>You must be at least 13 to use fletora. Keep your password safe; you’re responsible for what happens on your account. One person per account, and don’t pretend to be someone else.</P>
       </Sec>
@@ -163,14 +167,52 @@ function Terms() {
 
 export function Legal({ v }: { v: V }) {
   if (v.legalDoc === 'contact') return <ContactPage v={v} />;
-  const terms = v.legalDoc === 'terms', tab = (on: boolean, name: string, open: () => void) => (
+  const mob = !v.notMob, terms = v.legalDoc === 'terms', tab = (on: boolean, name: string, open: () => void) => (
     <button onClick={open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(on ? INK : undefined), borderBottom: on ? `1px solid ${INK}` : 'none' }}>{name}</button>
   );
+  // Wide screens: the list of sections down the side (sticky), and the sections in columns across the rest of the
+  // width, so the page is used without making lines too long to read. Phones: one column. See .legal-* in
+  // global.css.
   return (
-    <Page v={v} kicker="fletora." title={terms ? <>Terms of <em>use</em></> : <>Privacy <em>policy</em></>}>
-      <div style={{ display: 'flex', gap: 20, ...label() }}>{tab(!terms, 'Privacy', v.openPrivacy)}{tab(terms, 'Terms', v.openTerms)}</div>
-      {terms ? <Terms /> : <Privacy />}
-    </Page>
+    <div data-scroll style={screen}>
+      <div style={{ ...pagePad(mob, 64), display: 'flex', flexDirection: 'column', gap: mob ? 24 : 32, minHeight: '100%', paddingBottom: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <span style={label(MARK)}>fletora.</span>
+          <h1 style={{ margin: 0, ...serif(mob ? 44 : 64, 1, '-.02em') }}>{terms ? <>Terms of <em>use</em></> : <>Privacy <em>policy</em></>}</h1>
+          <div style={{ display: 'flex', gap: 20, marginTop: 6, ...label() }}>{tab(!terms, 'Privacy', v.openPrivacy)}{tab(terms, 'Terms', v.openTerms)}</div>
+        </div>
+        <LegalBody key={v.legalDoc}>{terms ? <Terms /> : <Privacy />}</LegalBody>
+        <SiteFooter v={v} />
+      </div>
+    </div>
+  );
+}
+
+/** The sections, with a sticky list of them beside (wide screens) that marks the one you're reading. */
+function LegalBody({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null), [secs, setSecs] = useState<string[]>([]), [on, setOn] = useState('');
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    const list = [...el.querySelectorAll<HTMLElement>('section[data-sec]')];
+    setSecs(list.map(x => x.dataset.sec || ''));
+    const io = new IntersectionObserver(es => {
+      const vis = es.filter(e => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (vis) setOn((vis.target as HTMLElement).dataset.sec || '');
+    }, { root: el.closest('[data-scroll]'), rootMargin: '0px 0px -60% 0px' });
+    list.forEach(x => io.observe(x));
+    return () => io.disconnect();
+  }, []);
+  const go = (t: string) => { document.getElementById(slug(t))?.scrollIntoView({ behavior: 'smooth', block: 'start' }); setOn(t); };
+  return (
+    <div className="legal-wrap">
+      <nav className="legal-nav" aria-label="On this page">
+        <span style={label()}>On this page</span>
+        {secs.map(t => (
+          <button key={t} onClick={() => go(t)} className={hoverText} style={{ padding: '2px 0 2px 12px', border: 'none', borderLeft: `2px solid ${on === t ? MARK : 'rgba(var(--ink-rgb),.15)'}`, background: 'none', textAlign: 'left', color: on === t ? INK : MUTED, font: `500 13px/1.35 ${SANS}`, cursor: 'pointer' }}>{t}</button>
+        ))}
+      </nav>
+      <div ref={ref} className="legal-cards">{children}</div>
+    </div>
   );
 }
 
