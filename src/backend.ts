@@ -367,8 +367,9 @@ export async function writeBook(owner: Account, b: Book) {
     captions: pages.map(u => (n[u]?.c || '').slice(0, 140)), dates: pages.map(u => n[u]?.d || ''),
     // `labels` lets Explore filter by medium or tag with a single array-contains query.
     mediums, tags, labels: [...mediums.map(m => 'm:' + mediumKey(m)), ...tags.map(x => 't:' + x)], hidden: !!b.hidden,
-    // Once the upload check has labelled it, it stays Mature (matureLock); otherwise the owner chooses.
-    mature: !!b.mature || !!b.matureLock, ...(b.matureLock ? { matureLock: true } : {}),
+    // Once the upload check has labelled it, it stays Mature (matureLock); otherwise the owner chooses. Written
+    // only when set, so books without the label save the same as before it existed.
+    ...(b.mature || b.matureLock ? { mature: true } : { mature: deleteField() }), ...(b.matureLock ? { matureLock: true } : {}),
   }, { merge: true });
 }
 
