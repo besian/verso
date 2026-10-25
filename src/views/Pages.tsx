@@ -10,7 +10,7 @@ const hoverText = hover(`color:${MARK}`);
 const hoverLine = hover(`color:${MARK};border-color:${MARK}`);
 const underline = (fs = 14): CSSProperties => ({ padding: '4px 0', border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', color: INK, font: `500 ${fs}px ${SANS}`, cursor: 'pointer' });
 const contact = import.meta.env.VITE_CONTACT_EMAIL;
-const UPDATED = '25 October 2026';
+const UPDATED = '26 October 2026';
 
 function Page({ v, kicker, title, children }: { v: V; kicker: string; title: ReactNode; children: ReactNode }) {
   const mob = !v.notMob;
@@ -49,11 +49,12 @@ function Privacy() {
         <Ul items={[
           <><b>Your account:</b> your email address and a password, held by Firebase Authentication (Google). Your password is never visible to us, and your email is never shown on the site.</>,
           <><b>Your profile:</b> name, handle, bio, location, website, social links, a contact email (if you add one) and photo. These are public.</>,
-          <><b>Your sketchbooks:</b> page images, drawings and typed text you add, covers, captions, dates, mediums and tags. Public sketchbooks can be seen by anyone; private ones only by you and anyone you’ve shared that sketchbook with.</>,
+          <><b>Your sketchbooks:</b> page images, drawings and typed text you add, covers, captions, dates, mediums and tags. Public sketchbooks can be seen by anyone. Link-only sketchbooks (Plus) don’t appear in Explore or on your profile, but anyone with the link can open them. Private ones can be seen only by you and the people you’ve shared that sketchbook with.</>,
+          <><b>Shared sketchbooks:</b> when you share a sketchbook (with one person, or up to five with Plus), everyone in it can see its pages and the names and handles of the others in it, and can add, caption and change pages. Pages someone adds stay in the sketchbook if they leave or are removed.</>,
           <><b>Messages:</b> the messages you send and receive, so the two people in a conversation can read them. Nobody else can, including us, unless a message is reported: then its text is sent to our moderators with the report. If you delete your account, messages you sent stay in the other person’s conversation.</>,
           <><b>Activity:</b> who you follow, which sketchbooks you like and save, who you block, your notifications, the reports you file, and a daily count of new conversations you start (to prevent spam). Follows and likes are visible to others; saved sketchbooks, blocks and reports are private.</>,
           <><b>Stats:</b> how many times each sketchbook is viewed and saved, and which part of the site views came from (Explore, a profile, a shared link…). These are counts only, not who viewed it, and only the sketchbook’s owner can see them.</>,
-          <><b>Fletora Plus:</b> if you subscribe, Stripe collects your payment details and billing address; we never see your full card number. We keep whether you have Plus, your plan, when it renews and your Stripe customer reference. Whether an account has Plus is public (it shows a Plus mark).</>,
+          <><b>Fletora Plus:</b> if you subscribe, Stripe collects your payment details and billing address; we never see your full card number. We keep whether you have Plus, your plan, when it renews and your Stripe customer reference, and show you your payments, the card each used and receipts from Stripe. Whether an account has Plus is public (it shows a Plus mark). Plus may also be given free by Fletora, which we record the same way.</>,
           <><b>On your device:</b> small settings such as light or dark theme, page sounds and which tips you’ve seen, kept in your browser’s storage. If analytics is turned on, Google Analytics for Firebase also records anonymous usage such as pages viewed, device type and approximate location.</>,
         ]} />
       </Sec>
@@ -61,14 +62,15 @@ function Privacy() {
         <P>To run your account and show your work, and to provide Plus if you subscribe (our agreement with you); to keep fletora. safe, prevent spam and act on reports (our legitimate interest in a safe community); and, only if it’s turned on, anonymous analytics to improve the site.</P>
       </Sec>
       <Sec title="Who processes it">
-        <P>Data is stored with Google Firebase (Authentication, Cloud Firestore and Cloud Storage), and the site is served by Vercel. Account emails (confirming your address, resetting your password) are sent through Resend, which receives your email address for that purpose; replies to them reach our inbox on Google Workspace. When you use Write to convert handwriting, an image of just that handwriting is sent to Anthropic’s Claude to read it; it isn’t used to train their models. Payments for Plus are handled by Stripe, which sells the subscription to you as merchant of record and processes your payment details under its own privacy policy. These services may store data outside the UK, including in the United States, under their own terms, privacy policies and data protection safeguards. We don’t sell your data or use it for advertising.</P>
+        <P>Data is stored with Google Firebase (Authentication, Cloud Firestore and Cloud Storage), and the site is served by Vercel. Account emails (confirming your address, resetting your password) are sent through Resend, which receives your email address for that purpose; replies to them reach our inbox on Google Workspace. When you use Write to convert handwriting, an image of just that handwriting is sent to Anthropic’s Claude to read it; it isn’t used to train their models. When you download a sketchbook as a PDF, the PDF is made in your browser; its page images may pass through our server on Vercel on the way, and aren’t kept there. Payments for Plus are handled by Stripe, which sells the subscription to you as merchant of record and processes your payment details under its own privacy policy. These services may store data outside the UK, including in the United States, under their own terms, privacy policies and data protection safeguards. We don’t sell your data or use it for advertising.</P>
       </Sec>
       <Sec title="How long we keep it">
         <P>For as long as you have an account. When you delete your account, your profile, handle, follows, saved list, notifications and every sketchbook with its images are removed straight away; any copies our providers keep for a short time are deleted under their own retention rules. Reports are kept until they’re dealt with. Stripe keeps records of payments for as long as tax law requires.</P>
       </Sec>
       <Sec title="Your choices and rights">
         <Ul items={[
-          'Make any sketchbook private from its Pages screen.',
+          'Make any sketchbook public, link-only (Plus) or private, and stop sharing it with anyone, from its Pages screen.',
+          'Download any of your sketchbooks as a PDF (Plus), or leave a sketchbook someone shared with you.',
           'Edit or remove your profile details at any time, and block anyone from messaging you.',
           'Delete your account from Account settings. This permanently removes your profile, handle, follows, saved list, notifications, and every sketchbook with all its images.',
           'You can ask for a copy of your data, ask us to correct or delete it, or object to how we use it. If you’re unhappy with how we handle your data, you can complain to the Information Commissioner’s Office (ico.org.uk) or your local data protection authority.',
@@ -93,7 +95,7 @@ function Terms() {
         <P>You must be at least 13 to use fletora. Keep your password safe; you’re responsible for what happens on your account. One person per account, and don’t pretend to be someone else.</P>
       </Sec>
       <Sec title="Your work stays yours">
-        <P>You keep all rights to what you upload. By making a sketchbook public, you let fletora. store and show it to visitors, including as previews when its link is shared or when it’s embedded on another site. Making it private or deleting it ends that. In a shared sketchbook, each person keeps the rights to the pages they add, and both agree they can be shown together in it.</P>
+        <P>You keep all rights to what you upload. By making a sketchbook public or link-only, you let fletora. store and show it to visitors who can see it, including as previews when its link is shared or when it’s embedded on another site. Making it private or deleting it ends that. In a shared sketchbook, each person keeps the rights to the pages they add, and everyone in it agrees they can be shown together in it, stay in it if they leave, and be deleted with it if its owner deletes it.</P>
       </Sec>
       <Sec title="What’s not allowed">
         <Ul items={[
