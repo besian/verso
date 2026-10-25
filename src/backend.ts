@@ -113,6 +113,11 @@ export function errMsg(e: unknown): string {
     'image/check-unavailable': 'Couldn’t check your pictures just now. Try again in a moment.',
     'image/limit': 'That’s a lot of uploads for one day. Try again tomorrow.',
     'image/not-yours': 'You can’t add pages to that sketchbook.',
+    'contact/wait': 'You’ve just sent one. Wait a couple of minutes before sending another.',
+    'contact/email': 'Enter the email address we should reply to.',
+    'contact/short': 'Tell us a little more, so we can help.',
+    'contact/send': 'Couldn’t send it just now. Try again, or email hello@fletora.studio.',
+    'contact/failed': 'Couldn’t send it just now. Try again, or email hello@fletora.studio.',
   };
   return msgs[code] || 'Something went wrong. Please try again.';
 }
@@ -875,6 +880,13 @@ export async function useLink(code: string) { await applyActionCode(need().auth,
 export async function setNewPassword(code: string, pw: string) { await confirmPasswordReset(need().auth, code, pw); }
 
 /** The signed-in user's ID token, for our own api/ functions. */
+/** The Contact page's form (api/contact): emails hello@fletora.studio, naming the account when signed in. */
+export async function contactUs(m: { kind: string; email: string; text: string; link: string; website: string }) {
+  const token = auth?.currentUser ? await auth.currentUser.getIdToken() : '';
+  const r = await fetch('/api/contact', { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify(m) }).catch(() => null);
+  const j = r ? await r.json().catch(() => ({})) : {};
+  if (!r?.ok) throw Object.assign(new Error(j.error || 'contact/failed'), { code: String(j.error || 'contact/failed') });
+}
 export async function idToken() { const u = need().auth.currentUser; return u ? u.getIdToken() : ''; }
 
 export async function resendVerification() { const u = need().auth.currentUser; if (u) await sendVerification(u); }

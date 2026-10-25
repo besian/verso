@@ -109,7 +109,9 @@ interface State {
   exView?: string; exSort?: 'trending' | 'new'; exQ?: string; stS?: number;
   /** Explore paging, and the medium/tag filter ('m:ink', 't:lisbon') with its results. */
   exMore?: boolean; exBusy?: boolean; exLabel?: string; exLabelBooks?: OtherBook[] | null;
-  legal?: 'privacy' | 'terms'; nf?: string;
+  legal?: 'privacy' | 'terms' | 'contact'; nf?: string;
+  /** The Contact page's form. */
+  ct?: { kind: string; email: string; text: string; link: string; hp: string; busy?: boolean; err?: string; sentTo?: string };
   banned?: string[]; admin?: boolean; adReports?: AdminItem[] | null; adBusy?: string; adErr?: string;
   /** Resend on the confirm-email reminder rests until this time. */
   vfUntil?: number;
@@ -381,7 +383,7 @@ export default class App extends Component<object, State> {
     } catch (e) { set({ step: 'error', err: api.errMsg(e) }); }
   }
   notFound(nf: string) { cancelAnimationFrame(this.raf); this.target = 0; this.setState(s => ({ mode: 'notfound', nf, other: null, images: s.books[s.active].images, p: 0, focus: false, fz: 0, managing: false })); }
-  openLegal(legal: 'privacy' | 'terms') { cancelAnimationFrame(this.raf); this.setState({ mode: 'legal', legal, other: null, focus: false, fz: 0, managing: false, draft: null }); }
+  openLegal(legal: 'privacy' | 'terms' | 'contact') { cancelAnimationFrame(this.raf); this.setState({ mode: 'legal', legal, other: null, focus: false, fz: 0, managing: false, draft: null }); }
   openAdmin() { cancelAnimationFrame(this.raf); this.setState({ mode: 'admin', other: null, focus: false, fz: 0, managing: false, draft: null }); if (this.state.admin) this.loadReports(); }
   collections(): string[] { return [...new Set([...(this.state.saved || []).map(x => x.col || '').filter(Boolean), ...(this.state.newCols || [])])].sort((a, b) => a.localeCompare(b)); }
   moveSaved(id: string, col: string) {
@@ -585,7 +587,7 @@ export default class App extends Component<object, State> {
     const s = this.state, mode = s.mode || 'home', o = s.other as OtherBook | null;
     const t = mode === 'other' && o ? `${o.name} by ${o.artist}` : mode === 'mine' ? s.books[s.active]?.name : mode === 'explore' ? 'Explore'
       : mode === 'profile' ? (s.profileOf ? (s.pf?.profile?.name || s.profileOf.name) : s.acct?.name) : mode === 'settings' ? 'Account settings' : mode === 'billing' ? 'Billing' : mode === 'messages' ? 'Messages' : mode === 'auth' ? (s.suMode === 'join' ? 'Join' : 'Sign in')
-      : mode === 'legal' ? (s.legal === 'terms' ? 'Terms' : 'Privacy') : mode === 'admin' ? 'Moderation' : mode === 'notfound' ? 'Not found' : '';
+      : mode === 'legal' ? (s.legal === 'terms' ? 'Terms' : s.legal === 'contact' ? 'Contact' : 'Privacy') : mode === 'admin' ? 'Moderation' : mode === 'notfound' ? 'Not found' : '';
     return t ? `${t} · fletora.` : 'fletora. — A place for the unfinished';
   }
   /** Shows the screen for the current address (first load, back/forward, pasted links). */
@@ -599,7 +601,7 @@ export default class App extends Component<object, State> {
         this.goMode('explore'); this.setState({ exQ: q.get('q') || '' });
         return this.setLabel(m ? 'm:' + m : t ? 't:' + tagSlug(t) : '');
       }
-      if (a === 'privacy' || a === 'terms') return this.openLegal(a);
+      if (a === 'privacy' || a === 'terms' || a === 'contact') return this.openLegal(a);
       if (a === 'auth' && b === 'action') return this.openAction();
       if (a === 'embed' && b) {
         const d = await api.getBook(b);
@@ -1434,7 +1436,7 @@ export default class App extends Component<object, State> {
       inInstalled: installer.installed(), inCanPrompt: installer.canPrompt(), inIOS: installer.isIOS(),
       inInstall: () => installer.install().then(ok => ok && this.toast('fletora is on your home screen')),
       isDark: !!s.dark, setTheme: (t: 'light' | 'dark') => { themeMode.setTheme(t); this.setState({ dark: t === 'dark' }); },
-      openPrivacy: () => this.openLegal('privacy'), openTerms: () => this.openLegal('terms'),
+      openPrivacy: () => this.openLegal('privacy'), openTerms: () => this.openLegal('terms'), openContact: () => this.openLegal('contact'),
       ...(() => {
         const t = s.act; if (s.mode !== 'action' || !t) return { isAction: false };
         return {
@@ -1463,7 +1465,7 @@ export default class App extends Component<object, State> {
         this.setState(st => ({ colNew: null, newCols: [...new Set([...(st.newCols || []), n])], pfCol: c.forId ? st.pfCol : n }));
         if (c.forId) this.moveSaved(c.forId, n);
       },
-      isLegal: s.mode === 'legal', legalDoc: s.legal || 'privacy', isNotFound: s.mode === 'notfound', nfWhat: s.nf || 'page',
+      isLegal: s.mode === 'legal', legalDoc: s.legal || 'privacy', ...this.contactVals(), isNotFound: s.mode === 'notfound', nfWhat: s.nf || 'page',
       ...this.settingsVals(),
       pfEditing: !!s.draft, dName: d.name || '', dHandle: d.handle || '', dBio: d.bio || '', dLoc: d.loc || '', dWeb: d.web || '', dMail: d.mail || '', onDMail: setD('mail'),
       dSocials: Object.keys(d.socials || {}).filter(k => PLATFORM[k]).map(k => ({ key: k, label: PLATFORM[k].label, hint: PLATFORM[k].hint, value: d.socials![k],
@@ -1750,6 +1752,30 @@ export default class App extends Component<object, State> {
       });
       this.setState({ adReports, banned });
     } catch (e) { console.error(e); this.setState({ adReports: [], adErr: api.errMsg(e) }); }
+  }
+  contactVals(): V {
+    const s = this.state, c = s.ct || { kind: 'help', email: s.acct?.email || '', text: '', link: '', hp: '' };
+    const set = (k: 'kind' | 'email' | 'text' | 'link' | 'hp') => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => { const val = e.target.value; this.setState(st => ({ ct: { ...(st.ct || c), [k]: val, err: '' } })); };
+    const HINTS: Record<string, string> = {
+      complaint: 'What happened, and what you’d like us to do about it.', appeal: 'Which sketchbook or account, what we did, and why you think it was wrong.',
+      bug: 'What you were doing, what went wrong, and your device and browser.', report: 'What’s wrong with it. For the fastest response, use Report on the page itself.',
+      privacy: 'What you’d like: a copy of your data, a correction, deletion, or something else.', billing: 'What you need help with. Don’t send card details.',
+    };
+    return {
+      ctKind: c.kind, ctEmail: c.email, ctText: c.text, ctLink: c.link, ctHp: c.hp, ctBusy: !!c.busy, ctErr: c.err || '', ctDone: !!c.sentTo, ctSentTo: c.sentTo || '',
+      ctNeedsLink: ['complaint', 'appeal', 'bug', 'report'].includes(c.kind), ctHint: HINTS[c.kind] || 'How can we help?',
+      onCtKind: set('kind'), onCtEmail: set('email'), onCtText: set('text'), onCtLink: set('link'), onCtHp: set('hp'),
+      ctAgain: () => this.setState({ ct: { ...c, text: '', link: '', sentTo: undefined } }),
+      ctSend: async (e: { preventDefault(): void }) => {
+        e.preventDefault(); if (c.busy) return;
+        const email = c.email.trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return this.setState({ ct: { ...c, err: 'Enter the email address we should reply to.' } });
+        if (c.text.trim().length < 10) return this.setState({ ct: { ...c, err: 'Tell us a little more, so we can help.' } });
+        this.setState({ ct: { ...c, busy: true, err: '' } });
+        try { await api.contactUs({ kind: c.kind, email, text: c.text, link: c.link, website: c.hp }); this.setState({ ct: { ...c, busy: false, sentTo: email } }); }
+        catch (er) { this.setState({ ct: { ...c, busy: false, err: api.errMsg(er) } }); }
+      },
+    };
   }
   adminVals(): V {
     const s = this.state, list = s.adReports;

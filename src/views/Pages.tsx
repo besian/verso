@@ -2,14 +2,19 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { V } from '../App';
 import { hover } from '../pseudo';
 import { INK, MARK, MUTED, PAPER, SANS, label, pagePad, serif } from '../theme';
-import { Notice, TextField } from './Overlays';
+import { Notice, SelectField, TextArea, TextField } from './Overlays';
 import { BOOKS_FREE, INK_FREE, PAGES_FREE, PRICE } from '../plus';
 
 const screen: CSSProperties = { position: 'absolute', inset: '0 0 var(--tabbar, 0px) 0', zIndex: 4, background: PAPER, overflowX: 'hidden', overflowY: 'auto' };
 const hoverText = hover(`color:${MARK}`);
 const hoverLine = hover(`color:${MARK};border-color:${MARK}`);
 const underline = (fs = 14): CSSProperties => ({ padding: '4px 0', border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', color: INK, font: `500 ${fs}px ${SANS}`, cursor: 'pointer' });
-const contact = import.meta.env.VITE_CONTACT_EMAIL;
+const contact = import.meta.env.VITE_CONTACT_EMAIL || 'hello@fletora.studio';
+/** Fletora's postal address, shown on the Contact page (the law asks a site that sells something to give one). */
+const ADDRESS = '45 Earls Court Square, London';
+/** What a message on the Contact page is about; keys must match KINDS in api/contact.ts. */
+export const CONTACT_KINDS = [['help', 'A question or help'], ['complaint', 'A complaint about Fletora'], ['appeal', 'Appeal a moderation decision'], ['bug', 'A problem with the site'],
+  ['report', 'Reporting content or a person'], ['privacy', 'A privacy or data request'], ['billing', 'Plus and billing'], ['other', 'Something else']] as const;
 const UPDATED = '26 October 2026';
 
 function Page({ v, kicker, title, children }: { v: V; kicker: string; title: ReactNode; children: ReactNode }) {
@@ -39,7 +44,7 @@ function Sec({ title, children }: { title: string; children: ReactNode }) {
 }
 const P = ({ children }: { children: ReactNode }) => <p style={{ margin: 0 }}>{children}</p>;
 const Ul = ({ items }: { items: ReactNode[] }) => <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>{items.map((x, i) => <li key={i}>{x}</li>)}</ul>;
-const Contact = () => contact ? <>email <a href={`mailto:${contact}`}>{contact}</a></> : <>use <b>Report</b> on any sketchbook or profile</>;
+const Contact = () => <>email <a href={`mailto:${contact}`}>{contact}</a> or use the Contact page</>;
 
 function Privacy() {
   return (
@@ -63,10 +68,10 @@ function Privacy() {
         <P>To run your account and show your work, and to provide Plus if you subscribe (our agreement with you); to keep fletora. safe, check uploads, prevent spam and act on reports (our legitimate interest in a safe community, and our legal duties under the Online Safety Act); and anonymous analytics to improve the site, only if you’ve agreed to it (your consent, which you can withdraw).</P>
       </Sec>
       <Sec title="Who processes it">
-        <P>Data is stored with Google Firebase (Authentication, Cloud Firestore and Cloud Storage), and the site is served by Vercel. Account emails (confirming your address, resetting your password) are sent through Resend, which receives your email address for that purpose; replies to them reach our inbox on Google Workspace. Every picture you upload is sent to Anthropic’s Claude to be checked before it’s published, and when you use Write to convert handwriting, an image of just that handwriting is sent to Claude to read it; Anthropic doesn’t use either to train its models. When you download a sketchbook as a PDF, the PDF is made in your browser; its page images may pass through our server on Vercel on the way, and aren’t kept there. Payments for Plus are handled by Stripe, which sells the subscription to you as merchant of record and processes your payment details under its own privacy policy. These services may store data outside the UK, including in the United States, under their own terms, privacy policies and data protection safeguards. We don’t sell your data or use it for advertising.</P>
+        <P>Data is stored with Google Firebase (Authentication, Cloud Firestore and Cloud Storage), and the site is served by Vercel. Account emails (confirming your address, resetting your password) and messages you send with the Contact page’s form are sent through Resend, which receives your email address for that purpose; they reach our inbox on Google Workspace, where we keep messages for as long as we need to deal with them. Every picture you upload is sent to Anthropic’s Claude to be checked before it’s published, and when you use Write to convert handwriting, an image of just that handwriting is sent to Claude to read it; Anthropic doesn’t use either to train its models. When you download a sketchbook as a PDF, the PDF is made in your browser; its page images may pass through our server on Vercel on the way, and aren’t kept there. Payments for Plus are handled by Stripe, which sells the subscription to you as merchant of record and processes your payment details under its own privacy policy. These services may store data outside the UK, including in the United States, under their own terms, privacy policies and data protection safeguards. We don’t sell your data or use it for advertising.</P>
       </Sec>
       <Sec title="How long we keep it">
-        <P>For as long as you have an account. When you delete your account, your profile, handle, follows, followers, saved list, blocks, notifications, every sketchbook with its images and stats, your Plus and billing records, and the counts we keep to prevent abuse (new conversations a day, handwriting conversions, emails sent) are removed straight away, and any subscription is cancelled. You leave sketchbooks others shared with you; pages you added there stay in them. Messages you sent stay in the other person’s conversation. Copies our providers keep for a short time (such as backups) are deleted under their own retention rules.</P>
+        <P>For as long as you have an account. When you delete your account, your profile, handle, follows, followers, saved list, blocks, notifications, every sketchbook with its images and stats, your Plus and billing records, and the counts we keep to prevent abuse (new conversations a day, handwriting conversions, upload checks, emails and contact messages sent) are removed straight away, and any subscription is cancelled. You leave sketchbooks others shared with you; pages you added there stay in them. Messages you sent stay in the other person’s conversation. Copies our providers keep for a short time (such as backups) are deleted under their own retention rules.</P>
         <P>A picture the upload check holds back is kept privately until a moderator has looked at it, then deleted; a photo the check refuses is deleted straight away. If a picture may show child sexual abuse, we report it to the Internet Watch Foundation or the National Crime Agency and keep it, and the account details that go with it, for as long as they or the law require, even if the account is deleted.</P>
         <P>Reports are kept until a moderator has dealt with them, then deleted; for serious cases we keep a short note of what was reported and what we did, without the content itself. Stripe keeps records of payments for as long as tax law requires.</P>
       </Sec>
@@ -126,6 +131,9 @@ function Terms() {
       <Sec title="Moderation">
         <P>Anyone can report a sketchbook, artist or message. Reports that a child may be at risk, and uploads the automatic check stops for that reason, come to us straight away and are looked at first; where the law requires it we pass them to the police or the Internet Watch Foundation. We may hide content, suspend accounts or remove them when these terms are broken, sometimes without notice. If you think we got it wrong, <Contact /> and we’ll take another look.</P>
       </Sec>
+      <Sec title="Complaints and appeals">
+        <P>You can complain about anything on fletora.: content or a person on it, a decision we made about your account or work, how we handle reports, or the site itself. Use <b>Report</b> on a sketchbook, profile or message, or the form on the Contact page. We confirm we’ve received it within 2 working days and give you an answer within 7 days, with a reason. An appeal against a moderation decision is looked at again, by a different moderator where we can; if we got it wrong, we put things back.</P>
+      </Sec>
       <Sec title="From the archive">
         <P>Sketchbooks in From the archive are historical works in the public domain, shown with credit to the artist and the museum or library they come from. They’re there for inspiration; the source’s own terms apply to its images.</P>
       </Sec>
@@ -147,22 +155,69 @@ function Terms() {
         <P>You can delete your account at any time from Account settings. We may close accounts that break these terms.</P>
       </Sec>
       <Sec title="Changes and contact">
-        <P>If these terms change, the date above will change too, and we’ll let you know on the site about big changes. Questions? <Contact />.</P>
+        <P>If these terms change, the date above will change too, and we’ll let you know on the site about big changes. Questions? <Contact />. Post: fletora., {ADDRESS}.</P>
       </Sec>
     </>
   );
 }
 
 export function Legal({ v }: { v: V }) {
-  const terms = v.legalDoc === 'terms';
+  const doc: 'privacy' | 'terms' | 'contact' = v.legalDoc, tab = (k: typeof doc, name: string, open: () => void) => (
+    <button onClick={open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(doc === k ? INK : undefined), borderBottom: doc === k ? `1px solid ${INK}` : 'none' }}>{name}</button>
+  );
   return (
-    <Page v={v} kicker="fletora." title={terms ? <>Terms of <em>use</em></> : <>Privacy <em>policy</em></>}>
+    <Page v={v} kicker="fletora." title={doc === 'terms' ? <>Terms of <em>use</em></> : doc === 'contact' ? <>Get in <em>touch</em></> : <>Privacy <em>policy</em></>}>
       <div style={{ display: 'flex', gap: 20, ...label() }}>
-        <button onClick={v.openPrivacy} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(terms ? undefined : INK), borderBottom: terms ? 'none' : `1px solid ${INK}` }}>Privacy</button>
-        <button onClick={v.openTerms} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(terms ? INK : undefined), borderBottom: terms ? `1px solid ${INK}` : 'none' }}>Terms</button>
+        {tab('privacy', 'Privacy', v.openPrivacy)}{tab('terms', 'Terms', v.openTerms)}{tab('contact', 'Contact', v.openContact)}
       </div>
-      {terms ? <Terms /> : <Privacy />}
+      {doc === 'terms' ? <Terms /> : doc === 'contact' ? <ContactUs v={v} /> : <Privacy />}
     </Page>
+  );
+}
+
+function ContactUs({ v }: { v: V }) {
+  const send: CSSProperties = { height: 48, padding: '0 26px', border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 15px ${SANS}`, cursor: v.ctBusy ? 'progress' : 'pointer', alignSelf: 'flex-start', opacity: v.ctBusy ? 0.6 : 1 };
+  return (
+    <>
+      <P>Email <a href={`mailto:${contact}`}>{contact}</a>, or send us a message below. We reply within 2 working days (privacy requests within one month at most).</P>
+      <Sec title="Send a message">
+        {v.ctDone
+          ? <><P>Thanks, it’s on its way. We’ll reply to <b>{v.ctSentTo}</b>.</P><button onClick={v.ctAgain} style={{ ...send, background: 'none', color: INK, border: `1.5px solid ${INK}` }}>Send another</button></>
+          : (
+            <form onSubmit={v.ctSend} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 560 }}>
+              <SelectField label="What’s it about?" value={v.ctKind} onChange={v.onCtKind} options={CONTACT_KINDS} />
+              <TextField label="Your email" type="email" autoComplete="email" value={v.ctEmail} onChange={v.onCtEmail} placeholder="you@example.com" />
+              {v.ctNeedsLink && <TextField label="Link (optional)" value={v.ctLink} onChange={v.onCtLink} placeholder="The sketchbook, profile or page it’s about" />}
+              <TextArea label="Message" value={v.ctText} onChange={v.onCtText} maxLength={4000} placeholder={v.ctHint} />
+              {/* Hidden from people; bots fill it in. */}
+              <input name="website" value={v.ctHp} onChange={v.onCtHp} tabIndex={-1} autoComplete="off" aria-hidden="true" style={{ position: 'absolute', left: -9999, width: 1, height: 1, opacity: 0 }} />
+              <Notice err={v.ctErr} />
+              <button type="submit" disabled={v.ctBusy} className={hover(`background:${MARK}`)} style={send}>{v.ctBusy ? 'Sending…' : 'Send message'}</button>
+            </form>
+          )}
+      </Sec>
+      <Sec title="Report something on fletora.">
+        <P>The quickest way is <b>Report</b> in the ⋯ menu on the sketchbook, profile or message: it goes straight to our moderators with what you’re reporting attached. You can also use the form above with a link.</P>
+      </Sec>
+      <Sec title="Complaints and appeals">
+        <P>Tell us about anything that’s gone wrong: content or a person on fletora., a decision we made about your account or work, how we dealt with a report, or the site itself. Choose <b>A complaint about Fletora</b> or <b>Appeal a moderation decision</b> above.</P>
+        <Ul items={[
+          'We confirm we’ve received it within 2 working days.',
+          'You get an answer within 7 days, with the reason for it.',
+          'An appeal is looked at again, by a different moderator where we can. If we got it wrong, we put your work or account back.',
+          'If you’re unhappy with how we’ve handled your data, you can also complain to the Information Commissioner’s Office (ico.org.uk).',
+        ]} />
+      </Sec>
+      <Sec title="A child at risk">
+        <P>If a child is in immediate danger, call 999. To report child sexual abuse images anywhere online, use the Internet Watch Foundation (report.iwf.org.uk). On fletora., choose <b>Report</b> and <b>A child may be at risk</b>: those reports reach us straight away.</P>
+      </Sec>
+      <Sec title="Plus and billing">
+        <P>Cancel, change plan, update your card and see receipts in Account settings → Plan. Stripe takes the payments as merchant of record. For anything else about Plus, including refunds, choose <b>Plus and billing</b> above.</P>
+      </Sec>
+      <Sec title="Post">
+        <P>fletora.<br />{ADDRESS}</P>
+      </Sec>
+    </>
   );
 }
 

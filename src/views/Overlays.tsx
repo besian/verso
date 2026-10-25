@@ -31,6 +31,15 @@ export function TextField({ label, value, onChange, ...rest }: { label: string; 
   return <label style={fieldLabel}>{label}<input value={value} onChange={onChange} {...rest} className={focusMark} style={field} /></label>;
 }
 
+/** A longer answer, styled like TextField. */
+export function TextArea({ label, value, onChange, ...rest }: { label: string; value: string; onChange: ChangeEventHandler<HTMLTextAreaElement>; placeholder?: string; rows?: number; maxLength?: number }) {
+  return <label style={fieldLabel}>{label}<textarea value={value} onChange={onChange} {...rest} className={focusMark} style={{ ...field, height: 'auto', minHeight: 140, padding: '12px 14px', lineHeight: 1.5, resize: 'vertical' }} /></label>;
+}
+/** A choice from a short list, styled like TextField. */
+export function SelectField({ label, value, onChange, options }: { label: string; value: string; onChange: ChangeEventHandler<HTMLSelectElement>; options: readonly (readonly [string, string])[] }) {
+  return <label style={fieldLabel}>{label}<select value={value} onChange={onChange} className={focusMark} style={{ ...field, cursor: 'pointer' }}>{options.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>;
+}
+
 export function HandleField({ value, onChange, placeholder }: { value: string; onChange: ChangeEventHandler<HTMLInputElement>; placeholder?: string }) {
   return (
     <label style={fieldLabel}>Handle
