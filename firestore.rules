@@ -266,11 +266,13 @@ service cloud.firestore {
       function valid(d) {
         return d.keys().hasOnly(['ownerId', 'ownerName', 'ownerHandle', 'name', 'color', 'shape', 'cover', 'pages', 'pageCount', 'createdAt', 'updatedAt', 'isPublic', 'linkOnly', 'thumbs', 'coverThumb',
             'captions', 'dates', 'mediums', 'tags', 'labels', 'hidden', 'collab', 'collabName', 'collabHandle', 'invite', 'inviteName', 'inviteHandle',
-            'collabs', 'invites', 'people', 'mature', 'matureLock'])
+            'collabs', 'invites', 'people', 'mature', 'matureLock', 'spreads', 'fillers'])
           && (!('isPublic' in d) || d.isPublic is bool)
           && (!('thumbs' in d) || (d.thumbs is list && d.thumbs.size() <= 1000))
           && (!('captions' in d) || (d.captions is list && d.captions.size() <= 1000))
           && (!('dates' in d) || (d.dates is list && d.dates.size() <= 1000))
+          && (!('spreads' in d) || (d.spreads is list && d.spreads.size() <= 1000))
+          && (!('fillers' in d) || (d.fillers is list && d.fillers.size() <= 1000))
           && (!('mediums' in d) || (d.mediums is list && d.mediums.size() <= 4))
           && (!('tags' in d) || (d.tags is list && d.tags.size() <= 8))
           && (!('labels' in d) || (d.labels is list && d.labels.size() <= 12))
@@ -336,7 +338,7 @@ service cloud.firestore {
           && (newInvites().hasOnly(oldInvites()) || newCollabs().size() + newInvites().size() <= (plus(resource.data.ownerId) ? 5 : 1)));
       }
       function collabEdits() {
-        return me() in oldCollabs() && changes().hasOnly(['pages', 'pageCount', 'thumbs', 'captions', 'dates', 'updatedAt']) && valid(request.resource.data);
+        return me() in oldCollabs() && changes().hasOnly(['pages', 'pageCount', 'thumbs', 'captions', 'dates', 'spreads', 'fillers', 'updatedAt']) && valid(request.resource.data);
       }
       // Someone invited accepts (moving into collabs) or declines; someone drawing in it leaves.
       function inviteeAnswers() {

@@ -112,6 +112,7 @@ export function errMsg(e: unknown): string {
     'image/refused-hold': 'That picture is waiting for a moderator to look at it, so it wasn’t added.',
     'image/check-unavailable': 'Couldn’t check your pictures just now. Try again in a moment.',
     'image/limit': 'That’s a lot of uploads for one day. Try again tomorrow.',
+    'image/failed': 'Couldn’t upload your pages just now. They’re kept here and will try again.',
     'image/not-yours': 'You can’t add pages to that sketchbook.',
     'contact/wait': 'You’ve just sent one. Wait a couple of minutes before sending another.',
     'contact/email': 'Enter the email address we should reply to.',
@@ -238,6 +239,9 @@ export interface BookDoc {
   thumbs: string[]; coverThumb: string | null;
   /** Margin notes per page, aligned with `pages` like thumbs. */
   captions: string[]; dates: string[];
+  /** Aligned with `pages`: true where a picture across two pages starts (its right half is the next page), and
+   *  where a blank page keeps a spread on facing pages. */
+  spreads: boolean[]; fillers: boolean[];
   mediums: string[]; tags: string[]; hidden: boolean;
   /** People who can add pages, and people invited who haven't answered yet. */
   collabs: Member[]; invites: Member[];
@@ -258,7 +262,7 @@ const bookDoc = (id: string, d: DocumentData): BookDoc => ({
   color: d.color || '#b8243a', shape: d.shape || 'portrait', cover: d.cover || null, pages: d.pages || [], pageCount: d.pageCount || 0,
   createdAt: d.createdAt || 0, updatedAt: d.updatedAt || 0, isPublic: d.isPublic !== false, legacy: d.isPublic === undefined, linkOnly: d.linkOnly === true, mature: d.mature === true, matureLock: d.matureLock === true,
   thumbs: d.thumbs || [], coverThumb: d.coverThumb || null,
-  captions: d.captions || [], dates: d.dates || [], mediums: d.mediums || [], tags: d.tags || [], hidden: d.hidden === true,
+  captions: d.captions || [], dates: d.dates || [], spreads: d.spreads || [], fillers: d.fillers || [], mediums: d.mediums || [], tags: d.tags || [], hidden: d.hidden === true,
   ...sharing(d),
 });
 
@@ -276,7 +280,9 @@ export const noteMap = (b: BookDoc): Record<string, PageNote> => {
 /** A book as the signed-in user's own: they own it, or draw in it with its owner. */
 export const toBook = (b: BookDoc, me?: string): Book => ({
   id: b.id, name: b.name, color: b.color, shape: b.shape, coverImg: b.cover, images: b.pages, createdAt: b.createdAt, isPublic: b.isPublic, linkOnly: b.linkOnly, mature: b.mature, matureLock: b.matureLock,
-  thumbs: thumbMap(b), notes: noteMap(b), mediums: b.mediums, tags: b.tags, hidden: b.hidden,
+  thumbs: thumbMap(b), notes: noteMap(b), mediums: b.mediums,
+  spreads: Object.fromEntries(b.pages.flatMap((u, i) => b.spreads[i] && b.pages[i + 1] ? [[u, b.pages[i + 1]]] : [])),
+  fillers: Object.fromEntries(b.pages.filter((_, i) => b.fillers[i]).map(u => [u, true as const])), tags: b.tags, hidden: b.hidden,
   role: me && b.ownerId !== me ? 'collab' : 'owner', owner: { uid: b.ownerId, name: b.ownerName, handle: b.ownerHandle }, collabs: b.collabs, invites: b.invites,
 });
 
@@ -369,7 +375,7 @@ export async function writeBook(owner: Account, b: Book) {
     pages, pageCount: pages.length, createdAt: b.createdAt || Date.now(), updatedAt: Date.now(), isPublic: !b.hidden && b.isPublic !== false,
     linkOnly: !b.hidden && b.isPublic === false && !!b.linkOnly,
     thumbs: pages.map(u => t[u] || ''), coverThumb: (cover && t[cover]) || null,
-    captions: pages.map(u => (n[u]?.c || '').slice(0, 140)), dates: pages.map(u => n[u]?.d || ''),
+    captions: pages.map(u => (n[u]?.c || '').slice(0, 140)), dates: pages.map(u => n[u]?.d || ''), ...pairLists(b, pages),
     // `labels` lets Explore filter by medium or tag with a single array-contains query.
     mediums, tags, labels: [...mediums.map(m => 'm:' + mediumKey(m)), ...tags.map(x => 't:' + x)], hidden: !!b.hidden,
     // Once the upload check has labelled it, it stays Mature (matureLock); otherwise the owner chooses. Written
@@ -378,12 +384,20 @@ export async function writeBook(owner: Account, b: Book) {
   }, { merge: true });
 }
 
+/** Spreads and their blank fillers as lists aligned with the pages; left out (removed) for a book with none, so
+ *  such books save exactly as before. */
+function pairLists(b: Book, pages: string[]) {
+  const sp = b.spreads || {}, fl = b.fillers || {};
+  const spreads = pages.map((u, i) => !!sp[u] && sp[u] === pages[i + 1]), fillers = pages.map(u => !!fl[u]);
+  return spreads.some(Boolean) || fillers.some(Boolean) ? { spreads, fillers } : { spreads: deleteField(), fillers: deleteField() };
+}
+
 /** What someone drawing in another person's sketchbook can change: its pages and their notes. */
 async function writePages(b: Book) {
   const pages = b.images.filter(u => !u.startsWith('data:')), t = b.thumbs || {}, n = b.notes || {};
   await updateDoc(doc(need().db, 'books', b.id), {
     pages, pageCount: pages.length, thumbs: pages.map(u => t[u] || ''),
-    captions: pages.map(u => (n[u]?.c || '').slice(0, 140)), dates: pages.map(u => n[u]?.d || ''), updatedAt: Date.now(),
+    captions: pages.map(u => (n[u]?.c || '').slice(0, 140)), dates: pages.map(u => n[u]?.d || ''), ...pairLists(b, pages), updatedAt: Date.now(),
   });
 }
 

@@ -6,6 +6,7 @@ import type { Account, ArchiveEntry, Book, OtherBook, PageNote, Shape, ShapeKey 
 import * as api from './backend';
 import type { AuthUser, Billing, BillingDetails, BookDoc, Chat, Msg, Notif, Person, Report, Saved, Stats, ViewSource } from './backend';
 import { BOOKS_FREE, PAGES_FREE, PAGES_PLUS, PAGE_H, PAGE_H_PLUS, PERKS, PRICE, REASONS, YEAR_SAVING } from './plus';
+import { alignSpreads, isLeftPage, partner, renamePage, splitSpread } from './spreads';
 import * as store from './storage';
 import * as sound from './sound';
 import * as themeMode from './themeMode';
@@ -50,6 +51,8 @@ interface EditState {
   paper?: Paper;
   /** Draw mode: finished strokes and the current tool. Write mode: whether the zoom pad is on, and where it sits on the page. */
   marks: Mark[]; pen: Pen; pad: boolean; box?: { x: number; y: number };
+  /** A new picture across two pages: the frame is two pages wide, and the picture is cut into a left and a right page. */
+  spread?: boolean;
 }
 type EdMode = 'fit' | 'adjust' | 'write' | 'draw' | 'pick';
 
@@ -822,11 +825,14 @@ export default class App extends Component<object, State> {
       const { done: m, refused, mature, error } = await api.uploadImages(acct.uid, id, pending);
       m.forEach(({ full }, du) => { const bu = this.blobs.get(du); if (bu) this.blobs.set(full, bu); });
       // Pictures the upload check refused come out of the book.
-      const swap = (u: string) => m.get(u)?.full || u, keep = (u: string) => !refused.has(u), thumbs: Record<string, string> = {};
+      const swap = (u: string) => m.get(u)?.full || u, thumbs: Record<string, string> = {};
+      // A refused half takes its spread with it.
+      const cur = this.findBook(id), gone = new Set([...refused.keys()].flatMap(u => [u, partner(u, cur?.spreads) || u]));
+      const keep = (u: string) => !gone.has(u);
       m.forEach(({ full, thumb }) => { thumbs[full] = thumb; });
       await new Promise<void>(done => this.setState(s => ({
         books: s.books.map(x => x.id === id ? { ...x, images: x.images.filter(keep).map(swap), coverImg: x.coverImg && keep(x.coverImg) ? swap(x.coverImg) : null, thumbs: { ...x.thumbs, ...thumbs },
-          notes: x.notes && Object.fromEntries(Object.entries(x.notes).map(([u, n]) => [swap(u), n])), ...(mature ? { mature: true, matureLock: true } : {}) } : x),
+          notes: x.notes && Object.fromEntries(Object.entries(x.notes).map(([u, n]) => [swap(u), n])), ...renamePage(x.spreads, x.fillers, swap), ...(mature ? { mature: true, matureLock: true } : {}) } : x),
         images: s.books[s.active]?.id === id ? s.images.filter(keep).map(swap) : s.images,
       }), done));
       if (refused.size) {
@@ -849,6 +855,10 @@ export default class App extends Component<object, State> {
     this.synced.set(id, now);
   }
   setImages(images: string[], patch: Partial<Book> = {}) {
+    // Spreads stay on facing pages whatever moved (see spreads.ts).
+    const cur = this.state.books[this.state.active];
+    const a = alignSpreads(images, patch.spreads ?? cur?.spreads, patch.fillers ?? cur?.fillers, () => paperUrl('plain', this.aspect()));
+    images = a.images; patch = { ...patch, spreads: a.spreads, fillers: a.fillers };
     const books = this.state.books.map((b, k) => k === this.state.active ? { ...b, ...patch, images } : b); this.setState({ books, images }); this.persist(books);
     const max = Math.max(CONFIG.minPages, images.length + (images.length % 2)) / 2 + 2;
     if (this.target > max) { this.target = max; this.setState({ p: max }); }
@@ -903,6 +913,13 @@ export default class App extends Component<object, State> {
   }
   movePage(from: number, to: number) {
     const im = [...this.state.images]; if (to < 0 || to >= im.length || from === to) return;
+    const sp = this.state.books[this.state.active]?.spreads || {}, other = partner(im[from], sp);
+    if (other) {
+      // A spread moves as one: both halves together, past the next page in that direction.
+      const l = sp[im[from]] ? im[from] : other, r = sp[l], li = im.indexOf(l), step = Math.abs(to - from) === 1 ? Math.sign(to - from) : 0;
+      const rest = im.filter(u => u !== l && u !== r), at = Math.max(0, Math.min(rest.length, step ? li + step : to));
+      rest.splice(at, 0, l, r); return this.setImages(rest);
+    }
     const [x] = im.splice(from, 1); im.splice(to, 0, x); this.setImages(im);
   }
   addFiles(files: FileList | File[]) {
@@ -945,7 +962,7 @@ export default class App extends Component<object, State> {
   curBook(): AnyBook { return this.state.other || this.state.books[this.state.active]; }
   aspect() { return this.shapeOf(this.curBook()).a; }
   /** The editor frame's shape: square for a profile photo, otherwise the sketchbook's page. */
-  edAspect() { return this.state.edit?.target === 'avatar' ? 1 : this.aspect(); }
+  edAspect() { const e = this.state.edit; return e?.target === 'avatar' ? 1 : e?.spread ? this.aspect() * 2 : this.aspect(); }
 
   // ---------- page turning ----------
   nPages() { const o = this.state.other as OtherBook | null | undefined; if (o) return o.pages; const n = this.state.images.length; return Math.max(CONFIG.minPages, n + (n % 2)); }
@@ -1112,7 +1129,9 @@ export default class App extends Component<object, State> {
     const { vw, vh } = this.state, a = this.edAspect();
     // Phones: the frame fills the width, capped so the controls below still fit.
     if (vw < 640) { let fw = vw - 32, fh = fw / a; const e = this.state.edit, maxH = vh * (e?.mode === 'write' && e.pad ? 0.34 : 0.5); if (fh > maxH) { fh = maxH; fw = fh * a; } return { fw: Math.round(fw), fh: Math.round(fh) }; }
-    const ed = this.state.edit, fh = Math.round(Math.max(200, Math.min(vh * (ed?.mode === 'write' && ed.pad ? 0.5 : 0.58), 520))); return { fh, fw: Math.round(fh * a) };
+    const ed = this.state.edit, fh = Math.round(Math.max(200, Math.min(vh * (ed?.mode === 'write' && ed.pad ? 0.5 : 0.58), 520)));
+    // A two-page frame is capped to the room beside the controls.
+    const maxW = Math.max(320, vw - 380); return fh * a > maxW ? { fw: Math.round(maxW), fh: Math.round(maxW / a) } : { fh, fw: Math.round(fh * a) };
   }
   baseSize() { const e = this.state.edit!, { fw, fh } = this.frame(); if (!e.nw) return { bw: fw, bh: fh }; const s = (e.target === 'avatar' ? Math.max : Math.min)(fw / e.nw, fh / e.nh); return { bw: e.nw * s, bh: e.nh * s }; }
   /** Re-baselines the drag / pinch gesture whenever a finger is added or lifted. */
@@ -1139,14 +1158,23 @@ export default class App extends Component<object, State> {
     applyToCanvas(c, e.adj);
     drawMarks(ctx, e.marks, outW, outH);
     await drawTexts(ctx, e.texts.filter(t => t.text.trim()), outW, outH);
-    const url = c.toDataURL('image/jpeg', 0.9), images = [...this.state.images];
+    const images = [...this.state.images];
+    if (e.spread && e.replaceIdx == null && !e.target) {
+      // Two pages: one picture cut down the middle, the halves kept together on facing pages.
+      // Two pages, and a blank one first when the next page would be a right-hand page.
+      if (this.pageRoom() < 2 + (isLeftPage(images.length) ? 0 : 1)) { this.setState({ edit: null }); return this.pagesFull(); }
+      const [l, r] = splitSpread(c), cur = this.state.books[this.state.active];
+      this.setImages([...images, l, r], { spreads: { ...cur.spreads, [l]: r } }); this.nextEdit(); return;
+    }
+    const url = c.toDataURL('image/jpeg', 0.9);
     if (e.target === 'cover') { this.updateBook({ coverImg: url }); this.setState({ edit: null }); return; }
     if (avatar) { this.setState(st => ({ edit: null, draft: st.draft ? { ...st.draft, av: url } : st.draft })); return; }
     let patch: Partial<Book> = {};
     if (e.replaceIdx != null) {
       // A re-fitted page keeps its caption and date.
-      const old = images[e.replaceIdx], notes = this.state.books[this.state.active].notes;
+      const old = images[e.replaceIdx], cur = this.state.books[this.state.active], notes = cur.notes;
       if (notes?.[old]) patch = { notes: { ...notes, [url]: notes[old] } };
+      patch = { ...patch, ...renamePage(cur.spreads, cur.fillers, u => u === old ? url : u) };
       images[e.replaceIdx] = url;
     } else if (this.pageRoom() <= 0) { this.setState({ edit: null }); return this.pagesFull(); }
     else images.push(url);
@@ -1156,7 +1184,7 @@ export default class App extends Component<object, State> {
     const e = this.state.edit; if (!e) return; const i = e.i + 1;
     if (i >= e.queue.length || e.replaceIdx != null) { this.setState({ edit: null }); cancelAnimationFrame(this.raf); this.target = Math.round(this.target); this.setState({ p: this.target }); return; }
     // The next image keeps the same adjustments: a batch of scans usually needs the same fix.
-    this.setState({ edit: { ...e, i, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, ink: [], texts: [], sel: null, inkErr: '', marks: [], box: undefined } }); this.loadEditImg(e.queue[i]);
+    this.setState({ edit: { ...e, i, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, ink: [], texts: [], sel: null, inkErr: '', marks: [], box: undefined, spread: false } }); this.loadEditImg(e.queue[i]);
   }
 
   /** Write mode: send the handwriting to be read, and place the words where it was written. */
@@ -1934,6 +1962,10 @@ export default class App extends Component<object, State> {
       editing: true, fw: fr.fw, fh: fr.fh, bw: bs.bw, bh: bs.bh, edBg: `url("${this.blobUrl(ed.queue[ed.i])}") center/100% 100% no-repeat`,
       edTransform: `translate(${ed.tx}px, ${ed.ty}px) rotate(${ed.rot}deg) scale(${ed.scale}) skew(${ed.skx}deg, ${ed.sky}deg)`,
       edAvatar: ed.target === 'avatar', edOne: !!ed.paper || ed.target === 'avatar' || ed.target === 'cover',
+      // Across two pages: only for a new picture (not a cover, profile photo, blank page or one being re-fitted).
+      edCanSpread: !ed.target && ed.replaceIdx == null && !ed.paper, edSpread: !!ed.spread,
+      edSpreadNote: isLeftPage(this.state.images.length) ? 'It’s cut at the dashed line onto two facing pages.' : 'It’s cut at the dashed line onto two facing pages. A blank page goes first, so they face each other.',
+      setSpread: (on: boolean) => this.setEd({ spread: on, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0 }),
       edTitle: ed.target === 'avatar' ? 'Profile photo' : ed.paper ? `${ed.paper[0].toUpperCase()}${ed.paper.slice(1)} page` : ed.target === 'cover' ? 'Cover image' : ed.replaceIdx != null ? `Edit page ${ed.replaceIdx + 1}` : `Image ${ed.i + 1} of ${ed.queue.length}`,
       scale: ed.scale, rot: ed.rot, skx: ed.skx, sky: ed.sky,
       scaleLbl: `${Math.round(ed.scale * 100)}%`, rotLbl: `${ed.rot}°`, skxLbl: `${ed.skx}°`, skyLbl: `${ed.sky}°`,
@@ -2065,12 +2097,15 @@ export default class App extends Component<object, State> {
       const cur = this.state.books[this.state.active], n = { ...cur.notes?.[u], ...patch };
       this.updateBook({ notes: { ...cur.notes, [u]: n } });
     };
+    const sp = (book as Book).spreads || {}, fill = (book as Book).fillers || {};
     const pagesList = images.map((u, i) => ({
+      // A spread's halves, and the blank pages that keep spreads on facing pages.
+      spread: sp[u] ? 'Spread · left' : partner(u, sp) ? 'Spread · right' : '', filler: !!fill[u],
       key: u.length + ':' + i + ':' + u.slice(-24), bg: `url("${this.blobUrl(this.thumbOf(book, u))}") center/cover no-repeat #f3efe6`, num: String(i + 1),
       caption: notes[u]?.c || '', date: notes[u]?.d || '',
       onCaption: (e: ChangeEvent<HTMLInputElement>) => setNote(u, { c: e.target.value.slice(0, 140) }),
       onDate: (e: ChangeEvent<HTMLInputElement>) => setNote(u, { d: e.target.value }),
-      edit: () => this.startEdit([images[i]], i), adjust: () => this.startEdit([images[i]], i, undefined, 'adjust'), write: () => this.startEdit([images[i]], i, undefined, 'write'), remove: () => this.setImages(images.filter((_, k) => k !== i)),
+      edit: () => this.startEdit([images[i]], i), adjust: () => this.startEdit([images[i]], i, undefined, 'adjust'), write: () => this.startEdit([images[i]], i, undefined, 'write'), remove: () => { const p = partner(u, sp); this.setImages(images.filter((x, k) => k !== i && x !== p)); },
       left: () => { this.movePage(i, i - 1); if (s.mgPage === i && i > 0) this.setState({ mgPage: i - 1 }); },
       right: () => { this.movePage(i, i + 1); if (s.mgPage === i && i < images.length - 1) this.setState({ mgPage: i + 1 }); },
       dragStart: (e: DragEvent) => { this.dragIdx = i; e.dataTransfer.effectAllowed = 'move'; },

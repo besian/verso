@@ -34,6 +34,8 @@ export interface Book {
   isPublic?: boolean;
   /** Plus: not public, but anyone with its link can open it. */
   linkOnly?: boolean;
+  /** Pictures across two pages: left half → right half; and blank pages added to keep them on facing pages. */
+  spreads?: Record<string, string>; fillers?: Record<string, true>;
   /** Labelled Mature (drawn nudity or sexual content); `matureLock` when the upload check did it. */
   mature?: boolean; matureLock?: boolean;
   /** Full image URL → thumbnail URL. */

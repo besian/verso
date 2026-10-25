@@ -185,6 +185,7 @@ export function Manager({ v }: { v: V }) {
                   <div key={i} draggable onDragStart={p.dragStart} onDragOver={p.dragOver} onDrop={p.drop} onClick={() => v.openPage(i)} style={{ display: 'flex', flexDirection: 'column', gap: 8, cursor: 'pointer', minWidth: 0 }}>
                     <div className={hover(`box-shadow:0 0 0 2px ${INK},0 10px 24px rgba(10,10,30,.3)`)} style={{ position: 'relative', aspectRatio: v.pgAspect, borderRadius: '2px 8px 8px 2px', background: p.bg, boxShadow: '0 10px 24px rgba(10,10,30,.3)' }}>
                       <span style={{ position: 'absolute', left: 8, top: 8, minWidth: 22, height: 22, padding: '0 6px', boxSizing: 'border-box', borderRadius: 11, background: 'rgba(246,242,233,.92)', color: '#222320', font: `500 12px/22px ${SANS}`, textAlign: 'center' }}>{p.num}</span>
+                      {(p.spread || p.filler) && <span style={{ position: 'absolute', left: 8, bottom: 8, right: 8, height: 22, padding: '0 8px', boxSizing: 'border-box', borderRadius: 11, background: 'rgba(246,242,233,.92)', color: p.filler ? 'rgba(34,35,32,.6)' : '#222320', font: `500 11px/22px ${SANS}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.filler ? 'Blank, before a spread' : p.spread}</span>}
                     </div>
                     <span style={{ fontSize: 13, color: p.caption ? INK : 'rgba(var(--ink-rgb),.45)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontStyle: p.caption ? 'italic' : 'normal' }}>{p.caption || 'Add a caption'}</span>
                   </div>
@@ -649,6 +650,8 @@ function PageSheet({ v, pg }: { v: V; pg: V }) {
             <input type="date" value={pg.date} onChange={pg.onDate} className={focusMark} style={{ ...field, color: pg.date ? INK : 'rgba(var(--ink-rgb),.5)' }} />
           </label>
           <span style={hint}>Written in the page’s margin in the book.</span>
+          {pg.spread && <span style={hint}>Half of a picture across two pages. Moving or removing it moves or removes both halves.</span>}
+          {pg.filler && <span style={hint}>A blank page that keeps the spread after it on facing pages. It goes away by itself when it’s no longer needed.</span>}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={() => { v.closePage(); pg.adjust(); }} className={hoverTint} style={act}>Adjust photo</button>
             <button onClick={() => { v.closePage(); pg.write(); }} className={hoverTint} style={act}>Write on page</button>
@@ -657,7 +660,7 @@ function PageSheet({ v, pg }: { v: V; pg: V }) {
             <button onClick={pg.right} disabled={v.mgPage === v.pagesList.length - 1} className={hoverTint} style={{ ...act, opacity: v.mgPage === v.pagesList.length - 1 ? 0.4 : 1 }}>Later →</button>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: 8 }}>
-            <button onClick={() => { v.closePage(); pg.remove(); }} className="tap" style={linkBtn(MARK)}>Remove page</button>
+            {pg.filler ? <span /> : <button onClick={() => { v.closePage(); pg.remove(); }} className="tap" style={linkBtn(MARK)}>{pg.spread ? 'Remove both pages' : 'Remove page'}</button>}
             <button onClick={v.closePage} style={{ height: 44, padding: '0 24px', borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer' }}>Done</button>
           </div>
         </div>
@@ -754,6 +757,23 @@ function EditFrame({ v, radius, shadow, wheel }: { v: V; radius: string; shadow:
       {v.edPad && <div style={{ position: 'absolute', ...v.padRect, boxSizing: 'border-box', border: `1.5px solid ${MARK}`, borderRadius: 2, background: 'rgba(173,73,58,.06)', pointerEvents: 'none' }} />}
       {v.inkBusy && <span style={{ position: 'absolute', left: '50%', top: 12, transform: 'translateX(-50%)', padding: '5px 12px', borderRadius: 12, background: 'rgba(34,35,32,.8)', color: '#F6F2E8', font: `500 12px ${SANS}` }}>Reading your writing…</span>}
       {v.edPeek && <span style={{ position: 'absolute', left: 8, top: 8, padding: '3px 8px', borderRadius: 10, background: 'rgba(34,35,32,.75)', color: '#F6F2E8', font: `500 11px ${SANS}` }}>Original</span>}
+      {/* Two pages: where the picture is cut, at the book's fold. */}
+      {v.edSpread && <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 0, borderLeft: '1.5px dashed rgba(246,242,233,.9)', boxShadow: '0 0 0 .5px rgba(34,35,32,.35)', pointerEvents: 'none' }} />}
+    </div>
+  );
+}
+
+/** A new picture: on one page, or across two (cut down the middle onto facing pages). */
+function SpreadSwitch({ v, height = 34 }: { v: V; height?: number }) {
+  if (!v.edCanSpread) return null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div role="radiogroup" aria-label="Pages" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, padding: 3, border: '1px solid rgba(var(--ink-rgb),.2)' }}>
+        {([[false, 'One page'], [true, 'Across two pages']] as const).map(([on, l]) => (
+          <button key={l} role="radio" aria-checked={v.edSpread === on} onClick={() => v.setSpread(on)} style={{ height, border: 'none', borderRadius: 2, background: v.edSpread === on ? INK : 'transparent', color: v.edSpread === on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' }}>{l}</button>
+        ))}
+      </div>
+      {v.edSpread && <span style={{ fontSize: 12, lineHeight: 1.45, color: 'rgba(var(--ink-rgb),.6)' }}>{v.edSpreadNote}</span>}
     </div>
   );
 }
@@ -886,6 +906,7 @@ function MobileEditor({ v }: { v: V }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 10 }}>
         <ModeSwitch v={v} height={34} />
         {pick ? <PickMode v={v} mob /> : draw ? <DrawTools v={v} outline={outline} mob /> : write ? <WriteTools v={v} outline={outline} mob /> : <>
+        {!adjust && <SpreadSwitch v={v} height={32} />}
         <div role="tablist" aria-label={adjust ? 'Adjustment' : 'Tool'} style={{ display: 'flex', gap: 4, overflowX: 'auto', scrollbarWidth: 'none' } as CSSProperties}>
           {tools.map(t => (
             <button key={t.key} role="tab" aria-selected={t.key === tool.key} onClick={() => choose(t.key)} style={{ flex: '1 0 auto', height: 34, padding: '0 10px', border: `1px solid ${t.key === tool.key ? INK : 'rgba(var(--ink-rgb),.2)'}`, borderRadius: 17, background: t.key === tool.key ? INK : 'transparent', color: t.key === tool.key ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' }}>{t.name}{adjust && t.value !== 0 ? ' •' : ''}</button>
@@ -936,6 +957,7 @@ export function Editor({ v }: { v: V }) {
           </>
         ) : (
           <>
+            <SpreadSwitch v={v} />
             <Slider name="Zoom" lbl={v.scaleLbl} min={0.3} max={4} step={0.01} value={v.scale} onChange={v.onScale} />
             <Slider name="Rotate" lbl={v.rotLbl} min={-180} max={180} step={0.5} value={v.rot} onChange={v.onRot} />
             {!v.edAvatar && <Slider name="Skew horizontal" lbl={v.skxLbl} min={-30} max={30} step={0.5} value={v.skx} onChange={v.onSkx} />}
