@@ -13,16 +13,16 @@ const hoverInk = hover(`color:${INK}`);
  *  which have to be easy to reach from anywhere on the site. */
 export function SiteFooter({ v }: { v: V }) {
   return (
-    <footer style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '10px 24px', marginTop: 'auto', paddingTop: 20, borderTop: '1px solid rgba(var(--ink-rgb),.15)', fontSize: 12, color: STONE }}>
-      <span style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ ...serif(17, 1), color: INK }}>fletora<span style={{ color: MARK }}>.</span></span>
-        <span>© {new Date().getFullYear()} · {ADDRESS}</span>
-      </span>
-      <nav aria-label="Legal" style={{ display: 'flex', gap: 18 }}>
+    <footer style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 10, marginTop: 'auto', paddingTop: 20, borderTop: '1px solid rgba(var(--ink-rgb),.15)', fontSize: 12, color: STONE }}>
+      <nav aria-label="Legal" style={{ display: 'flex', gap: 18, justifyContent: 'center' }}>
         <button onClick={v.openPrivacy} className={'tap ' + hoverInk} style={link}>Privacy</button>
         <button onClick={v.openTerms} className={'tap ' + hoverInk} style={link}>Terms</button>
         <button onClick={v.openContact} className={'tap ' + hoverInk} style={link}>Contact</button>
       </nav>
+      <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ ...serif(17, 1), color: INK }}>fletora<span style={{ color: MARK }}>.</span></span>
+        <span>© {new Date().getFullYear()} · {ADDRESS}</span>
+      </span>
     </footer>
   );
 }
