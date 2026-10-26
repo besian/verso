@@ -32,6 +32,7 @@ import type { Fit, Pt } from './autofit';
 import { AuthPage, BillingPage, Explore, HomeScreen, Profile, Settings } from './views/Screens';
 import { Admin, AuthAction, Legal, NotFound } from './views/Pages';
 import { Messages } from './views/Messages';
+import { CommentsPanel } from './views/Comments';
 import { ArchiveModal, AskModal, CardModal, ConsentBar, CollectionModal, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
 
 export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound' | 'action' | 'messages' | 'billing';
@@ -83,6 +84,8 @@ interface State {
   showMature?: boolean;
   /** Explore's Content filter set to Mature only (with Mature work shown). */
   matureOnly?: boolean;
+  /** Comments on the open sketchbook (kept live), and the comments panel: open, showing every page, the draft, and which page it's for. */
+  comments?: { bookId: string; list: api.Comment[] } | null; cmOpen?: boolean; cmAll?: boolean; cmDraft?: string; cmBusy?: boolean; cmErr?: string; cmFor?: number | null;
   /** Making a PDF of the open sketchbook: how far along ('3/40'). */
   pdfBusy?: string;
   /** A question asked in Fletora's own dialog before something that can't easily be undone. */
@@ -102,7 +105,7 @@ interface State {
   saved?: Saved[]; blocked?: string[]; followFeed?: OtherBook[]; followPeople?: Person[]; pfTab?: 'books' | 'saved' | 'following';
   toast?: string; more?: 'book' | 'profile' | 'chat' | null;
   counts?: Record<string, number>; liked?: Record<string, boolean>; notifs?: Notif[]; notifOpen?: boolean;
-  reportFor?: { kind: 'book' | 'user' | 'message'; targetId: string; ownerId: string; label: string; quote?: string } | null; reportReason?: string; reportNote?: string; reportBusy?: boolean; reportErr?: string;
+  reportFor?: { kind: 'book' | 'user' | 'message' | 'comment'; targetId: string; ownerId: string; label: string; quote?: string } | null; reportReason?: string; reportNote?: string; reportBusy?: boolean; reportErr?: string;
   p: number; zoom: number; managing: boolean;
   vw: number; vh: number; sw?: number; sh?: number;
   /** Top of the book area on screen (it sits below the title), used to centre a zoomed page on the whole screen. */
@@ -125,6 +128,8 @@ interface State {
   suBusy?: boolean; suErr?: string; suInfo?: string;
   draft?: (Omit<Account, 'uid' | 'email' | 'joined'>) | null; dBusy?: boolean; dErr?: string; socialMenu?: boolean;
   exView?: string; exSort?: 'trending' | 'new'; exQ?: string; stS?: number;
+  /** Explore: everyone's sketchbooks, or the latest pages from artists you follow. */
+  exTab?: 'all' | 'following';
   /** Explore paging, and the medium/tag filter ('m:ink', 't:lisbon') with its results. */
   exMore?: boolean; exBusy?: boolean; exLabel?: string; exLabelBooks?: OtherBook[] | null;
   legal?: 'privacy' | 'terms' | 'contact' | 'plus'; nf?: string;
@@ -497,6 +502,7 @@ export default class App extends Component<object, State> {
     const want = new Map<string, () => () => void>();
     const bookId = s.mode === 'other' ? o?.id : s.mode === 'mine' && mb && !mb.id.startsWith('local') ? mb.id : undefined;
     if (bookId) want.set('bc:' + bookId, () => api.watch(['bookCounts', bookId], d => this.setState(st => ({ counts: { ...st.counts, ['b:' + bookId]: Math.max(0, d?.likes || 0) } }))));
+    if (bookId) want.set('cm:' + bookId, () => api.watchComments(bookId, list => this.setState({ comments: { bookId, list } })));
     if (bookId && me && s.mode === 'other') want.set(`lk:${bookId}:${me}`, () => api.watch(['books', bookId, 'likes', me], d => this.setState(st => ({ liked: { ...st.liked, [bookId]: !!d } }))));
     const pu = s.mode === 'profile' ? s.profileOf?.uid || me : undefined;
     for (const u of new Set([pu, me])) if (u) {
@@ -1354,6 +1360,83 @@ export default class App extends Component<object, State> {
 
   // ---------- explore ----------
   /** Explore's list: the loaded pages (already in order from the server) or the medium/tag results, then the search. */
+  // ---------- comments ----------
+  /** Turns the open book to the opening that shows picture i. */
+  goToPage(i: number) { if (i < 0) return; this.turnTo(Math.max(1, Math.min(this.nLeaves() - 1, Math.floor((i + 1) / 2) + 1))); this.animate(); }
+  /** The pictures on show: the open spread's two pages, or in focus just the page zoomed in on. */
+  shownPages(): number[] {
+    const N = this.nLeaves(), P = Math.round(this.target), l = P >= 1 && P <= N - 1 ? this.face(P - 1, 1).idx : -1, r = P >= 1 && P <= N - 2 ? this.face(P, 0).idx : -1;
+    const side = this.state.focus ? this.state.fside : null;
+    return (side === 'L' ? [l] : side === 'R' ? [r] : [l, r]).filter(i => i >= 0);
+  }
+  commentVals(): V {
+    const s = this.state, mode = s.mode || 'home', o = s.other as OtherBook | null, mb = s.books[s.active];
+    const book = mode === 'other' && o && !o.arch ? { id: o.id, ownerId: o.ownerId || '', name: o.name } : mode === 'mine' && mb && !mb.id.startsWith('local') ? { id: mb.id, ownerId: mb.owner?.uid || s.acct?.uid || '', name: mb.name } : null;
+    if (!book) return { cmOn: false };
+    const all = (s.comments?.bookId === book.id ? s.comments.list : []).filter(c => !(s.blocked || []).includes(c.uid));
+    const imgs = s.images, keyAt = new Map(imgs.map((u, i) => [api.pageKey(u), i]));
+    const shown = this.shownPages(), shownKeys = new Set(shown.map(i => api.pageKey(imgs[i])));
+    const list = s.cmAll ? all : all.filter(c => shownKeys.has(c.page));
+    const me = s.acct?.uid, target = s.cmFor != null && shown.includes(s.cmFor) ? s.cmFor : shown[shown.length - 1] ?? -1;
+    const when = (t: number) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : m < 10080 ? Math.round(m / 1440) + 'd' : new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); };
+    const post = async () => {
+      const a = s.acct, text = (s.cmDraft || '').trim(); if (!a) return this.openJoin(); if (!text || target < 0 || s.cmBusy) return;
+      this.setState({ cmBusy: true, cmErr: '' });
+      try { await api.addComment(a, book, api.pageKey(imgs[target]), target + 1, text); this.setState({ cmDraft: '' }); }
+      catch (e) { console.error(e); this.setState({ cmErr: api.errMsg(e) }); }
+      finally { this.setState({ cmBusy: false }); }
+    };
+    return {
+      // Larger screens: the panel takes the right-hand side and the book moves over to stay in full view.
+      cmSide: !!s.cmOpen && s.vw >= 640 && (mode === 'mine' || mode === 'other') && !s.edit && !s.managing,
+      cmOn: true, cmOpen: !!s.cmOpen, cmCount: all.length, cmAll: !!s.cmAll, cmHere: all.filter(c => shownKeys.has(c.page)).length,
+      cmToggle: () => this.setState(st => ({ cmOpen: !st.cmOpen, more: null })), cmClose: () => this.setState({ cmOpen: false }),
+      cmShowAll: (on: boolean) => this.setState({ cmAll: on }),
+      cmWhere: !shown.length ? 'the cover' : shown.length === 2 ? `pages ${shown[0] + 1}–${shown[1] + 1}` : `page ${shown[0] + 1}`,
+      cmTargets: shown.length === 2 ? shown.map(i => ({ key: i, label: `Page ${i + 1}`, on: i === target, pick: () => this.setState({ cmFor: i }) })) : [],
+      cmTargetLbl: target >= 0 ? `page ${target + 1}` : '',
+      cmList: list.map(c => {
+        const i = keyAt.get(c.page);
+        return {
+          key: c.id, name: c.name || '@' + c.handle, handle: '@' + c.handle, initials: (c.name || c.handle || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase(),
+          when: when(c.at), text: c.text, mine: c.uid === me, page: i == null ? 'an earlier page' : `Page ${i + 1}`, showPage: !!s.cmAll || shown.length === 2,
+          goPage: () => i != null && this.goToPage(i),
+          openAuthor: () => this.openProfile({ uid: c.uid, name: c.name, handle: c.handle }),
+          canDelete: !!me && (c.uid === me || book.ownerId === me || !!s.admin),
+          del: () => this.ask({ title: 'Delete this comment?', text: c.uid === me ? 'It’s taken off the page for everyone.' : `${c.name}’s comment is taken off the page for everyone.`, yes: 'Delete', danger: true,
+            run: () => api.deleteComment(book.id, c.id).catch(e => { console.error(e); this.toast('Couldn’t delete that. Try again.'); }) }),
+          canReport: !!me && c.uid !== me,
+          report: () => this.openReport({ kind: 'comment', targetId: `${book.id}:${c.id}`, ownerId: c.uid, label: `${c.name}’s comment`, quote: c.text }),
+        };
+      }),
+      cmSignedIn: !!s.acct, cmSignin: () => this.openAuth('signin'), cmCanPost: target >= 0,
+      cmDraft: s.cmDraft || '', onCmDraft: (e: ChangeEvent<HTMLTextAreaElement>) => this.setState({ cmDraft: e.target.value.slice(0, api.COMMENT_MAX), cmErr: '' }),
+      cmKey: (e: { key: string; metaKey: boolean; ctrlKey: boolean; preventDefault(): void }) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); post(); } },
+      cmPost: post, cmBusy: !!s.cmBusy, cmErr: s.cmErr || '', cmLeft: api.COMMENT_MAX - (s.cmDraft || '').length,
+    };
+  }
+  /** Explore's Following tab: each followed artist's recently updated sketchbooks, newest first, with their latest pages. */
+  feedVals(): V {
+    const s = this.state, on = !!s.acct && s.exTab === 'following', mob = s.vw < 640;
+    const setTab = (t: 'all' | 'following') => { this.setState({ exTab: t }); if (t === 'following' && !s.followFeed) this.loadFollowFeed(); };
+    const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); return m < 60 ? 'just now' : m < 1440 ? Math.round(m / 60) + 'h ago' : m < 10080 ? Math.round(m / 1440) + 'd ago' : new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); };
+    const feed = this.community((s.followFeed || []).filter(b => b.images.length > 0)).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 40);
+    const openAt = (b: OtherBook, i: number) => { this.openOtherBook(b, 'explore'); setTimeout(() => { if (this.state.mode === 'other' && this.state.other?.id === b.id) this.goToPage(i); }, 80); };
+    const h = mob ? 120 : 170;
+    return {
+      exTabs: !!s.acct, exFollowing: on, exTabAll: () => setTab('all'), exTabFollowing: () => setTab('following'),
+      exFeedLoading: on && !s.followFeed, exFeedNoFollows: on && !(s.follows || []).length,
+      exFeed: on ? feed.map(b => {
+        const shp = this.shapeOf(b), n = b.images.length, from = Math.max(0, n - (mob ? 4 : 6));
+        return {
+          key: b.id, artist: b.artist, handle: b.handle ? '@' + b.handle : '', init: ini(b.artist), name: b.name, when: ago(b.updatedAt || 0), mature: !!b.mature,
+          meta: `${n} ${n === 1 ? 'page' : 'pages'}${(b.mediums || []).length ? ' · ' + (b.mediums || []).join(', ') : ''}`,
+          open: () => this.openOtherBook(b, 'explore'), openArtist: () => this.openProfile(this.whoOf(b)),
+          pages: b.images.slice(from).map((u, k) => ({ key: from + k, num: String(from + k + 1), bg: `url("${this.blobUrl(this.thumbOf(b, u))}") center/cover no-repeat #f3efe6`, w: Math.round(h * shp.a), h, open: () => openAt(b, from + k) })).reverse(),
+        };
+      }) : [],
+    };
+  }
   /** Explore's Content filter. Showing Mature work needs a signed-in adult, as in Account settings. */
   setContent(k: 'hide' | 'all' | 'only') {
     const s = this.state, only = k === 'only';
@@ -1730,10 +1813,14 @@ export default class App extends Component<object, State> {
       ntItems: list.map(n => ({
         key: n.id, unread: !n.read, when: ago(n.at), goal: n.type === 'goal',
         who: n.type === 'goal' ? '' : n.fromName || '@' + n.fromHandle,
-        text: n.type === 'like' ? <>liked <i>{n.bookName}</i></> : n.type === 'invite' ? <>invited you to draw in <i>{n.bookName}</i></> : n.type === 'follow' ? 'started following you' : n.goal === 'likes100' ? `You reached ${GOAL} likes. Thank you for sharing your pages.` : `You reached ${GOAL} followers. People are following along.`,
+        text: n.type === 'comment' ? <>commented on page {n.page} of <i>{n.bookName}</i>: “{n.text}”</> : n.type === 'like' ? <>liked <i>{n.bookName}</i></> : n.type === 'invite' ? <>invited you to draw in <i>{n.bookName}</i></> : n.type === 'follow' ? 'started following you' : n.goal === 'likes100' ? `You reached ${GOAL} likes. Thank you for sharing your pages.` : `You reached ${GOAL} followers. People are following along.`,
         open: () => {
           this.setState({ notifOpen: false });
           if (n.type === 'invite' && n.bookId) { const j = s.books.findIndex(b => b.id === n.bookId); if (j >= 0) { this.goMode('mine'); this.setState({ active: j, images: s.books[j].images }); } else this.setState({ notifOpen: true }); }
+          else if (n.type === 'comment' && n.bookId) {
+            const j = s.books.findIndex(b => b.id === n.bookId); if (j < 0) return;
+            this.goMode('mine'); this.setState({ active: j, images: s.books[j].images, cmOpen: true, cmAll: false }, () => this.goToPage(Number(n.page || 1) - 1));
+          }
           else if (n.type === 'like' && n.bookId) { const j = s.books.findIndex(b => b.id === n.bookId); if (j >= 0) { this.goMode('mine'); this.setState({ active: j, images: s.books[j].images }); } }
           else if (n.type === 'follow') this.openProfile({ uid: n.from, name: n.fromName, handle: n.fromHandle });
           else this.openProfile(null);
@@ -1903,6 +1990,7 @@ export default class App extends Component<object, State> {
         key: k, label: l, on: k === 'hide' ? !s.showMature : !!s.showMature && !!s.matureOnly === (k === 'only'),
         pick: () => this.setContent(k),
       })),
+      ...this.feedVals(),
       exMediums: [{ key: '', label: 'All mediums', on: !s.exLabel?.startsWith('m:'), pick: () => this.setLabel('') },
         ...MEDIUMS.map(m => ({ key: m, label: m, on: s.exLabel === 'm:' + mediumKey(m), pick: () => this.setLabel(s.exLabel === 'm:' + mediumKey(m) ? '' : 'm:' + mediumKey(m)) }))],
       exTag: s.exLabel?.startsWith('t:') ? '#' + s.exLabel.slice(2) : '', clearLabel: () => this.setLabel(''),
@@ -1956,12 +2044,13 @@ export default class App extends Component<object, State> {
       const [rs, banned] = await Promise.all([api.reports(), api.bannedUsers()]);
       const books = new Map<string, BookDoc | null>(), people = new Map<string, Awaited<ReturnType<typeof api.getProfile>>>();
       await Promise.all([
-        ...[...new Set(rs.filter(r => r.kind === 'book' || (r.kind === 'image' && r.targetId !== r.ownerId)).map(r => r.targetId))].map(async id => { books.set(id, await api.getBook(id)); }),
+        ...[...new Set(rs.filter(r => r.kind === 'book' || r.kind === 'comment' || (r.kind === 'image' && r.targetId !== r.ownerId)).map(r => r.targetId.split(':')[0]))].map(async id => { books.set(id, await api.getBook(id).catch(() => null)); }),
         ...[...new Set(rs.map(r => r.ownerId).filter(Boolean))].map(async id => { people.set(id, await api.getProfile(id).catch(() => null)); }),
       ]);
       const adReports = rs.map((r): AdminItem => {
-        const b = books.get(r.targetId), pr = people.get(r.ownerId), forBook = r.kind === 'image' && r.targetId !== r.ownerId;
+        const b = books.get(r.targetId.split(':')[0]), pr = people.get(r.ownerId), forBook = r.kind === 'image' && r.targetId !== r.ownerId;
         const targetName = r.kind === 'book' ? b?.name || 'Deleted sketchbook' : r.kind === 'message' ? `A message from ${pr?.name || 'a deleted account'}`
+          : r.kind === 'comment' ? `A comment by ${pr?.name || 'a deleted account'} on “${b?.name || 'a deleted sketchbook'}”`
           : r.kind === 'image' ? (forBook ? `A page for “${b?.name || 'a sketchbook not saved yet'}”` : 'A profile picture') : pr?.name || 'Deleted account';
         return { ...r, targetName, ownerName: pr?.name || '', ownerHandle: pr?.handle || '',
           hidden: !!b?.hidden, mature: !!b?.mature, banned: banned.includes(r.ownerId), gone: r.kind === 'book' || forBook ? !b : !pr };
@@ -2007,9 +2096,11 @@ export default class App extends Component<object, State> {
       isAdminPage: s.mode === 'admin', adAllowed: !!s.admin, adLoading: !list, adErr: s.adErr || '', adReload: () => this.loadReports(),
       adCount: list ? `${list.length} open ${list.length === 1 ? 'report' : 'reports'}` : '',
       adItems: (list || []).map(r => ({
-        key: r.id, kind: r.kind === 'book' ? 'Sketchbook' : r.kind === 'message' ? 'Message' : r.kind === 'image' ? 'Upload' : 'Artist', name: r.targetName, owner: r.ownerName ? `${r.ownerName} · @${r.ownerHandle}` : '',
+        key: r.id, kind: r.kind === 'book' ? 'Sketchbook' : r.kind === 'message' ? 'Message' : r.kind === 'comment' ? 'Comment' : r.kind === 'image' ? 'Upload' : 'Artist', name: r.targetName, owner: r.ownerName ? `${r.ownerName} · @${r.ownerHandle}` : '',
         reason: r.reason, note: r.note, when: ago(r.at), hidden: r.hidden, banned: r.banned, gone: r.gone, isBook: r.kind === 'book' || (r.kind === 'image' && r.targetId !== r.ownerId), busy: s.adBusy?.startsWith(r.id) ? s.adBusy : '',
-        open: () => r.kind === 'book' || (r.kind === 'image' && r.targetId !== r.ownerId) ? this.openBookById(r.targetId) : this.openProfile({ uid: r.ownerId, name: r.ownerName, handle: r.ownerHandle }),
+        isComment: r.kind === 'comment', deleteComment: () => { const [bid, cid] = r.targetId.split(':');
+          this.ask({ title: 'Delete this comment?', text: 'It’s taken off the page for everyone.', yes: 'Delete', danger: true, run: () => act(r.id + ':comment', () => api.deleteComment(bid, cid), l => l.filter(x => x.id !== r.id), 'Comment deleted').then(() => api.dismissReport(r.id).catch(() => {})) }); },
+        open: () => r.kind === 'comment' ? this.openBookById(r.targetId.split(':')[0]) : r.kind === 'book' || (r.kind === 'image' && r.targetId !== r.ownerId) ? this.openBookById(r.targetId) : this.openProfile({ uid: r.ownerId, name: r.ownerName, handle: r.ownerHandle }),
         openOwner: () => this.openProfile({ uid: r.ownerId, name: r.ownerName, handle: r.ownerHandle }),
         hide: () => act(r.id + ':hide', () => api.setHidden(r.targetId, !r.hidden), l => l.map(x => x.targetId === r.targetId ? { ...x, hidden: !r.hidden } : x), r.hidden ? 'Sketchbook restored' : 'Sketchbook hidden'),
         ban: () => {
@@ -2475,7 +2566,7 @@ export default class App extends Component<object, State> {
             if (!s.reportReason) return this.setState({ reportErr: 'Choose a reason.' });
             this.setState({ reportBusy: true });
             // Moderators can't read conversations, so a reported message travels with the report.
-            const note = r.quote ? `Message: “${r.quote.slice(0, 300)}”\n${s.reportNote || ''}`.slice(0, 500) : s.reportNote || '';
+            const note = r.quote ? `${r.kind === 'comment' ? 'Comment' : 'Message'}: “${r.quote.slice(0, 300)}”\n${s.reportNote || ''}`.slice(0, 500) : s.reportNote || '';
             try { await api.report(a.uid, { kind: r.kind, targetId: r.targetId, ownerId: r.ownerId, reason: s.reportReason, note }); this.setState({ reportFor: null }); this.toast('Thanks. We’ll take a look.'); }
             catch (e) { this.setState({ reportErr: api.errMsg(e) }); }
             finally { this.setState({ reportBusy: false }); }
@@ -2605,6 +2696,7 @@ export default class App extends Component<object, State> {
       ...(mode === 'admin' ? this.adminVals() : {}),
       ...(mode === 'messages' && this.state.acct ? this.messagesVals() : {}),
       ...this.accountVals(),
+      ...this.commentVals(),
     };
     const kids = (
       <>
@@ -2618,6 +2710,7 @@ export default class App extends Component<object, State> {
         {v.isAction && <AuthAction v={v} />}
         {v.isAdminPage && <Admin v={v} />}
         {v.isMessages && <Messages v={v} />}
+        {v.cmOn && v.cmOpen && (v.isMine || v.isOther) && !v.editing && !v.managing && <CommentsPanel v={v} />}
         {v.reportOpen && <ReportModal v={v} />}
         {v.emOpen && <EmbedModal v={v} />}
         {v.cnOpen && <CollectionModal v={v} />}

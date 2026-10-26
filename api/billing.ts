@@ -209,6 +209,11 @@ export async function POST(req: Request) {
         ...(email ? ['mailLog', 'contactLog'].map(c => db.collection(c).doc(createHash('sha256').update(email.toLowerCase()).digest('hex'))) : []),
         ...ink.docs.map(d => d.ref), ...checks.docs.map(d => d.ref),
         ...books.docs.flatMap(b => [db.collection('stats').doc(b.id), db.collection('bookCounts').doc(b.id), db.collection('mature').doc(b.id)])];
+      // Comments: everything they wrote anywhere, and every comment on their own sketchbooks. (Theirs needs the
+      // comments.uid index in firestore.indexes.json; without it the rest still goes.)
+      const mine = await db.collectionGroup('comments').where('uid', '==', uid).get().then(q => q.docs.map(d => d.ref)).catch(e => { console.error('comments by uid', e); return []; });
+      const onBooks = (await Promise.all(books.docs.map(b => b.ref.collection('comments').get()))).flatMap(q => q.docs.map(d => d.ref));
+      refs.push(...mine, ...onBooks);
       for (let i = 0; i < refs.length; i += 400) { const batch = db.batch(); refs.slice(i, i + 400).forEach(r => batch.delete(r)); await batch.commit(); }
       return json(200, { ok: true });
     }

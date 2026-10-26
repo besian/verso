@@ -63,6 +63,7 @@ function Privacy() {
           <><b>Shared sketchbooks:</b> when you share a sketchbook (with one person, or up to five with Plus), everyone in it can see its pages and the names and handles of the others in it, and can add, caption and change pages. Pages someone adds stay in the sketchbook if they leave or are removed.</>,
           <><b>Messages:</b> the messages you send and receive, so the two people in a conversation can read them. Nobody else can, including us, unless a message is reported: then its text is sent to our moderators with the report. If you delete your account, messages you sent stay in the other person’s conversation.</>,
           <><b>Activity:</b> who you follow, which sketchbooks you like and save, who you block, your notifications, the reports you file, and a daily count of new conversations you start (to prevent spam). Follows and likes are visible to others; saved sketchbooks, blocks and reports are private.</>,
+          <><b>Comments:</b> what you write on a page, with your name and when. Anyone who can see that sketchbook can read them. You can delete your own at any time, and the sketchbook’s owner and our moderators can remove them; they’re deleted with your account.</>,
           <><b>Stats:</b> how many times each sketchbook is viewed and saved, and which part of the site views came from (Explore, a profile, a shared link…). These are counts only, not who viewed it, and only the sketchbook’s owner can see them.</>,
           <><b>Fletora Plus:</b> if you subscribe, Stripe collects your payment details and billing address; we never see your full card number. We keep whether you have Plus, your plan, when it renews and your Stripe customer reference, and show you your payments, the card each used and receipts from Stripe. Whether an account has Plus is public (it shows a Plus mark). Plus may also be given free by Fletora, which we record the same way. For the free trial, we keep a one-way scrambled (hashed) copy of the email address that started it, so the same address can’t start another; it can’t be turned back into the address, and we keep it even after the account is deleted, only for this purpose.</>,
           <><b>On your device:</b> small settings such as light or dark theme, page sounds, whether you’ve chosen to see Mature work and which tips you’ve seen, kept in your browser’s storage. Google Analytics for Firebase records anonymous usage (pages viewed, device type, approximate location) only if you choose Allow when asked; you can change that any time in Account settings → Your data, and choosing No removes its cookies.</>,
@@ -236,7 +237,7 @@ const PLUS_FAQ: [string, string][] = [
   ['What happens when Plus ends?', `Nothing you’ve made is deleted. Link-only sketchbooks become private, stats and your pinned sketchbook are hidden, and the free limits apply to anything new (${BOOKS_FREE} sketchbooks, ${PAGES_FREE} pages each).`],
   ['Can I cancel?', 'Anytime, in Account settings → Plan. You keep Plus until the end of the month or year you’ve paid for, and you’re not charged again.'],
   ['Who takes the payment?', 'Stripe, as merchant of record: it takes the payment, charges any VAT that applies and sends your receipts. We never see your card number.'],
-  ['What stays free?', 'Everything else: public and private sketchbooks, pictures across two pages, drawing and writing on pages, following, likes, saves and messages.'],
+  ['What stays free?', 'Everything else: public and private sketchbooks, pictures across two pages, drawing and writing on pages, following, likes, comments, saves and messages.'],
 ];
 
 /** Fletora Plus: what it costs, what it adds, and the free trial. Open to everyone, signed in or not. */
@@ -439,6 +440,7 @@ export function Admin({ v }: { v: V }) {
           </div>
           {r.note && <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: INK, whiteSpace: 'pre-wrap' }}>{r.auto ? <><span style={{ color: MUTED }}>The check saw:</span> {r.note}</> : <>“{r.note}”</>}</p>}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', opacity: r.busy ? 0.6 : 1 }}>
+            {r.isComment && <button onClick={r.deleteComment} disabled={!!r.busy} style={smallBtn(true, false)}>Delete comment</button>}
             {r.file && <button onClick={r.viewFile} disabled={!!r.busy} style={smallBtn(false, false)}>View picture</button>}
             {r.file && <button onClick={r.deleteFile} disabled={!!r.busy} style={smallBtn(true, false)}>Delete picture</button>}
             {r.isBook && !r.gone && r.mature && <button onClick={r.clearMature} disabled={!!r.busy} style={smallBtn(false, false)}>Remove Mature label</button>}

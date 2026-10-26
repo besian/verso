@@ -77,8 +77,12 @@ service cloud.firestore {
         allow create: if signedIn() && !suspended()
           && request.resource.data.from == request.auth.uid
           && request.resource.data.read == false
-          && request.resource.data.keys().hasOnly(['type', 'from', 'fromName', 'fromHandle', 'bookId', 'bookName', 'goal', 'at', 'read'])
+          && request.resource.data.keys().hasOnly(['type', 'from', 'fromName', 'fromHandle', 'bookId', 'bookName', 'goal', 'at', 'read', 'commentId', 'text', 'page'])
           && ((request.resource.data.type in ['like', 'invite'] && nid == request.resource.data.type + '_' + request.resource.data.bookId + '_' + request.auth.uid)
+            // A comment: one notification per comment, sent with it, by its author, to the book's owner.
+            || (request.resource.data.type == 'comment' && nid == 'comment_' + request.resource.data.commentId && str(request.resource.data.text, 140)
+              && getAfter(/databases/$(database)/documents/books/$(request.resource.data.bookId)/comments/$(request.resource.data.commentId)).data.uid == request.auth.uid
+              && get(/databases/$(database)/documents/books/$(request.resource.data.bookId)).data.ownerId == uid)
             || (request.resource.data.type == 'follow' && nid == 'follow_' + request.auth.uid)
             || (request.resource.data.type == 'goal' && uid == request.auth.uid && nid == 'goal_' + request.resource.data.goal));
       }
@@ -134,7 +138,7 @@ service cloud.firestore {
         && id == request.auth.uid + '_' + request.resource.data.targetId
         && request.resource.data.by == request.auth.uid
         && request.resource.data.keys().hasOnly(['by', 'kind', 'targetId', 'ownerId', 'reason', 'note', 'at'])
-        && request.resource.data.kind in ['book', 'user', 'message']
+        && request.resource.data.kind in ['book', 'user', 'message', 'comment']
         && str(request.resource.data.reason, 60) && str(request.resource.data.note, 500);
       allow read, delete: if isAdmin();
       allow update: if false;
@@ -376,6 +380,28 @@ service cloud.firestore {
       match /likes/{likerId} {
         allow read: if true;
         allow create, delete: if signedIn() && likerId == request.auth.uid;
+      }
+
+      // Comments on a page (`page` is a short code for the page's picture). Anyone who can open the book reads them;
+      // signed-in people post as themselves, unless suspended or blocked by the book's owner. Nobody edits a
+      // comment; its author, the book's owner and moderators can delete it.
+      function bookDoc() { return get(/databases/$(database)/documents/books/$(bookId)).data; }
+      function bookOpen(b) {
+        return b.get('isPublic', true) == true || (b.get('linkOnly', false) == true && b.get('hidden', false) == false)
+          || (signedIn() && (b.ownerId == request.auth.uid || request.auth.uid in b.get('collabs', []))) || isAdmin();
+      }
+      match /comments/{cid} {
+        allow read: if bookOpen(bookDoc());
+        allow create: if signedIn() && !suspended() && bookOpen(bookDoc())
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'handle', 'page', 'text', 'at'])
+          && request.resource.data.uid == request.auth.uid
+          && str(request.resource.data.name, 80) && str(request.resource.data.handle, 40)
+          && str(request.resource.data.page, 40) && request.resource.data.page.size() > 0
+          && str(request.resource.data.text, 500) && request.resource.data.text.size() > 0
+          && request.resource.data.at is int
+          && !exists(/databases/$(database)/documents/users/$(bookDoc().ownerId)/blocked/$(request.auth.uid));
+        allow delete: if signedIn() && (resource.data.uid == request.auth.uid || bookDoc().ownerId == request.auth.uid || isAdmin());
+        allow update: if false;
       }
     }
   }

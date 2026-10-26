@@ -5,6 +5,7 @@ import ClosedBook from '../ClosedBook';
 import { hover } from '../pseudo';
 import { earClip } from '../wear';
 import { MoreMenu } from './Overlays';
+import { COMMENT_ICON } from './Comments';
 import { Verified } from './Verified';
 import type { Wear } from '../wear';
 import { INK, MARK, PAGE_EDGES, PAPER, SANS, SERIF, STONE, label } from '../theme';
@@ -212,6 +213,7 @@ const Title = memo(function Title({ v }: { v: V }) {
               ? <button onClick={v.bkLike} aria-pressed={v.bkLiked} title={v.bkLiked ? 'Unlike' : 'Like'} aria-label={`${v.bkLiked ? 'Unlike' : 'Like'}, ${v.bkLikes} likes`} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct, color: v.bkLiked ? MARK : INK }}><Icon d={HEART} fill={v.bkLiked} />{v.bkLikes}</button>
               : <span title="Likes" style={iconAct}><Icon d={HEART} />{v.bkLikes}</span>}
             {v.isOther && <button onClick={v.bkSave} aria-pressed={v.bkSaved} title={v.bkSaved ? 'Saved' : 'Save'} aria-label={v.bkSaved ? 'Saved' : 'Save'} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct, color: v.bkSaved ? MARK : INK }}><Icon d={BOOKMARK} fill={v.bkSaved} /></button>}
+            {v.cmOn && <button onClick={v.cmToggle} title="Comments" aria-label={`Comments, ${v.cmCount}`} aria-pressed={v.cmOpen} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct, color: v.cmOpen ? MARK : INK }}><Icon d={COMMENT_ICON} fill={v.cmOpen} />{v.cmCount}</button>}
             <button onClick={v.bkShare} title="Share" aria-label="Share" className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct }}><Icon d={SHARE} /></button>
             <MoreMenu open={v.bkMoreOpen} onToggle={v.bkMore} items={[
               ...(v.bkArch?.url ? [{ label: `View at the source ↗`, onClick: () => window.open(v.bkArch.url, '_blank', 'noopener') }] : []),
@@ -387,6 +389,11 @@ const Controls = memo(function Controls({ v }: { v: V }) {
       <button onClick={v.zoomOut} title="Zoom out" className={hover('transform:scale(1.08)')} style={roundDark(44, 22)}>−</button>
       {v.notOther && <button onClick={v.openManager} title="Pages" className={hover('transform:scale(1.06)')} style={{ width: 88, height: 44, borderRadius: 22, border: 'none', background: MARK, color: PAPER, font: `500 20px ${SANS}`, cursor: 'pointer' }}>✎</button>}
       <button onClick={v.zoomIn} title="Zoom in" className={hover('transform:scale(1.08)')} style={roundDark(44, 22)}>+</button>
+      {/* Comments on the page on show; most useful zoomed in, where the title (and its comments button) is hidden. */}
+      {v.cmOn && <button onClick={v.cmToggle} title="Comments" aria-label={`Comments, ${v.cmCount}`} aria-pressed={v.cmOpen} className={hover('transform:scale(1.08)')} style={{ ...roundDark(44, 14), position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', background: v.cmOpen ? MARK : INK }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={COMMENT_ICON} /></svg>
+        {v.cmCount > 0 && <span style={{ position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18, padding: '0 5px', boxSizing: 'border-box', borderRadius: 9, background: MARK, color: PAPER, font: `600 10px/18px ${SANS}`, boxShadow: `0 0 0 2px ${PAPER}` }}>{v.cmCount > 99 ? '99+' : v.cmCount}</span>}
+      </button>}
       <button onClick={v.toggleSound} title={v.sndOn ? 'Mute page sounds' : 'Turn on page sounds'} aria-pressed={v.sndOn} className={hover(`color:${MARK}`)} style={{ position: 'absolute', left: '100%', top: '50%', transform: 'translateY(-50%)', width: 36, height: 36, marginLeft: 4, padding: 0, border: 'none', borderRadius: '50%', background: 'none', color: v.sndOn ? INK : STONE, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" />
@@ -428,7 +435,7 @@ export default function Stage({ v, children }: { v: V; children: ReactNode }) {
     });
   });
   return (
-    <div ref={root} onDragOver={v.onDragOver} onDrop={v.onDrop} onMouseMove={v.wake} onPointerDown={v.wake} onClick={v.closeMore} style={{ ['--tabbar' as string]: v.tabBar ? 'calc(57px + env(safe-area-inset-bottom))' : '0px', position: 'fixed', inset: 0, background: PAPER, color: INK, fontFamily: SANS, display: 'flex', flexDirection: 'column', alignItems: 'center', userSelect: 'none' }}>
+    <div ref={root} onDragOver={v.onDragOver} onDrop={v.onDrop} onMouseMove={v.wake} onPointerDown={v.wake} onClick={v.closeMore} style={{ ['--tabbar' as string]: v.tabBar ? 'calc(57px + env(safe-area-inset-bottom))' : '0px', position: 'fixed', inset: 0, boxSizing: 'border-box', paddingRight: v.cmSide ? 380 : 0, background: PAPER, color: INK, fontFamily: SANS, display: 'flex', flexDirection: 'column', alignItems: 'center', userSelect: 'none' }}>
       {/* Focus backdrop, only while zoomed: a tiny pre-blurred copy of the page stretched across the screen.
           (A CSS blur on a screen-sized layer had to be recomputed every frame and made zooming stutter.) */}
       {+v.fz > 0.001 && (

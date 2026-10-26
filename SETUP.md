@@ -173,6 +173,13 @@ sketchbooks private. Paid Plus is left to the Stripe webhook.
    job; without it the job refuses to run.
 2. Redeploy. The job appears under Vercel → your project → Settings → Cron Jobs.
 
+## Comments and the Following feed
+
+- Comments live in `books/{bookId}/comments/{id}`: `uid`, `name`, `handle`, `page` (a short code for the page's picture, so a comment stays with its page when pages move), `text` (up to 500 characters), `at`. The rules in `firestore.rules` let anyone who can open the book read them; signed-in people post as themselves unless suspended or blocked by the owner; the author, the owner and moderators delete. Publish the rules after pulling this.
+- A comment sends the owner a `comment_<id>` notification in the same write. Reports of comments use `kind: 'comment'` and `targetId: '<bookId>:<commentId>'`; moderators can delete the comment from the reports page.
+- Deleting an account removes the person's comments everywhere (and all comments on their sketchbooks). Finding their comments needs the `comments.uid` collection-group index in `firestore.indexes.json`: run `firebase deploy --only firestore:indexes`, or in the console add a single-field exemption for `comments` → `uid` with *Collection group* ascending.
+- Explore's Following tab lists the followed artists' recently updated sketchbooks (no extra data or indexes).
+
 ## Messages
 
 Direct messages live in `chats/{a}_{b}` (and `chats/…/messages`), with a daily limit on new conversations in

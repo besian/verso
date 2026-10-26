@@ -3,5 +3,7 @@
     { "collectionGroup": "books", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "isPublic", "order": "ASCENDING" }, { "fieldPath": "updatedAt", "order": "DESCENDING" }] },
     { "collectionGroup": "books", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "isPublic", "order": "ASCENDING" }, { "fieldPath": "pageCount", "order": "DESCENDING" }] }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    { "collectionGroup": "comments", "fieldPath": "uid", "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION" }, { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }] }
+  ]
 }

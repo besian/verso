@@ -639,7 +639,7 @@ export function watchSize(path: string[], cb: (n: number) => void): () => void {
 
 // ---------- likes, counts, notifications ----------
 
-export interface Notif { id: string; type: 'like' | 'follow' | 'goal' | 'invite'; from: string; fromName: string; fromHandle: string; bookId?: string; bookName?: string; goal?: string; at: number; read: boolean }
+export interface Notif { id: string; type: 'like' | 'follow' | 'goal' | 'invite' | 'comment'; from: string; fromName: string; fromHandle: string; bookId?: string; bookName?: string; goal?: string; at: number; read: boolean; commentId?: string; text?: string; page?: string }
 const note = (me: Account, type: 'like' | 'follow', book?: { id: string; name: string }) => ({
   type, from: me.uid, fromName: me.name, fromHandle: me.handle, ...(book ? { bookId: book.id, bookName: book.name } : {}), at: Date.now(), read: false,
 });
@@ -658,6 +658,33 @@ export async function setLike(me: Account, book: { id: string; ownerId: string; 
   await batch.commit();
   if (on && book.ownerId !== me.uid) notifyOnce(book.ownerId, `like_${book.id}_${me.uid}`, note(me, 'like', book));
 }
+
+// ---------- comments on pages ----------
+export interface Comment { id: string; uid: string; name: string; handle: string; page: string; text: string; at: number }
+export const COMMENT_MAX = 500;
+/** A short, stable code for a page's picture, so a comment stays with its page when pages are moved around. */
+export function pageKey(u: string) {
+  let a = 5381, b = 52711;
+  for (let i = 0; i < u.length; i++) { const c = u.charCodeAt(i); a = (a * 33 ^ c) >>> 0; b = (b * 31 + c) >>> 0; }
+  return a.toString(36) + b.toString(36);
+}
+/** A sketchbook's comments, oldest first, kept up to date. */
+export function watchComments(bookId: string, cb: (c: Comment[]) => void): () => void {
+  if (!db) return () => {};
+  return onSnapshot(query(collection(db, 'books', bookId, 'comments'), orderBy('at'), limitToLast(500)),
+    s => cb(s.docs.map(x => ({ ...(x.data() as Omit<Comment, 'id'>), id: x.id }))), () => cb([]));
+}
+/** Posts a comment on a page, and tells the sketchbook's owner (in the same write, as the rules require). */
+export async function addComment(me: Account, book: { id: string; ownerId: string; name: string }, page: string, pageNo: number, text: string) {
+  const { db: d } = need(), batch = writeBatch(d), ref = doc(collection(d, 'books', book.id, 'comments')), at = Date.now();
+  batch.set(ref, { uid: me.uid, name: me.name.slice(0, 80), handle: me.handle, page, text: text.slice(0, COMMENT_MAX), at });
+  if (book.ownerId && book.ownerId !== me.uid) batch.set(doc(d, 'users', book.ownerId, 'notifications', 'comment_' + ref.id), {
+    type: 'comment', from: me.uid, fromName: me.name, fromHandle: me.handle, bookId: book.id, bookName: book.name, commentId: ref.id,
+    text: text.length > 140 ? text.slice(0, 139) + '…' : text, page: String(pageNo), at, read: false,
+  });
+  await batch.commit();
+}
+export async function deleteComment(bookId: string, id: string) { await deleteDoc(doc(need().db, 'books', bookId, 'comments', id)); }
 
 /** Live document listener; returns an unsubscribe function. */
 export function watch(path: string[], cb: (data: DocumentData | null) => void): () => void {
@@ -721,7 +748,7 @@ export async function setBlocked(uid: string, target: string, on: boolean, wasFo
 export const CHILD_REASON = 'A child may be at risk';
 export const REPORT_REASONS = ['Spam or scam', 'Not their own work', 'Harassment or hate', 'Sexual content', CHILD_REASON, 'Something else'] as const;
 /** Files a report for moderators (one per person per target; reporting again is quietly ignored). */
-export async function report(by: string, r: { kind: 'book' | 'user' | 'message'; targetId: string; ownerId: string; reason: string; note: string }) {
+export async function report(by: string, r: { kind: 'book' | 'user' | 'message' | 'comment'; targetId: string; ownerId: string; reason: string; note: string }) {
   await setDoc(doc(need().db, 'reports', `${by}_${r.targetId}`), { by, ...r, note: r.note.slice(0, 500), at: Date.now() })
     .catch(e => { if ((e as { code?: string }).code !== 'permission-denied') throw e; });
   if (r.reason === CHILD_REASON) {
@@ -804,7 +831,7 @@ export async function setPin(uid: string, bookId: string) { await updateDoc(doc(
 
 /** `kind: 'image'` and `by: 'check'` are the upload check's: a picture it held back (stored at `file` until a
  *  moderator deletes it), for a sketchbook (targetId) or a profile picture (targetId is the owner). */
-export interface Report { id: string; by: string; kind: 'book' | 'user' | 'message' | 'image'; targetId: string; ownerId: string; reason: string; note: string; at: number; file?: string }
+export interface Report { id: string; by: string; kind: 'book' | 'user' | 'message' | 'image' | 'comment'; targetId: string; ownerId: string; reason: string; note: string; at: number; file?: string }
 
 export async function isAdmin(uid: string): Promise<boolean> {
   try { return (await getDoc(doc(need().db, 'admins', uid))).exists(); } catch { return false; }

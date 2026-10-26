@@ -90,16 +90,74 @@ const stackEdge = (side: 'top' | 'bottom' | 'left' | 'right', bg: string, filter
     : { position: 'absolute', top: 0, bottom: 0, [side === 'right' ? 'left' : 'right']: '100%', width: 14, transformOrigin: side === 'right' ? 'left' : 'right', transform: `rotateY(${side === 'right' ? 90 : -90}deg)`, background: bg, filter };
 };
 
+/** Signed in: Explore shows everyone's sketchbooks, or the latest pages from artists you follow. */
+function ExploreTabs({ v }: { v: V }) {
+  if (!v.exTabs) return null;
+  const tab = (on: boolean, l: string, go: () => void) => (
+    <button role="tab" aria-selected={on} onClick={go} className={hover(`color:${MARK}`)} style={{ padding: '4px 0', border: 'none', borderBottom: `1.5px solid ${on ? INK : 'transparent'}`, background: 'none', cursor: 'pointer', ...label(on ? INK : STONE, 11) }}>{l}</button>
+  );
+  return <div role="tablist" aria-label="Explore" style={{ display: 'flex', gap: 24 }}>{tab(!v.exFollowing, 'Everyone', v.exTabAll)}{tab(v.exFollowing, 'Following', v.exTabFollowing)}</div>;
+}
+
+/** The Following tab: one entry per recently updated sketchbook, with its latest pages to tap straight into. */
+function FollowingFeed({ v }: { v: V }) {
+  const mob = !v.notMob;
+  return (
+    <div style={screen('auto')}>
+      <div style={{ minHeight: '100%', boxSizing: 'border-box', padding: `${v.exPadT}px ${v.exPadX}px 28px`, display: 'flex', flexDirection: 'column', gap: v.exGap }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', paddingBottom: 18, borderBottom: `1px solid ${INK}` }}>
+          <h1 style={{ margin: 0, ...serif(v.exH1, .95, '-.02em') }}><em>Following</em></h1>
+          <ExploreTabs v={v} />
+        </div>
+        {v.exFeedLoading ? <div style={{ padding: '40px 0', textAlign: 'center', color: MUTED, fontSize: 14 }}>Opening sketchbooks…</div>
+          : !v.exFeed.length ? (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, textAlign: 'center', padding: '40px 0', color: MUTED, fontSize: 14 }}>
+              <span style={serif(34)}>{v.exFeedNoFollows ? <>Follow some <em style={{ color: MARK }}>artists.</em></> : <>Nothing new <em style={{ color: MARK }}>yet.</em></>}</span>
+              <span style={{ maxWidth: 380, lineHeight: 1.5 }}>{v.exFeedNoFollows ? 'Follow artists from their profiles, and their newest pages show up here.' : 'When the artists you follow add pages, they show up here.'}</span>
+              <button onClick={v.exTabAll} className={hoverLine} style={underlineBtn(14)}>Explore everyone’s sketchbooks ↗</button>
+            </div>
+          ) : v.exFeed.map((f: V) => (
+            <article key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: v.exGap, borderBottom: '1px solid rgba(var(--ink-rgb),.15)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                <button onClick={f.openArtist} aria-label={`${f.artist}’s profile`} style={{ width: 38, height: 38, flexShrink: 0, borderRadius: '50%', border: 'none', background: INK, color: PAPER, font: `600 12px ${SANS}`, cursor: 'pointer' }}>{f.init}</button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+                  <span style={{ fontSize: 14, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <button onClick={f.openArtist} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `600 14px ${SANS}`, cursor: 'pointer' }}>{f.artist}</button>
+                    <span style={{ color: MUTED }}> · {f.when}</span>
+                  </span>
+                  <button onClick={f.open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', textAlign: 'left', color: INK, cursor: 'pointer', ...serif(mob ? 22 : 26, 1.1, 'normal'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{f.name}</button>
+                </div>
+                {f.mature && <span style={label(MUTED, 10)}>Mature</span>}
+                <span style={{ fontSize: 13, color: MUTED, flexShrink: 0 }}>{!mob && f.meta}</span>
+              </div>
+              <div onWheel={wheelSideways} style={{ display: 'flex', gap: mob ? 8 : 12, overflowX: 'auto', margin: `0 -${v.exPadX}px`, padding: `2px ${v.exPadX}px 6px`, scrollbarWidth: 'none' } as CSSProperties}>
+                {f.pages.map((pg: V) => (
+                  <button key={pg.key} onClick={pg.open} title={`Page ${pg.num}`} aria-label={`Open page ${pg.num} of ${f.name}`} className={hover('transform:translateY(-4px)')}
+                    style={{ position: 'relative', flexShrink: 0, width: pg.w, height: pg.h, padding: 0, border: 'none', borderRadius: '2px 6px 6px 2px', background: pg.bg, boxShadow: '0 8px 20px rgba(34,35,32,.14), inset 0 0 0 1px rgba(34,35,32,.08)', cursor: 'pointer', transition: 'transform .3s cubic-bezier(.2,.8,.2,1)' }}>
+                    <span style={{ position: 'absolute', right: 6, bottom: 5, padding: '1px 5px', borderRadius: 3, background: 'rgba(246,242,233,.85)', color: '#3a3830', font: `500 10px ${SANS}` }}>{pg.num}</span>
+                  </button>
+                ))}
+              </div>
+            </article>
+          ))}
+        <SiteFooter v={v} />
+      </div>
+    </div>
+  );
+}
+
 export function Explore({ v }: { v: V }) {
+  if (v.exFollowing) return <FollowingFeed v={v} />;
   return (
     <div onScroll={v.onExScroll} style={screen(v.exOvY)}>
       <div style={{ maxWidth: 'none', height: v.exInnerH, minHeight: '100%', boxSizing: 'border-box', margin: '0 auto', padding: `${v.exPadT}px ${v.exPadX}px 28px`, display: 'flex', flexDirection: 'column', gap: v.exGap }}>
         {v.exGrid && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', paddingBottom: 18, borderBottom: `1px solid ${INK}` }}>
             <h1 style={{ margin: 0, ...serif(v.exH1, .95, '-.02em') }}><em>Explore</em></h1>
-            <span style={label()}>{v.exCountLbl}</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 24, flexWrap: 'wrap' }}><ExploreTabs v={v} /><span style={label()}>{v.exCountLbl}</span></div>
           </div>
         )}
+        {!v.exGrid && <ExploreTabs v={v} />}
         {/* One row: search, then surprise, sort, medium and view. Phones put sort and medium on a short second row. */}
         {(() => {
           const sortItems = [{ key: 'trend', label: 'Featured', on: v.sTrBg !== 'transparent', pick: v.sortTrend }, { key: 'new', label: 'Recent', on: v.sNewBg !== 'transparent', pick: v.sortNew }];
