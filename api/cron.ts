@@ -1,4 +1,4 @@
-// Once a day (vercel.json → crons): reminds people their free trial of Plus ends soon, and ends Plus that has run
+// Once a day (vercel.json → crons): sends the weekly email on Mondays (api/_lib/weekly.ts), reminds people their free trial of Plus ends soon, and ends Plus that has run
 // out without a subscription behind it (trials, gifts, Plus switched on by hand). Paid Plus is ended by the
 // Stripe webhook instead. When Plus ends, link-only sketchbooks become private.
 // Needs CRON_SECRET (Vercel sends it to cron jobs), FIREBASE_SERVICE_ACCOUNT and RESEND_API_KEY in Vercel.
@@ -6,6 +6,7 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { emailPage, esc, row } from './_lib/emailLayout.js';
+import { sendWeekly, unsubOk } from './_lib/weekly.js';
 
 const ORIGIN = process.env.APP_ORIGIN || 'https://fletora.studio';
 const FROM = process.env.EMAIL_FROM || 'Fletora <noreply@fletora.studio>';
@@ -25,12 +26,33 @@ function reminder(name: string, ends: number) {
   return { subject, html, text };
 }
 
+const admin = () => { if (!getApps().length) initializeApp({ credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT!)) }); return getFirestore(); };
+const page = (heading: string, body: string, form = '') => new Response(emailPage({ title: 'Weekly email', origin: ORIGIN, heading, rows: [row.text(body), form].filter(Boolean) }), { headers: { 'content-type': 'text/html; charset=utf-8' } });
+
+/** Unsubscribing from the weekly email, from its link: the link shows a button (so mail scanners opening links
+ *  don't unsubscribe anyone), and the button, or the mail app's one-click unsubscribe, POSTs here. */
+async function unsubscribe(req: Request, url: URL) {
+  const uid = url.searchParams.get('unsub') || '', sig = url.searchParams.get('t') || '';
+  if (!process.env.CRON_SECRET || !process.env.FIREBASE_SERVICE_ACCOUNT) return json(503, { error: 'not-configured' });
+  if (!unsubOk(uid, sig)) return page('That link <em>doesn’t work</em>', `You can turn the weekly email off in <a href="${ORIGIN}/settings" style="color:inherit">Settings</a> instead.`);
+  if (req.method !== 'POST') return page('Stop the <em>weekly email</em>?', 'You won’t get the Monday email any more. You can turn it back on in Settings whenever you like.',
+    `<tr><td style="padding:4px 0 10px"><form method="post" action="${esc(url.pathname + url.search)}"><button type="submit" style="background:#222320;color:#F4F1E9;border:none;padding:15px 28px;font:500 15px/1 Helvetica,Arial,sans-serif;cursor:pointer">Unsubscribe</button></form></td></tr>`);
+  await admin().collection('emailPrefs').doc(uid).set({ weekly: false, at: Date.now() }, { merge: true });
+  return page('You’re <em>unsubscribed</em>', `No more weekly emails. You can turn it back on in <a href="${ORIGIN}/settings" style="color:inherit">Settings</a>.`);
+}
+export async function POST(req: Request) {
+  const url = new URL(req.url);
+  return url.searchParams.has('unsub') ? unsubscribe(req, url) : json(405, { error: 'method' });
+}
+
 export async function GET(req: Request) {
+  const url = new URL(req.url);
+  if (url.searchParams.has('unsub')) return unsubscribe(req, url);
   if (!process.env.CRON_SECRET || !process.env.FIREBASE_SERVICE_ACCOUNT) return json(503, { error: 'not-configured' });
   if (req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) return json(401, { error: 'not-allowed' });
-  if (!getApps().length) initializeApp({ credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) });
-  const db = getFirestore(), auth = getAuth(), now = Date.now();
-  let reminded = 0, ended = 0;
+  const db = admin(), auth = getAuth(), now = Date.now();
+  let reminded = 0, ended = 0, weekly = 0;
+  try { weekly = await sendWeekly(db, auth, { now, origin: ORIGIN, from: FROM, force: url.searchParams.get('weekly') === 'now' }); } catch (e) { console.error('weekly', e); }
 
   // Trials ending within the next two days that haven't been reminded yet.
   if (process.env.RESEND_API_KEY) {
@@ -60,5 +82,5 @@ export async function GET(req: Request) {
       ended++;
     } catch (e) { console.error('ending plus', d.id, e); }
   }
-  return json(200, { ok: true, reminded, ended });
+  return json(200, { ok: true, weekly, reminded, ended });
 }

@@ -237,6 +237,14 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false;
     }
+    // Email settings (the weekly email is opt-in). The server also writes lastWeekly and turns it off on unsubscribe.
+    match /emailPrefs/{uid} {
+      allow read: if isUser(uid);
+      allow create, update: if isUser(uid) && request.resource.data.keys().hasOnly(['weekly', 'at', 'lastWeekly'])
+        && request.resource.data.weekly is bool && request.resource.data.at is int
+        && request.resource.data.get('lastWeekly', 0) == (resource == null ? 0 : resource.data.get('lastWeekly', 0));
+      allow delete: if isUser(uid);
+    }
     match /billing/{uid} {
       allow read: if isUser(uid);
       allow write: if false;

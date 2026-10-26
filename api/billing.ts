@@ -205,7 +205,7 @@ export async function POST(req: Request) {
         await stripe('DELETE', `subscriptions/${bill.sub}`).catch(e => { if ((e as { status?: number }).status !== 404) throw e; });
       const byUid = (c: string) => db.collection(c).where(FieldPath.documentId(), '>=', uid + '_').where(FieldPath.documentId(), '<', uid + '_\uf8ff').get();
       const [books, ink, checks] = await Promise.all([db.collection('books').where('ownerId', '==', uid).get(), byUid('inkLog'), byUid('checkLog')]);
-      const refs = [billing, db.collection('plus').doc(uid), db.collection('chatLimits').doc(uid), db.collection('userCounts').doc(uid),
+      const refs = [billing, db.collection('plus').doc(uid), db.collection('chatLimits').doc(uid), db.collection('userCounts').doc(uid), db.collection('emailPrefs').doc(uid),
         ...(email ? ['mailLog', 'contactLog'].map(c => db.collection(c).doc(createHash('sha256').update(email.toLowerCase()).digest('hex'))) : []),
         ...ink.docs.map(d => d.ref), ...checks.docs.map(d => d.ref),
         ...books.docs.flatMap(b => [db.collection('stats').doc(b.id), db.collection('bookCounts').doc(b.id), db.collection('mature').doc(b.id)])];

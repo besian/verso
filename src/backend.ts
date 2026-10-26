@@ -725,6 +725,9 @@ export async function likeComment(me: Account, book: { id: string; name: string 
     text: c.text.length > 140 ? c.text.slice(0, 139) + '…' : c.text, page: String(pageNo), at: Date.now(), read: false,
   });
 }
+/** Email settings: the weekly email is opt-in. */
+export async function weeklyEmail(uid: string) { return (await getDoc(doc(need().db, 'emailPrefs', uid))).data()?.weekly === true; }
+export async function setWeeklyEmail(uid: string, on: boolean) { await setDoc(doc(need().db, 'emailPrefs', uid), { weekly: on, at: Date.now() }, { merge: true }); }
 export async function deleteComment(bookId: string, id: string) { await deleteDoc(doc(need().db, 'books', bookId, 'comments', id)); }
 
 /** Live document listener; returns an unsubscribe function. */

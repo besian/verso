@@ -85,6 +85,8 @@ interface State {
   plus?: boolean; bill?: Billing | null; myGift?: api.PlusInfo | null;
   /** Analytics consent ('yes' / 'no', or null when not asked yet; only asked when analytics is set up). */
   analytics?: 'yes' | 'no' | null;
+  /** The weekly email (Settings; opt-in, kept in emailPrefs). */
+  weekly?: boolean;
   /** Shows Mature sketchbooks (Settings; signed in and 18 or over). */
   showMature?: boolean;
   /** Explore's Content filter set to Mature only (with Mature work shown). */
@@ -747,7 +749,7 @@ export default class App extends Component<object, State> {
   chatUnread(c: Chat) { const me = this.state.acct?.uid || ''; return c.lastFrom !== me && c.lastAt > (c.read[me] || 0); }
 
   openBilling = () => { cancelAnimationFrame(this.raf); this.setState({ mode: 'billing', other: null, focus: false, fz: 0, managing: false, draft: null, acErr: '', acInfo: '' }); };
-  openSettings = () => { cancelAnimationFrame(this.raf); this.setState({ mode: 'settings', other: null, focus: false, fz: 0, managing: false, draft: null, acErr: '', acInfo: '' }); };
+  openSettings = () => { cancelAnimationFrame(this.raf); const u = this.state.acct?.uid; if (u) api.weeklyEmail(u).then(on => this.setState({ weekly: on })).catch(() => {}); this.setState({ mode: 'settings', other: null, focus: false, fz: 0, managing: false, draft: null, acErr: '', acInfo: '' }); };
   closeAuth = () => {
     // Coming from an emailed link (e.g. after resetting a password), carry on to the sketchbooks rather than back to the link page.
     if (this.state.authFrom === 'action') { this.setState({ suErr: '', suInfo: '', su: null }); return this.goMode(this.state.acct ? 'mine' : 'home'); }
@@ -1918,6 +1920,9 @@ export default class App extends Component<object, State> {
       // Analytics consent: a small bar until they choose, and a setting under Your data.
       anOffered: api.analyticsOffered, anOn: s.analytics === 'yes', anAsk: api.analyticsOffered && !s.analytics && !s.embed,
       anChoose: (yes: boolean) => { store.saveAnalytics(yes ? 'yes' : 'no'); api.analyticsConsent(yes); this.setState({ analytics: yes ? 'yes' : 'no' }); },
+      wkOn: !!s.weekly,
+      wkToggle: () => { const a = s.acct; if (!a) return; const on = !s.weekly; this.setState({ weekly: on });
+        api.setWeeklyEmail(a.uid, on).then(() => this.toast(on ? 'You’ll get the weekly email on Mondays.' : 'No more weekly emails.')).catch(() => { this.setState({ weekly: !on }); this.toast('Couldn’t save that. Try again.'); }); },
       mtOn: !!s.showMature,
       mtToggle: () => s.showMature ? this.setMature(false)
         : this.ask({ title: 'Show Mature work?', text: 'Mature sketchbooks have drawings with nudity. Turn this on only if you’re 18 or over.', yes: 'I’m 18 or over', run: () => this.setMature(true) }),
