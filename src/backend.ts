@@ -335,7 +335,17 @@ let indexMissing = false;
 /** One page of public books: most pages first ('trending') or most recently updated ('new').
  *  `next` is null once there are no more. Needs the composite indexes in firestore.indexes.json;
  *  until they exist it falls back to one unpaged batch sorted here. */
-export async function communityPage(sort: 'trending' | 'new', after: Cursor): Promise<{ books: BookDoc[]; next: Cursor }> {
+export async function communityPage(sort: 'trending' | 'new', after: Cursor, matureOnly = false): Promise<{ books: BookDoc[]; next: Cursor }> {
+  if (!matureOnly) return onePage(sort, after);
+  // Mature only: picked from the usual pages, reading on until there's a screenful (or nothing more).
+  const books: BookDoc[] = []; let next = after;
+  for (let k = 0; k < 8; k++) {
+    const r = await onePage(sort, next); books.push(...r.books.filter(b => b.mature)); next = r.next;
+    if (!next || books.length >= PAGE_SIZE / 2) break;
+  }
+  return { books, next };
+}
+async function onePage(sort: 'trending' | 'new', after: Cursor): Promise<{ books: BookDoc[]; next: Cursor }> {
   if (!db) return { books: [], next: null };
   const c = collection(db, 'books');
   if (!indexMissing) {

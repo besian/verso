@@ -81,6 +81,8 @@ interface State {
   analytics?: 'yes' | 'no' | null;
   /** Shows Mature sketchbooks (Settings; signed in and 18 or over). */
   showMature?: boolean;
+  /** Explore's Content filter set to Mature only (with Mature work shown). */
+  matureOnly?: boolean;
   /** Making a PDF of the open sketchbook: how far along ('3/40'). */
   pdfBusy?: string;
   /** A question asked in Fletora's own dialog before something that can't easily be undone. */
@@ -316,7 +318,7 @@ export default class App extends Component<object, State> {
     const gen = more ? this.exGen : ++this.exGen;
     if (!more) this.exCursor = null;
     this.setState({ exBusy: true });
-    api.communityPage(sort, more ? this.exCursor : null).then(({ books, next }) => {
+    api.communityPage(sort, more ? this.exCursor : null, !!(s.showMature && s.matureOnly)).then(({ books, next }) => {
       if (gen !== this.exGen) return;
       this.exCursor = next;
       this.setState(st => {
@@ -574,7 +576,7 @@ export default class App extends Component<object, State> {
         text: `Everything in Fletora Plus until ${fmtLong(r.until)}: unlimited sketchbooks, 300 pages each, PDFs, stats, link-only sketchbooks and more. No card needed. Afterwards you’re back on the free plan, and nothing you’ve made is deleted.` });
     } catch (e) { console.warn('trial', e); }
   }
-  setMature(on: boolean, then?: () => void) { store.saveMature(on); api.setShowMature(on); this.setState({ showMature: on }, () => { this.loadCommunity(); then?.(); }); }
+  setMature(on: boolean, then?: () => void) { store.saveMature(on); api.setShowMature(on); this.setState({ showMature: on, ...(on ? {} : { matureOnly: false }) }, () => { this.loadCommunity(); then?.(); }); }
   pendingCheckout: string | null = null;
   confirmPlus(session: string | null) {
     if (!session || !session.startsWith('cs_')) return;
@@ -1352,10 +1354,20 @@ export default class App extends Component<object, State> {
 
   // ---------- explore ----------
   /** Explore's list: the loaded pages (already in order from the server) or the medium/tag results, then the search. */
+  /** Explore's Content filter. Showing Mature work needs a signed-in adult, as in Account settings. */
+  setContent(k: 'hide' | 'all' | 'only') {
+    const s = this.state, only = k === 'only';
+    if (k === 'hide') return s.showMature ? this.setMature(false) : this.setState({ matureOnly: false });
+    if (s.showMature) return this.setState({ matureOnly: only }, () => this.loadCommunity());
+    if (!s.acct) return this.ask({ title: 'Mature sketchbooks', text: 'These have drawings with nudity. Sign in to choose whether to see them.', yes: 'Sign in', run: () => this.openAuth('signin') });
+    this.ask({ title: 'Mature sketchbooks', text: 'These have drawings with nudity. Only show them if you’re 18 or over. You can change this any time in Account settings.', yes: 'I’m 18 or over, show them',
+      run: () => this.setState({ matureOnly: only }, () => this.setMature(true)) });
+  }
   exSorted() {
     const s = this.state, q = (s.exQ || '').trim().toLowerCase().replace(/^#/, '');
     const src = s.exLabel ? this.community(s.exLabelBooks || []) : this.community();
-    const l = src.filter(b => !q || `${b.name} ${b.artist} @${b.handle || ''} ${(b.mediums || []).join(' ')} ${(b.tags || []).join(' ')}`.toLowerCase().includes(q));
+    const only = s.showMature && s.matureOnly;
+    const l = src.filter(b => (!only || b.mature) && (!q || `${b.name} ${b.artist} @${b.handle || ''} ${(b.mediums || []).join(' ')} ${(b.tags || []).join(' ')}`.toLowerCase().includes(q)));
     if (s.exLabel) return (s.exSort || 'trending') === 'trending' ? l.sort((a, b) => b.pages - a.pages) : l;
     return l;
   }
@@ -1886,6 +1898,11 @@ export default class App extends Component<object, State> {
     const [vGridBg, vGridFg] = on(view === 'grid'), [vStackBg, vStackFg] = on(view === 'stack'), [sTrBg, sTrFg] = on(sort === 'trending'), [sNewBg, sNewFg] = on(sort === 'new');
     return {
       exH1: mob ? 36 : 72, exCountLbl: n + (s.exMore && !s.exLabel ? '+' : '') + (n === 1 ? ' sketchbook' : ' sketchbooks') + ' · ' + new Date().toLocaleDateString('en', { month: 'short', year: 'numeric' }),
+      // Content: Mature work hidden (the default), shown alongside the rest, or on its own. Showing it asks for 18+ first.
+      exContent: ([['hide', 'Hide Mature'], ['all', 'Show all'], ['only', 'Mature only']] as const).map(([k, l]) => ({
+        key: k, label: l, on: k === 'hide' ? !s.showMature : !!s.showMature && !!s.matureOnly === (k === 'only'),
+        pick: () => this.setContent(k),
+      })),
       exMediums: [{ key: '', label: 'All mediums', on: !s.exLabel?.startsWith('m:'), pick: () => this.setLabel('') },
         ...MEDIUMS.map(m => ({ key: m, label: m, on: s.exLabel === 'm:' + mediumKey(m), pick: () => this.setLabel(s.exLabel === 'm:' + mediumKey(m) ? '' : 'm:' + mediumKey(m)) }))],
       exTag: s.exLabel?.startsWith('t:') ? '#' + s.exLabel.slice(2) : '', clearLabel: () => this.setLabel(''),
@@ -1918,13 +1935,13 @@ export default class App extends Component<object, State> {
       exGrid: view === 'grid' && n > 0, exStack: view === 'stack' && n > 0, vGridBg, vGridFg, vStackBg, vStackFg, sTrBg, sTrFg, sNewBg, sNewFg,
       viewGrid: () => setView('grid'), viewStack: () => setView('stack'), sortTrend: () => setSort('trending'), sortNew: () => setSort('new'),
       exploreList: list.map(b => ({
-        key: b.id, name: b.name, artist: b.artist, verified: this.isTeam(b.ownerId), color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, no: 'Sketchbook ' + String(b.idx + 1).padStart(3, '0'),
+        key: b.id, name: b.name, artist: b.artist, verified: this.isTeam(b.ownerId), mature: !!b.mature, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, no: 'Sketchbook ' + String(b.idx + 1).padStart(3, '0'),
         count: `${b.pages} pages · ${(b.mediums || []).length ? (b.mediums || []).join(', ') : this.shapeOf(b).label}`,
         ar: String(this.shapeOf(b).a), wp: String(GRID_WIDTH[b.shape] || 78),
         open: () => this.openOtherBook(b), openArtist: (e: MouseEvent) => { e.stopPropagation(); this.openProfile(this.whoOf(b)); },
       })),
       stackList,
-      stRank: 'Sketchbook ' + String((tb?.idx ?? 0) + 1).padStart(3, '0'), stShape: this.shapeOf(tb).label || '', stName: tb?.name, stArtist: tb?.artist,
+      stMature: !!tb?.mature, stRank: 'Sketchbook ' + String((tb?.idx ?? 0) + 1).padStart(3, '0'), stShape: this.shapeOf(tb).label || '', stName: tb?.name, stArtist: tb?.artist,
       stPages: `Pages 01—${String(tb?.pages).padStart(2, '0')}`, stPos: `${top + 1} of ${n}`,
       stOpen: () => tb && this.openOtherBook(tb), stArtistOpen: (e: MouseEvent) => { e.stopPropagation(); if (tb) this.openProfile(this.whoOf(tb)); },
       stUp: () => this.stackStep(-1), stDown: () => this.stackStep(1), stUpOp: top > 0 ? 1 : 0.35, stDownOp: top < n - 1 ? 1 : 0.35,

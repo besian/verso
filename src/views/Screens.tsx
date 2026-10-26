@@ -106,6 +106,7 @@ export function Explore({ v }: { v: V }) {
           const med = v.exMediums.find((m: V) => m.on && m.key), medLbl = med ? med.label : 'Medium';
           const sort = <Pick label={sortItems.find(i => i.on)?.label || 'Featured'} title="Sort" items={sortItems} touch={v.isTouch} />;
           const medium = <Pick label={medLbl} title="Filter by medium" items={v.exMediums} touch={v.isTouch} active={!!med} />;
+          const cont = v.exContent.find((c: V) => c.on), content = <Pick label={cont?.key === 'all' ? 'All content' : cont?.key === 'only' ? 'Mature only' : 'Content'} title="Mature work" items={v.exContent} touch={v.isTouch} active={cont?.key !== 'hide'} />;
           const surprise = <button onClick={v.surprise} title="Surprise me: open a random sketchbook" aria-label="Surprise me" className={hover(`border-color:${INK};color:${MARK}`)} style={{ ...toolBtn(false), width: 40, padding: 0, justifyContent: 'center', fontSize: 16 }}>✦</button>;
           const tag = v.exTag && <button onClick={v.clearLabel} title="Clear tag" style={{ ...toolBtn(true), background: MARK, borderColor: MARK, color: PAPER }}>{v.exTag} ×</button>;
           const view = (
@@ -122,12 +123,12 @@ export function Explore({ v }: { v: V }) {
           );
           return v.notMob ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              {search}{tag}<div style={{ flex: 1, minWidth: 0 }} />{surprise}{sort}{medium}{view}
+              {search}{tag}<div style={{ flex: 1, minWidth: 0 }} />{surprise}{sort}{medium}{content}{view}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>{search}{surprise}{view}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>{sort}{medium}{tag}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>{sort}{medium}{content}{tag}</div>
             </div>
           );
         })()}
@@ -195,6 +196,7 @@ export function Explore({ v }: { v: V }) {
                 <div key={xb.key} onClick={xb.open} style={{ display: 'flex', flexDirection: 'column', gap: 20, cursor: 'pointer', minWidth: 0 }}>
                   <div className={hover('transform:translateY(-8px)')} style={{ position: 'relative', aspectRatio: xb.ar, width: `calc(${xb.wp}% - 7px)`, marginRight: 7, transition: 'transform .35s cubic-bezier(.2,.8,.2,1)' }}>
                     <ClosedBook bg={xb.bg} board={xb.color} label={xb.showLabel ? xb.name : null} />
+                    {xb.mature && <span style={matureBadge}>Mature</span>}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
                     {v.notMob && <span style={label(STONE, 10)}>{xb.no}</span>}
@@ -234,7 +236,7 @@ export function Explore({ v }: { v: V }) {
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: v.stInfoGap, minWidth: 220, maxWidth: 280, alignItems: v.stAlign, textAlign: v.stTA }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: MARK, letterSpacing: '.04em' }}>{v.stRank} · {v.stShape}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: MARK, letterSpacing: '.04em' }}>{v.stRank} · {v.stShape}{v.stMature && ' · Mature'}</div>
               <div style={{ fontSize: v.stTitle, fontFamily: SERIF, fontWeight: 400, letterSpacing: '-.01em', lineHeight: 1.05 }}>{v.stName}</div>
               <div style={{ fontSize: 14, color: 'rgba(var(--ink-rgb),.75)' }}><span onClick={v.stArtistOpen} className={hover(`color:${INK}`)} style={{ cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: 'rgba(var(--ink-rgb),.35)' }}>{v.stArtist}</span> · {v.stPages}</div>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: v.stBtnTop }}>
@@ -308,6 +310,9 @@ function CollectionPick({ pb }: { pb: V }) {
 
 const toolBtn = (on: boolean): CSSProperties => ({ height: 40, padding: '0 12px', display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, boxSizing: 'border-box', border: `1px solid ${on ? INK : 'rgba(var(--ink-rgb),.2)'}`, borderRadius: 2, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' });
 /** A compact dropdown for the Explore toolbar: the system picker on touch screens, our own menu elsewhere. */
+/** Marks a Mature sketchbook's cover in Explore. */
+const matureBadge: CSSProperties = { position: 'absolute', bottom: 12, left: 10, padding: '3px 7px', borderRadius: 3, background: 'rgba(34,35,32,.82)', color: '#F6F2E8', font: `600 10px/1.2 ${SANS}`, letterSpacing: '.08em', textTransform: 'uppercase', pointerEvents: 'none' };
+
 function Pick({ label, title, items, touch, active }: { label: string; title: string; items: { key: string; label: string; on: boolean; pick: () => void }[]; touch: boolean; active?: boolean }) {
   const [open, setOpen] = useState(false), anchor = useRef<HTMLSpanElement>(null);
   useEffect(() => { if (!open) return; const close = () => setOpen(false); addEventListener('click', close); return () => removeEventListener('click', close); }, [open]);
