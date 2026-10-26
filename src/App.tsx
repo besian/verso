@@ -35,6 +35,7 @@ import { Admin, AuthAction, Legal, NotFound } from './views/Pages';
 import { Messages } from './views/Messages';
 import { CommentsPanel } from './views/Comments';
 import { ReplayPlayer } from './views/Replay';
+import { shareImage, sharePicture } from './shareImage';
 import { ArchiveModal, AskModal, CardModal, ConsentBar, CollectionModal, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
 
 export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound' | 'action' | 'messages' | 'billing';
@@ -1482,6 +1483,18 @@ export default class App extends Component<object, State> {
         } };
       })(),
       rpState: s.replay || null, rpClose: () => this.setState({ replay: null }),
+      // A picture of the pages on show, framed for Instagram and the like.
+      bkShareImage: async () => {
+        const shown = this.shownPages(); if (!shown.length) return this.toast('Turn to a page to share it as a picture.');
+        const handle = o?.handle || mb?.owner?.handle || s.acct?.handle || '', artist = o ? o.artist : mb?.owner?.name || s.acct?.name || '';
+        const link = `${location.origin}${o?.arch ? `/archive/${book.id}` : `/@${handle}/${book.id}`}`;
+        this.toast('Making your picture…');
+        try {
+          const blob = await shareImage({ pages: shown.map(i => this.blobUrl(imgs[i])), aspect: this.aspect(), title: book.name, artist, link });
+          const r = await sharePicture(blob, `${book.name.replace(/[^\w\- ]+/g, '').trim() || 'fletora'} - page ${shown[0] + 1}.jpg`, `${book.name} by ${artist}`, link);
+          if (r === 'saved') this.toast('Picture saved: post it anywhere.');
+        } catch (e) { console.error(e); this.toast('Couldn’t make the picture. Try again.'); }
+      },
       cmOn: true, cmOpen: !!s.cmOpen, cmCount: all.length, cmAll: !!s.cmAll, cmHere: all.filter(c => shownKeys.has(c.page)).length,
       cmToggle: () => this.setState(st => ({ cmOpen: !st.cmOpen, more: null })), cmClose: () => this.setState({ cmOpen: false }),
       cmShowAll: (on: boolean) => this.setState({ cmAll: on }),
