@@ -818,7 +818,7 @@ export async function getPlus(uid: string): Promise<PlusInfo> {
   try { return plusInfo((await getDoc(doc(need().db, 'plus', uid))).data() || null); } catch { return plusInfo(null); }
 }
 
-type BillingAction = 'checkout' | 'portal' | 'sync' | 'close' | 'details' | 'cancel' | 'resume' | 'switch' | 'card' | 'card-done' | 'gift' | 'trial';
+type BillingAction = 'checkout' | 'portal' | 'sync' | 'close' | 'details' | 'cancel' | 'resume' | 'switch' | 'card' | 'card-done' | 'gift' | 'trial' | 'stats';
 /** Calls api/billing: a Stripe page to go to (url), a checkout or card form for our page (clientSecret, ui), or data. */
 async function billing<T = { url?: string; clientSecret?: string; ui?: 'elements' | 'embedded'; plus?: boolean; refused?: string[] }>(action: BillingAction, extra: object = {}): Promise<T> {
   const u = need().auth.currentUser; if (!u) throw Object.assign(new Error('signed out'), { code: 'auth/no-current-user' });
@@ -850,6 +850,13 @@ export const changePlan = (action: 'cancel' | 'resume' | 'switch') => billing<{ 
 export const cardSetup = async () => (await billing<{ clientSecret: string }>('card')).clientSecret;
 export const cardDone = (setup: string) => billing<{ ok: boolean }>('card-done', { setup });
 /** Moderators: give someone Plus for some months (0 = for good), or take a gift back. */
+export interface SiteStats {
+  members: number | null; week7: number | null; month30: number | null; books: number | null; publicBooks: number | null; pages: number | null;
+  reports: number | null; banned: number | null; comments7: number | null; weekly: number | null; plus: { paid: number; trial: number; gift: number } | null;
+  newest: { uid: string; name: string; handle: string; joined: number }[];
+}
+/** The moderator dashboard's numbers (moderators only). */
+export const siteStats = () => billing<SiteStats>('stats');
 export const giftPlus = (target: string, months: number) => billing<{ ok: boolean; emailed?: boolean }>('gift', { target, months });
 /** Starts a new account's free 14-day trial of Plus (the server checks it's new and hasn't had one). */
 export const startTrial = () => billing<{ ok: boolean; until?: number }>('trial');

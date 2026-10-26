@@ -413,13 +413,37 @@ export function Admin({ v }: { v: V }) {
     );
   }
   return (
-    <Page v={v} kicker="Moderation" title={<>Open <em>reports</em></>}>
+    <Page v={v} kicker="Moderation" title={<>The <em>dashboard</em></>}>
+      {v.adStats && (
+        <section aria-label="Site numbers" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 1, background: 'rgba(var(--ink-rgb),.12)', border: '1px solid rgba(var(--ink-rgb),.12)' }}>
+          {v.adStats.tiles.map((t: V) => (
+            <div key={t.key} style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '16px 16px 14px', background: PAPER }}>
+              <span style={label(t.alert ? MARK : MUTED, 10)}>{t.label}</span>
+              <span style={{ ...serif(40, 1), color: t.alert ? MARK : INK }}>{t.value}</span>
+              <span style={{ fontSize: 12.5, lineHeight: 1.4, color: MUTED }}>{t.note}</span>
+            </div>
+          ))}
+        </section>
+      )}
+      {v.adStats?.newest.length > 0 && (
+        <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <span style={label()}>Newest members</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 18px' }}>
+            {v.adStats.newest.map((p: V) => (
+              <button key={p.key} onClick={p.open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', font: `500 14px ${SANS}`, textAlign: 'left' }}>
+                {p.name} <span style={{ color: MUTED, fontWeight: 400 }}>{p.handle} · {p.when}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
       <section style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 20px', flexWrap: 'wrap', padding: '14px 16px', background: 'rgba(173,73,58,.06)', borderLeft: `2px solid ${MARK}` }}>
         {v.adPick
           ? <span style={{ fontSize: 14 }}><span style={label(MARK, 10)}>Staff pick</span> <button onClick={v.adPick.open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', ...serif(20, 1.1), fontStyle: 'italic' }}>{v.adPick.name}</button> <span style={{ color: MUTED }}>by {v.adPick.artist}</span></span>
           : <span style={{ fontSize: 14, color: MUTED }}><span style={label(MARK, 10)}>Staff pick</span> · none. Open any public sketchbook and choose <b style={{ color: INK, fontWeight: 600 }}>Make staff pick</b> from its ⋯ menu.</span>}
         {v.adPick && <button onClick={v.adPick.remove} style={smallBtn(true)}>Remove</button>}
       </section>
+      <h2 style={{ margin: '12px 0 0', ...serif(32, 1.1), fontWeight: 400 }}>Open <em>reports</em></h2>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, ...label() }}>
         <span>{v.adCount}</span>
         <button onClick={v.adReload} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(INK) }}>Refresh</button>

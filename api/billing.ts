@@ -7,7 +7,7 @@
 // Needs STRIPE_SECRET_KEY and FIREBASE_SERVICE_ACCOUNT in Vercel.
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { FieldPath, getFirestore } from 'firebase-admin/firestore';
+import { AggregateField, FieldPath, getFirestore } from 'firebase-admin/firestore';
 import type { Firestore } from 'firebase-admin/firestore';
 import { createHash } from 'node:crypto';
 import { stripe } from './_lib/stripe.js';
@@ -30,6 +30,27 @@ const DAY = 86_400_000, TRIAL_DAYS = 14;
 /** Free trials are for accounts made from this day on. */
 const TRIAL_FROM = Date.parse('2026-10-26T00:00:00Z');
 const json = (status: number, body: object) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+/** The moderator dashboard's numbers. Each one is null if it can't be counted (e.g. a missing index). */
+async function siteStats(db: Firestore) {
+  const now = Date.now(), week = now - 7 * DAY, month = now - 30 * DAY;
+  const n = (q: FirebaseFirestore.Query) => q.count().get().then(r => r.data().count).catch(e => { console.error('stats', e); return null; });
+  const [members, week7, month30, books, publicBooks, pages, reports, banned, comments7, weekly, plusDocs, newest] = await Promise.all([
+    n(db.collection('users')), n(db.collection('users').where('joined', '>', week)), n(db.collection('users').where('joined', '>', month)),
+    n(db.collection('books')), n(db.collection('books').where('isPublic', '==', true)),
+    db.collection('books').aggregate({ pages: AggregateField.sum('pageCount') }).get().then(r => r.data().pages).catch(() => null),
+    n(db.collection('reports')), n(db.collection('banned')),
+    n(db.collectionGroup('comments').where('at', '>', week)), n(db.collection('emailPrefs').where('weekly', '==', true)),
+    db.collection('plus').where('on', '==', true).get().catch(() => null),
+    db.collection('users').orderBy('joined', 'desc').limit(8).get().catch(() => null),
+  ]);
+  const plus = { paid: 0, trial: 0, gift: 0 };
+  plusDocs?.docs.forEach(d => { const p = d.data(); if (p.paid) plus.paid++; else if (p.trial) plus.trial++; else if ((p.until || 0) > now) plus.gift++; });
+  return {
+    members, week7, month30, books, publicBooks, pages, reports, banned, comments7, weekly, plus: plusDocs ? plus : null,
+    newest: newest?.docs.map(d => ({ uid: d.id, name: String(d.get('name') || ''), handle: String(d.get('handle') || ''), joined: Number(d.get('joined') || 0) })) || [],
+  };
+}
 
 function admin() {
   if (!getApps().length) initializeApp({ credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}')) });
@@ -192,6 +213,11 @@ export async function POST(req: Request) {
       // Tell them (the gift stands even if the email can't be sent).
       const emailed = await sendGiftEmail(db, target, until, !months).catch(e => { console.error('gift email', e); return false; });
       return json(200, { ok: true, until, emailed });
+    }
+    if (body.action === 'stats') {
+      // Moderators only: how the site is doing, counted on the server (aggregate counts, so it stays cheap).
+      if (!(await db.collection('admins').doc(uid).get()).exists) return json(403, { error: 'not-allowed' });
+      return json(200, await siteStats(db));
     }
     if (body.action === 'sync') {
       if (!/^cs_[A-Za-z0-9_]+$/.test(body.session || '')) return json(400, { error: 'bad-request' });

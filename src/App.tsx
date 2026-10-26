@@ -85,6 +85,8 @@ interface State {
   plus?: boolean; bill?: Billing | null; myGift?: api.PlusInfo | null;
   /** Analytics consent ('yes' / 'no', or null when not asked yet; only asked when analytics is set up). */
   analytics?: 'yes' | 'no' | null;
+  /** The moderator dashboard's numbers. */
+  adStats?: api.SiteStats;
   /** The weekly email (Settings; opt-in, kept in emailPrefs). */
   weekly?: boolean;
   /** Shows Mature sketchbooks (Settings; signed in and 18 or over). */
@@ -2181,6 +2183,7 @@ export default class App extends Component<object, State> {
   // ---------- moderation ----------
   async loadReports() {
     this.setState({ adReports: null, adErr: '' });
+    api.siteStats().then(adStats => this.setState({ adStats }), e => console.warn('stats', e));
     try {
       const [rs, banned] = await Promise.all([api.reports(), api.bannedUsers()]);
       const books = new Map<string, BookDoc | null>(), people = new Map<string, Awaited<ReturnType<typeof api.getProfile>>>();
@@ -2233,6 +2236,24 @@ export default class App extends Component<object, State> {
     };
     const ago = (t: number) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ', ' + new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     return {
+      // The dashboard: the site's numbers, and the newest members.
+      adStats: (() => {
+        const st = s.adStats; if (!st) return null; const f = (x: number | null | undefined) => x == null ? '—' : x.toLocaleString('en-GB');
+        const plusAll = st.plus ? st.plus.paid + st.plus.trial + st.plus.gift : null;
+        return {
+          tiles: [
+            { key: 'members', label: 'Members', value: f(st.members), note: `${f(st.week7)} this week · ${f(st.month30)} in 30 days` },
+            { key: 'books', label: 'Sketchbooks', value: f(st.books), note: `${f(st.publicBooks)} public` },
+            { key: 'pages', label: 'Pages', value: f(st.pages), note: 'across every sketchbook' },
+            { key: 'plus', label: 'Plus', value: f(plusAll), note: st.plus ? `${f(st.plus.paid)} paid · ${f(st.plus.trial)} trial · ${f(st.plus.gift)} gift` : '' },
+            { key: 'comments', label: 'Comments', value: f(st.comments7), note: 'in the last 7 days' },
+            { key: 'reports', label: 'Open reports', value: f(st.reports), note: 'waiting below', alert: (st.reports || 0) > 0 },
+            { key: 'banned', label: 'Suspended', value: f(st.banned), note: 'artists' },
+            { key: 'weekly', label: 'Weekly email', value: f(st.weekly), note: 'people subscribed' },
+          ],
+          newest: st.newest.map(p => ({ key: p.uid, name: p.name || p.handle, handle: '@' + p.handle, when: p.joined ? new Date(p.joined).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '', open: () => this.openProfile({ uid: p.uid, name: p.name, handle: p.handle }) })),
+        };
+      })(),
       adPick: s.pick ? { name: s.pick.name, artist: s.pick.artist, open: () => this.openOtherBook(s.pick!), remove: () => this.togglePick(s.pick!) } : null,
       isAdminPage: s.mode === 'admin', adAllowed: !!s.admin, adLoading: !list, adErr: s.adErr || '', adReload: () => this.loadReports(),
       adCount: list ? `${list.length} open ${list.length === 1 ? 'report' : 'reports'}` : '',

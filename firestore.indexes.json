@@ -4,6 +4,7 @@
     { "collectionGroup": "books", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "isPublic", "order": "ASCENDING" }, { "fieldPath": "pageCount", "order": "DESCENDING" }] }
   ],
   "fieldOverrides": [
-    { "collectionGroup": "comments", "fieldPath": "uid", "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION" }, { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }] }
+    { "collectionGroup": "comments", "fieldPath": "uid", "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION" }, { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }] },
+    { "collectionGroup": "comments", "fieldPath": "at", "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION" }, { "order": "DESCENDING", "queryScope": "COLLECTION" }, { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }] }
   ]
 }
