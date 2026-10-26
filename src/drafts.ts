@@ -22,3 +22,11 @@ export interface Draft { snap: Snapshot; at: number }
 export const saveDraft = (key: string, snap: Snapshot) => tx('readwrite', s => s.put({ snap, at: Date.now() } satisfies Draft, key)).catch(() => {});
 export const loadDraft = (key: string) => tx<Draft | undefined>('readonly', s => s.get(key)).catch(() => undefined);
 export const deleteDraft = (key: string) => tx('readwrite', s => s.delete(key)).catch(() => {});
+
+// Sketchbooks whose latest changes haven't reached the server yet (book:<uid>:<id>), kept until a save goes
+// through, so a failed upload or a closed tab doesn't lose new pages. Same database, keyed apart from drawings.
+export interface BookDraft<B> { book: B; at: number }
+const bookKey = (uid: string, id: string) => `book:${uid}:${id}`;
+export const saveBookDraft = <B>(uid: string, id: string, book: B) => tx('readwrite', s => s.put({ book, at: Date.now() }, bookKey(uid, id))).catch(() => {});
+export const deleteBookDraft = (uid: string, id: string) => tx('readwrite', s => s.delete(bookKey(uid, id))).catch(() => {});
+export const bookDrafts = <B>(uid: string) => tx<BookDraft<B>[]>('readonly', s => s.getAll(IDBKeyRange.bound(`book:${uid}:`, `book:${uid}:￿`))).catch(() => [] as BookDraft<B>[]);

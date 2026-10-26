@@ -21,7 +21,7 @@ import { RULED, paperUrl } from './paper';
 import { MAX_SOCIALS, PLATFORM, PLATFORMS, cleanHandle, socialLinks } from './socials';
 import { drawMarks, pathD } from './draw';
 import { DEFAULT_PEN, MAX_LAYERS, NO_COLOR, Painter } from './paint';
-import { deleteDraft, loadDraft, saveDraft } from './drafts';
+import { bookDrafts, deleteBookDraft, deleteDraft, loadDraft, saveBookDraft, saveDraft } from './drafts';
 import type { Mark } from './draw';
 import type { Pen, Tool } from './paint';
 import type { Paper } from './paper';
@@ -36,7 +36,7 @@ import { Messages } from './views/Messages';
 import { CommentsPanel } from './views/Comments';
 import { ReplayPlayer } from './views/Replay';
 import { shareImage, sharePicture } from './shareImage';
-import { ArchiveModal, AskModal, CardModal, ConsentBar, CollectionModal, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
+import { ArchiveModal, AskModal, CardModal, ConsentBar, CollectionModal, UnsavedBar, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
 
 export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound' | 'action' | 'messages' | 'billing';
 /** A report with what it points at, for the moderation page. */
@@ -87,6 +87,8 @@ interface State {
   analytics?: 'yes' | 'no' | null;
   /** The moderator dashboard's numbers. */
   adStats?: api.SiteStats;
+  /** Books whose last save failed (shown with Try again). */
+  unsaved?: string[];
   /** The weekly email (Settings; opt-in, kept in emailPrefs). */
   weekly?: boolean;
   /** Shows Mature sketchbooks (Settings; signed in and 18 or over). */
@@ -278,6 +280,8 @@ export default class App extends Component<object, State> {
     if (e.shiftKey) this.switchBook(s.active + dir); else this.go(dir);
   };
   componentDidMount() {
+    // Closing the tab while a save is still going asks first (the changes are kept on this device either way).
+    window.addEventListener('beforeunload', e => { if (this.dirty.size || [...this.busy.values()].some(n => n > 0)) { e.preventDefault(); e.returnValue = ''; } });
     this.onResize();
     requestAnimationFrame(this.onResize);
     addEventListener('resize', this.onResize); addEventListener('keydown', this.onKey); addEventListener('popstate', this.onPop);
@@ -311,7 +315,7 @@ export default class App extends Component<object, State> {
       // Signed-in visitors start on their own sketchbooks rather than the home page.
       if (!u.verified && !acct) this.checkVerified();
       this.setState(s => ({ acct: a, verified: acct ? false : !!u.verified, follows, saved, blocked, books, active: 0, images: books[0].images, p: 0, authReady: true, mode: this.routed && (s.mode === 'home' || s.mode === 'auth') ? 'mine' : s.mode }),
-        () => { if (fresh || legacy) this.persist(books); this.backfillThumbs(); this.loadFollowFeed(); api.mirrorFollows(u.uid, follows).catch(e => console.warn('follower backfill', e));
+        () => { if (fresh || legacy) this.persist(books); this.backfillThumbs(); this.restoreUnsaved(u.uid, docs); this.loadFollowFeed(); api.mirrorFollows(u.uid, follows).catch(e => console.warn('follower backfill', e));
           api.isAdmin(u.uid).then(admin => this.setState({ admin }, () => { if (admin && this.state.mode === 'admin') this.loadReports(); }));
           if (this.pendingCheckout) this.confirmPlus(this.pendingCheckout);
           this.startTrial(u.uid); });
@@ -781,7 +785,36 @@ export default class App extends Component<object, State> {
     const prev = new Map(this.state.books.map(b => [b.id, b]));
     for (const b of books) if (b.id !== this.mgHold && (prev.get(b.id) !== b || !this.synced.has(b.id))) { this.dirty.add(b.id); this.editedAt.set(b.id, Date.now()); }
     clearTimeout(this.syncT);
-    this.syncT = setTimeout(() => { for (const id of this.dirty) this.enqueue(id, () => this.syncBook(id)); this.dirty.clear(); }, 400);
+    this.syncT = setTimeout(() => { for (const id of this.dirty) this.syncNow(id); this.dirty.clear(); }, 400);
+  }
+  /** Saves a book: a copy is kept in the browser first and dropped once the server has it all, so a failed
+   *  upload or a closed tab can't lose new pages (offered back on the next visit, see restoreUnsaved). */
+  announce = new Set<string>();
+  syncNow(id: string) {
+    const uid = this.state.acct?.uid, b = this.findBook(id);
+    if (uid && b) saveBookDraft(uid, id, b);
+    this.enqueue(id, async () => {
+      try { await this.syncBook(id); }
+      catch (e) { this.announce.delete(id); this.setState(s => ({ unsaved: [...new Set([...(s.unsaved || []), id])] })); throw e; }
+      const now = this.findBook(id);
+      if (uid && now && id !== this.mgHold && !bookUrls(now).some(isData) && !this.dirty.has(id)) {
+        if (this.announce.delete(id)) this.toast('Saved');
+        deleteBookDraft(uid, id); if (this.state.unsaved?.includes(id)) this.setState(s => ({ unsaved: (s.unsaved || []).filter(x => x !== id) }));
+      }
+    });
+  }
+  /** On sign-in: changes this browser made that never reached the server, newer than what the server has. */
+  async restoreUnsaved(uid: string, docs: { id: string; updatedAt: number }[]) {
+    const drafts = await bookDrafts<Book>(uid), at = new Map(docs.map(d => [d.id, d.updatedAt]));
+    for (const d of drafts) {
+      const id = d.book.id, server = at.get(id);
+      if ((server != null && server >= d.at) || this.state.acct?.uid !== uid) { if (server != null && server >= d.at) deleteBookDraft(uid, id); continue; }
+      const when = new Date(d.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      await new Promise<void>(done => this.ask({ title: 'Unsaved changes', text: `Changes to “${d.book.name}” from ${when} didn’t finish saving. Put them back and save them now?`, yes: 'Restore and save', no: 'Discard',
+        run: () => { this.setState(s => { const has = s.books.some(b => b.id === id), books = has ? s.books.map(b => b.id === id ? { ...b, ...d.book } : b) : [...s.books, d.book], mine = s.books[s.active]?.id === id;
+          return { books, images: mine ? d.book.images : s.images }; }, () => { this.dirty.add(id); this.syncNow(id); this.dirty.delete(id); done(); }); },
+        onNo: () => { deleteBookDraft(uid, id); done(); } }));
+    }
   }
   enqueue(id: string, job: () => Promise<void>) {
     this.busy.set(id, (this.busy.get(id) || 0) + 1);
@@ -802,8 +835,9 @@ export default class App extends Component<object, State> {
     const id = this.mgHold; this.mgHold = null;
     if (id && this.findBook(id) && this.findBook(id) !== this.mgSnap) {
       this.dirty.add(id); this.editedAt.set(id, Date.now());
-      clearTimeout(this.syncT); this.syncT = setTimeout(() => { for (const d of this.dirty) this.enqueue(d, () => this.syncBook(d)); this.dirty.clear(); }, 50);
-      this.toast('Saved');
+      clearTimeout(this.syncT); this.syncT = setTimeout(() => { for (const d of this.dirty) this.syncNow(d); this.dirty.clear(); }, 50);
+      // With new pictures it takes a moment: "Saved" comes once they're up.
+      if (bookUrls(this.findBook(id)!).some(isData)) { this.announce.add(id); this.toast('Saving…'); } else this.toast('Saved');
     }
     this.setState({ managing: false, mgPage: null });
   }
@@ -981,6 +1015,7 @@ export default class App extends Component<object, State> {
     // Deleting the only sketchbook leaves a fresh blank one in its place.
     let nb = books.filter((_, k) => k !== active);
     if (!nb.length) nb = [{ id: this.state.acct ? api.newBookId() : 'local-' + Date.now(), name: 'sketchbook', color: '#b8243a', images: [], createdAt: Date.now() }];
+    if (this.state.acct) deleteBookDraft(this.state.acct.uid, gone.id);
     if (this.state.acct) this.enqueue(gone.id, async () => { await api.deleteBook(gone.id, [...new Set([...bookUrls(gone), ...(this.synced.get(gone.id) || [])])]); this.synced.delete(gone.id); });
     const k = Math.min(j, nb.length - 1); this.target = 0; this.setState({ books: nb, active: k, images: nb[k].images, p: 0, managing: false }); this.persist(nb);
   }
@@ -1939,6 +1974,10 @@ export default class App extends Component<object, State> {
       pfCancel: () => this.setState({ draft: null, dErr: '' }), pfClose: (e: MouseEvent) => { if (e.target === e.currentTarget) this.setState({ draft: null }); },
       signOut: () => this.ask({ title: 'Sign out?', text: 'You can sign back in any time with your email and password.', yes: 'Sign out', run: async () => { await api.signOut(); this.setState({ draft: null }); this.goMode('home'); } }),
       // Analytics consent: a small bar until they choose, and a setting under Your data.
+      // Saves that failed: a bar until they go through.
+      usOn: !!s.unsaved?.length && !s.embed, usText: (() => { const n = (s.unsaved || []).map(id => this.findBook(id)?.name).filter(Boolean); return n.length === 1 ? `“${n[0]}” isn’t saved yet.` : `${n.length} sketchbooks aren’t saved yet.`; })(),
+      usBusy: (s.unsaved || []).some(id => (this.busy.get(id) || 0) > 0),
+      usRetry: () => { (s.unsaved || []).forEach(id => this.findBook(id) ? this.syncNow(id) : this.setState(st => ({ unsaved: (st.unsaved || []).filter(x => x !== id) }))); this.forceUpdate(); },
       anOffered: api.analyticsOffered, anOn: s.analytics === 'yes', anAsk: api.analyticsOffered && !s.analytics && !s.embed,
       anChoose: (yes: boolean) => { store.saveAnalytics(yes ? 'yes' : 'no'); api.analyticsConsent(yes); this.setState({ analytics: yes ? 'yes' : 'no' }); },
       wkOn: !!s.weekly,
@@ -2971,6 +3010,7 @@ export default class App extends Component<object, State> {
         {v.gfOpen && <GiftModal v={v} />}
         {v.askQ && <AskModal v={v} />}
         {v.anAsk && <ConsentBar v={v} />}
+        {v.usOn && <UnsavedBar v={v} />}
         {v.isBilling && v.cardSecret && <CardModal v={v} />}
         <input ref={this.fileRef} type="file" accept="image/*" multiple onChange={v.onFiles} style={{ display: 'none' }} />
         {/* Phones: opens the camera straight away. */}
