@@ -2693,6 +2693,14 @@ export default class App extends Component<object, State> {
       caption: notes[u]?.c || '', date: notes[u]?.d || '',
       onCaption: (e: ChangeEvent<HTMLInputElement>) => setNote(u, { c: e.target.value.slice(0, 140) }),
       onDate: (e: ChangeEvent<HTMLInputElement>) => setNote(u, { d: e.target.value }),
+      // The page's picture as a file, at the size it's stored (JPEG for photos, PNG for drawn pages).
+      save: async () => {
+        try {
+          const blob = await (await fetch(this.blobUrl(u))).blob(), ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
+          const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${(book.name || 'sketchbook').replace(/[^\w\- ]+/g, '').trim() || 'fletora'} - page ${i + 1}.${ext}`;
+          document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+        } catch (e) { console.warn('page download', e); this.toast('Couldn’t download that page. Try again.'); }
+      },
       edit: () => this.startEdit([images[i]], i), adjust: () => this.startEdit([images[i]], i, undefined, 'adjust'), write: () => this.startEdit([images[i]], i, undefined, 'write'), remove: () => { const p = partner(u, sp); this.setImages(images.filter((x, k) => k !== i && x !== p)); },
       // The open page follows the move (a spread moves two or three places, past any blank page).
       left: () => { this.movePage(i, i - 1); if (s.mgPage === i) this.setState(st => ({ mgPage: Math.max(0, st.images.indexOf(u)) })); },

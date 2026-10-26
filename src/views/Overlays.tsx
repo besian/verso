@@ -633,35 +633,42 @@ export function PlusModal({ v }: { v: V }) {
 
 /** One page: bigger preview, its caption and date, and what you can do with it. */
 function PageSheet({ v, pg }: { v: V; pg: V }) {
-  const act: CSSProperties = { ...ghostBtn, height: 40, padding: '0 14px', fontSize: 14 };
+  const first = v.mgPage === 0, last = v.mgPage === v.pagesList.length - 1, mob = !v.notMob;
+  const act: CSSProperties = { ...ghostBtn, height: 44, padding: '0 18px', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 };
+  const move = (off: boolean): CSSProperties => ({ ...ghostBtn, width: 36, height: 36, padding: 0, fontSize: 16, opacity: off ? 0.35 : 1, cursor: off ? 'default' : 'pointer' });
+  const icon = (d: string) => <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
+  const note = pg.spread ? 'Half of a picture across two pages: moving or removing it moves or removes both halves.'
+    : pg.filler ? 'A blank page that keeps the spread after it on facing pages. It goes away by itself when it’s no longer needed.' : '';
   return (
-    <div onClick={e => { if (e.target === e.currentTarget) v.closePage(); }} style={{ position: 'absolute', inset: 0, zIndex: 2, background: 'rgba(var(--canvas-rgb),.88)', display: 'flex', alignItems: v.notMob ? 'center' : 'flex-end', justifyContent: 'center', padding: v.notMob ? 24 : 0 }}>
-      <div role="dialog" aria-label={`Page ${pg.num}`} style={{ background: PAPER, border: v.notMob ? `1px solid ${INK}` : 'none', borderTop: `1px solid ${INK}`, width: '100%', maxWidth: 720, maxHeight: '100%', overflowY: 'auto', boxSizing: 'border-box', padding: v.notMob ? 28 : '20px 16px calc(20px + env(safe-area-inset-bottom))', display: 'flex', gap: 24, flexDirection: v.notMob ? 'row' : 'column' }}>
-        <div style={{ flexShrink: 0, width: v.notMob ? 220 : '42%', alignSelf: v.notMob ? 'flex-start' : 'center', aspectRatio: v.pgAspect, borderRadius: '2px 8px 8px 2px', background: pg.bg, boxShadow: '0 10px 24px rgba(10,10,30,.3)' }} />
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <span style={{ font: `400 28px/1 ${SERIF}` }}>Page {pg.num}</span>
+    <div onClick={e => { if (e.target === e.currentTarget) v.closePage(); }} style={{ position: 'absolute', inset: 0, zIndex: 2, background: 'rgba(var(--canvas-rgb),.88)', display: 'flex', alignItems: mob ? 'flex-end' : 'center', justifyContent: 'center', padding: mob ? 0 : 24 }}>
+      <div role="dialog" aria-label={`Page ${pg.num}`} style={{ background: PAPER, border: mob ? 'none' : `1px solid ${INK}`, borderTop: `1px solid ${INK}`, width: '100%', maxWidth: 760, maxHeight: '100%', overflowY: 'auto', boxSizing: 'border-box', padding: mob ? '20px 16px calc(20px + env(safe-area-inset-bottom))' : 32, display: 'grid', gridTemplateColumns: mob ? '1fr' : '240px minmax(0, 1fr)', gap: mob ? 18 : 32, alignItems: 'start' }}>
+        <div style={{ width: mob ? '46%' : '100%', justifySelf: 'center', aspectRatio: v.pgAspect, borderRadius: '2px 8px 8px 2px', background: pg.bg, boxShadow: '0 10px 24px rgba(10,10,30,.25)' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0, alignSelf: 'stretch' }}>
+          {/* Title, where it sits in the book, and moving it earlier or later. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ font: `400 30px/1 ${SERIF}`, flex: 1 }}>Page {pg.num}</span>
             <span style={hint}>{v.mgPage + 1} of {v.pagesList.length}</span>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button onClick={pg.left} disabled={first} aria-label="Move earlier" title="Move earlier" className={first ? undefined : hoverTint} style={move(first)}>←</button>
+              <button onClick={pg.right} disabled={last} aria-label="Move later" title="Move later" className={last ? undefined : hoverTint} style={move(last)}>→</button>
+            </div>
           </div>
-          <label style={fieldLabel}>Caption
-            <input value={pg.caption} onChange={pg.onCaption} maxLength={140} placeholder="Where, what, who" autoFocus={v.notMob} className={focusMark} style={field} />
-          </label>
-          <label style={fieldLabel}>Date
-            <input type="date" value={pg.date} onChange={pg.onDate} className={focusMark} style={{ ...field, color: pg.date ? INK : 'rgba(var(--ink-rgb),.5)' }} />
-          </label>
-          <span style={hint}>Written in the page’s margin in the book.</span>
-          {pg.spread && <span style={hint}>Half of a picture across two pages. Moving or removing it moves or removes both halves.</span>}
-          {pg.filler && <span style={hint}>A blank page that keeps the spread after it on facing pages. It goes away by itself when it’s no longer needed.</span>}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button onClick={() => { v.closePage(); pg.adjust(); }} className={hoverTint} style={act}>Adjust photo</button>
-            <button onClick={() => { v.closePage(); pg.write(); }} className={hoverTint} style={act}>Write on page</button>
-            <button onClick={() => { v.closePage(); pg.edit(); }} className={hoverTint} style={act}>Crop & fit</button>
-            <button onClick={pg.left} disabled={v.mgPage === 0} className={hoverTint} style={{ ...act, opacity: v.mgPage === 0 ? 0.4 : 1 }}>← Earlier</button>
-            <button onClick={pg.right} disabled={v.mgPage === v.pagesList.length - 1} className={hoverTint} style={{ ...act, opacity: v.mgPage === v.pagesList.length - 1 ? 0.4 : 1 }}>Later →</button>
+          <div style={{ display: 'grid', gridTemplateColumns: mob ? '1fr' : 'minmax(0, 1.6fr) minmax(0, 1fr)', gap: 12 }}>
+            <label style={fieldLabel}>Caption
+              <input value={pg.caption} onChange={pg.onCaption} maxLength={140} placeholder="Where, what, who" autoFocus={v.notMob} className={focusMark} style={field} />
+            </label>
+            <label style={fieldLabel}>Date
+              <input type="date" value={pg.date} onChange={pg.onDate} className={focusMark} style={{ ...field, color: pg.date ? INK : 'rgba(var(--ink-rgb),.5)' }} />
+            </label>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: 8 }}>
+          <span style={{ ...hint, marginTop: -8 }}>Shown in the page’s margin in the book.{note && ' ' + note}</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {!pg.filler && <button onClick={() => { v.closePage(); pg.edit(); }} className={hoverTint} style={{ ...act, flex: 1 }}>{icon('M4.5 19.5l1.2-4.2L15.5 5.5l3 3-9.8 9.8zM13.5 7.5l3 3')}Edit</button>}
+            {!pg.filler && <button onClick={pg.save} className={hoverTint} style={{ ...act, flex: 1 }}>{icon('M12 4v11M7 10.5l5 5 5-5M5 19.5h14')}Download</button>}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: 14, borderTop: '1px solid rgba(var(--ink-rgb),.12)' }}>
             {pg.filler ? <span /> : <button onClick={() => { v.closePage(); pg.remove(); }} className="tap" style={linkBtn(MARK)}>{pg.spread ? 'Remove both pages' : 'Remove page'}</button>}
-            <button onClick={v.closePage} style={{ height: 44, padding: '0 24px', borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer' }}>Done</button>
+            <button onClick={v.closePage} style={{ height: 44, padding: '0 28px', borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer' }}>Done</button>
           </div>
         </div>
       </div>
