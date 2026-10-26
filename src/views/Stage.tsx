@@ -41,6 +41,11 @@ function TopBar({ v }: { v: V }) {
           {v.promoPlus && <button onClick={v.openPlusPage} className={hover(`color:${MARK}`)} style={{ ...navLink, borderBottom: `1px solid ${v.navPlusLine}`, color: v.navPlusFg }}>Plus</button>}
         </div>}
       </div>
+      {/* Phones with the tab bar: the bell (and + New on your sketchbooks) up here, so the bar keeps four tabs. */}
+      {v.tabBar && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {v.isMine && <button onClick={v.tbNew} className={hover(`color:${MARK}`)} style={textBtn}>{v.newLbl}</button>}
+        <Bell v={v} />
+      </div>}
       {!v.tabBar && <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         {v.isMine && <button onClick={v.newBook} className={hover(`color:${MARK}`)} style={textBtn}>{v.newLbl}</button>}
         {v.ntShow && <MsgBtn v={v} />}
@@ -88,6 +93,7 @@ function NavMenu({ v }: { v: V }) {
 }
 
 const TB_ICONS: Record<string, ReactNode> = {
+  msgs: <path d="M4.5 5.5h15v10h-8l-4.5 3.5v-3.5h-2.5z" />,
   explore: <><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4.5 4.5" /></>,
   mine: <><path d="M6 3.5h11a1.5 1.5 0 0 1 1.5 1.5v14a1.5 1.5 0 0 1-1.5 1.5H6z" /><path d="M6 3.5v17M14.5 3.5v17" /></>,
 };
@@ -103,11 +109,8 @@ function TabBar({ v }: { v: V }) {
     <nav aria-label="Main" onClick={e => e.stopPropagation()} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 12, display: 'flex', alignItems: 'stretch', padding: '0 6px env(safe-area-inset-bottom)', background: PAPER, borderTop: '1px solid rgba(var(--ink-rgb),.14)', opacity: v.uiOp, pointerEvents: v.uiPE }}>
       {item('explore', 'Explore', v.tbOn === 'explore', v.goExplore, svg('explore'))}
       {item('mine', 'Yours', v.tbOn === 'mine', v.goMine, svg('mine'))}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <button onClick={v.tbNew} aria-label="New sketchbook" className={hover('transform:scale(1.06)')} style={{ width: 46, height: 46, borderRadius: '50%', border: 'none', background: MARK, color: '#F6F2E8', font: `300 28px/1 ${SANS}`, cursor: 'pointer', boxShadow: '0 6px 16px rgba(173,73,58,.35)' }}>+</button>
-      </div>
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><MsgBtn v={v} sheet /></div>
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Bell v={v} sheet /></div>
+      {item('msgs', 'Messages', !!v.isMessagesMode, v.ntOpenMsgs, <span style={{ position: 'relative', display: 'flex' }}>{svg('msgs')}
+        {v.ntMsgs > 0 && <span style={{ position: 'absolute', top: -5, right: -9, minWidth: 16, height: 16, padding: '0 4px', boxSizing: 'border-box', borderRadius: 8, background: MARK, color: PAPER, font: `600 10px/16px ${SANS}`, textAlign: 'center' }}>{v.ntMsgs > 9 ? '9+' : v.ntMsgs}</span>}</span>)}
       {item('me', 'You', v.tbOn === 'me', v.openMe, <span style={{ width: 24, height: 24, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.22)', boxSizing: 'border-box', background: v.meAvBg, color: PAPER, font: `600 9px/24px ${SANS}`, textAlign: 'center', letterSpacing: 0, boxShadow: v.tbOn === 'me' ? `0 0 0 1.5px ${PAPER}, 0 0 0 3px ${INK}` : 'none' }}>{v.meInit}</span>)}
     </nav>
   );
