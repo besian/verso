@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, memo, useEffect, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { V } from '../App';
 import ClosedBook from '../ClosedBook';
@@ -23,9 +23,14 @@ function Icon({ d, fill }: { d: string; fill?: boolean }) {
 const actLink: CSSProperties = { padding: 0, border: 'none', background: 'none', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: INK, cursor: 'pointer' };
 const arrowBtn: CSSProperties = { width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'rgba(var(--ink-rgb),.12)', color: INK, font: `500 16px ${SANS}`, cursor: 'pointer' };
 
-function TopBar({ v }: { v: V }) {
+// Zoomed in, the bars and title fade out. Their opacity comes from custom properties set on the stage, so that
+// during animation frames (v.$frame) they needn't render at all: see frameState in App.
+const UI_OP = 'var(--ui-op)', UI_PE = 'var(--ui-pe)' as CSSProperties['pointerEvents'];
+const skipOnFrame = (_: { v: V }, next: { v: V }) => !!next.v.$frame;
+
+const TopBar = memo(function TopBar({ v }: { v: V }) {
   return (
-    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: `${v.mTop}px ${v.mPad}px 12px`, background: PAPER, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, zIndex: 5, opacity: v.uiOp, pointerEvents: v.uiPE }}>
+    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: `${v.mTop}px ${v.mPad}px 12px`, background: PAPER, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, zIndex: 5, opacity: UI_OP, pointerEvents: UI_PE }}>
       {/* Viewing someone's sketchbook: the way back sits just under the logo. */}
       {v.isOther && v.notMob && !v.embed && (
         <button onClick={v.goExplore} title="Back to Explore" aria-label="Back to Explore" className={hover(`color:${MARK};border-color:${MARK}`)} style={{ position: 'absolute', left: v.mPad, top: 'calc(100% + 6px)', width: 36, height: 36, padding: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.25)', background: 'none', color: INK, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -61,7 +66,7 @@ function TopBar({ v }: { v: V }) {
       </div>}
     </div>
   );
-}
+}, skipOnFrame);
 
 /** Phones, signed out: Explore, Plus and Sign in behind one menu button, so the bar is just the logo and Join. */
 function NavMenu({ v }: { v: V }) {
@@ -98,7 +103,7 @@ const TB_ICONS: Record<string, ReactNode> = {
   mine: <><path d="M6 3.5h11a1.5 1.5 0 0 1 1.5 1.5v14a1.5 1.5 0 0 1-1.5 1.5H6z" /><path d="M6 3.5v17M14.5 3.5v17" /></>,
 };
 /** Phones, signed in: Explore, your sketchbooks, a new one, notifications and your profile, within thumb reach. */
-function TabBar({ v }: { v: V }) {
+const TabBar = memo(function TabBar({ v }: { v: V }) {
   const item = (k: string, label: string, on: boolean, onClick: () => void, icon: ReactNode) => (
     <button key={k} onClick={onClick} aria-current={on ? 'page' : undefined} style={{ flex: 1, minWidth: 0, height: 56, padding: 0, border: 'none', background: 'none', color: on ? INK : STONE, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, cursor: 'pointer', font: `500 10px ${SANS}`, letterSpacing: '.06em', textTransform: 'uppercase' }}>
       {icon}<span>{label}</span>
@@ -106,7 +111,7 @@ function TabBar({ v }: { v: V }) {
   );
   const svg = (k: string) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{TB_ICONS[k]}</svg>;
   return (
-    <nav aria-label="Main" onClick={e => e.stopPropagation()} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 12, display: 'flex', alignItems: 'stretch', padding: '0 6px env(safe-area-inset-bottom)', background: PAPER, borderTop: '1px solid rgba(var(--ink-rgb),.14)', opacity: v.uiOp, pointerEvents: v.uiPE }}>
+    <nav aria-label="Main" onClick={e => e.stopPropagation()} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 12, display: 'flex', alignItems: 'stretch', padding: '0 6px env(safe-area-inset-bottom)', background: PAPER, borderTop: '1px solid rgba(var(--ink-rgb),.14)', opacity: UI_OP, pointerEvents: UI_PE }}>
       {item('explore', 'Explore', v.tbOn === 'explore', v.goExplore, svg('explore'))}
       {item('mine', 'Yours', v.tbOn === 'mine', v.goMine, svg('mine'))}
       {item('msgs', 'Messages', !!v.isMessagesMode, v.ntOpenMsgs, <span style={{ position: 'relative', display: 'flex' }}>{svg('msgs')}
@@ -114,13 +119,13 @@ function TabBar({ v }: { v: V }) {
       {item('me', 'You', v.tbOn === 'me', v.openMe, <span style={{ width: 24, height: 24, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.22)', boxSizing: 'border-box', background: v.meAvBg, color: PAPER, font: `600 9px/24px ${SANS}`, textAlign: 'center', letterSpacing: 0, boxShadow: v.tbOn === 'me' ? `0 0 0 1.5px ${PAPER}, 0 0 0 3px ${INK}` : 'none' }}>{v.meInit}</span>)}
     </nav>
   );
-}
+}, skipOnFrame);
 
 /** First few times on a touch screen: how to turn pages and zoom. */
-function SwipeHint({ v }: { v: V }) {
+const SwipeHint = memo(function SwipeHint({ v }: { v: V }) {
   // Zero-height wrapper: the hint floats above the controls, so showing or hiding it never moves the book.
-  return <div style={{ position: 'relative', height: 0, width: '100%', zIndex: 2 }}><div role="status" style={{ position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap', padding: '7px 14px', borderRadius: 16, background: 'rgba(var(--ink-rgb),.08)', fontSize: 13, color: INK, opacity: v.uiOp, pointerEvents: 'none' }}>Swipe to turn pages · pinch to zoom in</div></div>;
-}
+  return <div style={{ position: 'relative', height: 0, width: '100%', zIndex: 2 }}><div role="status" style={{ position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap', padding: '7px 14px', borderRadius: 16, background: 'rgba(var(--ink-rgb),.08)', fontSize: 13, color: INK, opacity: UI_OP, pointerEvents: 'none' }}>Swipe to turn pages · pinch to zoom in</div></div>;
+}, skipOnFrame);
 
 /** Messages, next to the bell: opens your conversations, with a count of unread ones and requests. */
 function MsgBtn({ v, sheet }: { v: V; sheet?: boolean }) {
@@ -174,11 +179,11 @@ function Bell({ v, sheet }: { v: V; sheet?: boolean }) {
   );
 }
 
-function Title({ v }: { v: V }) {
+const Title = memo(function Title({ v }: { v: V }) {
   return (
-    <div style={{ position: 'relative', marginTop: v.mTitleTop, maxWidth: '100%', boxSizing: 'border-box', padding: `0 ${v.mPad}px`, display: 'flex', alignItems: 'center', gap: v.mGap, opacity: v.uiOp, pointerEvents: v.uiPE }}>
+    <div style={{ position: 'relative', marginTop: v.mTitleTop, maxWidth: '100%', boxSizing: 'border-box', padding: `0 ${v.mPad}px`, display: 'flex', alignItems: 'center', gap: v.mGap, opacity: UI_OP, pointerEvents: UI_PE }}>
       {v.multi && <button onClick={v.prevBook} title="Previous sketchbook" style={{ ...arrowBtn, opacity: v.prevOp }}>‹</button>}
-      <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', minWidth: 0, opacity: v.titleOp }}>
+      <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', minWidth: 0, opacity: 'var(--title-op)' }}>
         <div style={{ fontSize: v.mTitleSize, fontFamily: SERIF, fontWeight: 400, letterSpacing: '-.01em', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.titleName}</div>
         <div style={label()}>
           {v.isOther && v.bkArch
@@ -219,17 +224,17 @@ function Title({ v }: { v: V }) {
       {v.multi && <button onClick={v.nextBook} title="Next sketchbook" style={{ ...arrowBtn, opacity: v.nextOp }}>›</button>}
     </div>
   );
-}
+}, skipOnFrame);
 
 /** Inside an embed: the sketchbook's name and artist, linking back to fletora. */
-function EmbedTitle({ v }: { v: V }) {
+const EmbedTitle = memo(function EmbedTitle({ v }: { v: V }) {
   return (
-    <div style={{ marginTop: 14, padding: '0 14px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, textAlign: 'center', opacity: v.uiOp, pointerEvents: v.uiPE, maxWidth: '100%', boxSizing: 'border-box' }}>
+    <div style={{ marginTop: 14, padding: '0 14px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, textAlign: 'center', opacity: UI_OP, pointerEvents: UI_PE, maxWidth: '100%', boxSizing: 'border-box' }}>
       <div style={{ ...{ font: `400 ${v.notMob ? 30 : 24}px/1.1 ${SERIF}` }, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.titleName}</div>
       <a href={v.embedHref} target="_blank" rel="noopener" style={{ ...label(INK, 10), textDecoration: 'none' }}>by {v.artist} · open on fletora<span style={{ color: MARK }}>.</span> ↗</a>
     </div>
   );
-}
+}, skipOnFrame);
 
 function Carousel({ v }: { v: V }) {
   return (
@@ -344,6 +349,21 @@ function CurledLeaf({ leaf, W, H }: { leaf: V; W: number; H: number }) {
   return <>{seg(0)}</>;
 }
 
+/** A leaf's faces (and curl strips). Most frames of a turn only rotate leaves, so the faces render again only when
+ *  something drawn on them changes: their click handlers read live state, so an older copy of them is fine. */
+const LeafFaces = memo(function LeafFaces({ leaf, W, H }: { leaf: V; W: number; H: number }) {
+  return (
+    <>
+      {/* Curl strips stay built for the leaves that may turn next and are only shown mid-turn (building them on the
+          first frame of a turn made it hitch); the flat faces show the rest of the time. */}
+      {(leaf.curlable || leaf.curl) && <div style={{ ...fill, transformStyle: 'preserve-3d', visibility: leaf.curl ? 'visible' : 'hidden' }}><CurledLeaf leaf={leaf} W={W} H={H} /></div>}
+      <FrontFace leaf={leaf} onClick={leaf.openFront} style={leaf.curl ? HIDDEN : undefined} />
+      <BackFace leaf={leaf} onClick={leaf.openBack} style={leaf.curl ? HIDDEN : undefined} />
+    </>
+  );
+}, (a, b) => a.W === b.W && a.H === b.H && Object.keys(b.leaf).every(k => k === 'transform' || typeof b.leaf[k] === 'function' || a.leaf[k] === b.leaf[k]));
+const HIDDEN: CSSProperties = { visibility: 'hidden' };
+
 function Book3D({ v }: { v: V }) {
   return (
     <div style={{ position: 'relative', width: 0, height: v.H, transformStyle: 'preserve-3d', transform: v.bookTransform, opacity: v.bookOp }}>
@@ -354,18 +374,14 @@ function Book3D({ v }: { v: V }) {
       </div>
       {v.leaves.map((leaf: V) => (
         <div key={leaf.key} style={{ position: 'absolute', left: 0, top: 0, width: v.W, height: v.H, transformOrigin: '0 50%', transformStyle: 'preserve-3d', transform: leaf.transform, willChange: 'transform' }}>
-          {/* Curl strips stay built for the leaves that may turn next and are only shown mid-turn (building them on the
-              first frame of a turn made it hitch); the flat faces show the rest of the time. */}
-          {(leaf.curlable || leaf.curl) && <div style={{ ...fill, transformStyle: 'preserve-3d', visibility: leaf.curl ? 'visible' : 'hidden' }}><CurledLeaf leaf={leaf} W={v.W} H={v.H} /></div>}
-          <FrontFace leaf={leaf} onClick={leaf.openFront} style={leaf.curl ? { visibility: 'hidden' } : undefined} />
-          <BackFace leaf={leaf} onClick={leaf.openBack} style={leaf.curl ? { visibility: 'hidden' } : undefined} />
+          <LeafFaces leaf={leaf} W={v.W} H={v.H} />
         </div>
       ))}
     </div>
   );
 }
 
-function Controls({ v }: { v: V }) {
+const Controls = memo(function Controls({ v }: { v: V }) {
   return (
     <div style={{ position: 'relative', zIndex: 2, display: 'flex', gap: 12, marginBottom: `calc(${v.mBottom}px + env(safe-area-inset-bottom))`, flexShrink: 0, padding: 6, opacity: v.ctrlOp, transform: `translateY(${v.ctrlY}px)`, pointerEvents: v.ctrlPE, transition: 'opacity .35s,transform .35s cubic-bezier(.2,.8,.2,1)' }}>
       <button onClick={v.zoomOut} title="Zoom out" className={hover('transform:scale(1.08)')} style={roundDark(44, 22)}>−</button>
@@ -379,17 +395,17 @@ function Controls({ v }: { v: V }) {
       </button>
     </div>
   );
-}
+}, skipOnFrame);
 
 const kbd: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 22, height: 22, padding: '0 5px', boxSizing: 'border-box', border: '1px solid rgba(var(--ink-rgb),.28)', borderBottomWidth: 2, borderRadius: 4, background: 'rgba(var(--paper-rgb),.85)', color: INK, font: `500 13px/1 ${SANS}`, letterSpacing: 0 };
 
 /** Quiet key reference in the corner of the book view; compact labels on mid-size windows so it clears the controls. */
-function KeyGuide({ v }: { v: V }) {
+const KeyGuide = memo(function KeyGuide({ v }: { v: V }) {
   const full = v.vw >= 1000;
   const rows: [string[], string, string][] = [[['←', '→'], 'Turn pages', 'Turn'], [['↑'], 'Open · zoom in', 'Open · zoom'], [['↓'], 'Zoom out · close', 'Zoom out · close']];
   if (v.multi) rows.push([['⇧', '←', '→'], 'Switch sketchbook', 'Switch book']);
   return (
-    <div aria-label="Keyboard shortcuts" style={{ position: 'absolute', left: full ? 24 : 16, bottom: full ? 24 : 18, zIndex: 2, display: 'grid', gridTemplateColumns: 'auto auto', columnGap: full ? 14 : 10, rowGap: full ? 7 : 5, alignItems: 'center', opacity: v.uiOp, pointerEvents: 'none', ...label(STONE, full ? 10 : 9) }}>
+    <div aria-label="Keyboard shortcuts" style={{ position: 'absolute', left: full ? 24 : 16, bottom: full ? 24 : 18, zIndex: 2, display: 'grid', gridTemplateColumns: 'auto auto', columnGap: full ? 14 : 10, rowGap: full ? 7 : 5, alignItems: 'center', opacity: UI_OP, pointerEvents: 'none', ...label(STONE, full ? 10 : 9) }}>
       {rows.map(([keys, long, short]) => (
         <Fragment key={long}>
           <span style={{ display: 'flex', gap: 3 }}>{keys.map(k => <span key={k} style={full ? kbd : { ...kbd, minWidth: 18, height: 18, fontSize: 11 }}>{k}</span>)}</span>
@@ -398,12 +414,12 @@ function KeyGuide({ v }: { v: V }) {
       ))}
     </div>
   );
-}
+}, skipOnFrame);
 
 /** App shell: focus backdrop, top bar, book title, the 3D stage and its controls. Screens and overlays render as children above it. */
 export default function Stage({ v, children }: { v: V; children: ReactNode }) {
   return (
-    <div onDragOver={v.onDragOver} onDrop={v.onDrop} onMouseMove={v.wake} onPointerDown={v.wake} onClick={v.closeMore} style={{ ['--tabbar' as string]: v.tabBar ? 'calc(57px + env(safe-area-inset-bottom))' : '0px', position: 'fixed', inset: 0, background: PAPER, color: INK, fontFamily: SANS, display: 'flex', flexDirection: 'column', alignItems: 'center', userSelect: 'none' }}>
+    <div onDragOver={v.onDragOver} onDrop={v.onDrop} onMouseMove={v.wake} onPointerDown={v.wake} onClick={v.closeMore} style={{ ['--tabbar' as string]: v.tabBar ? 'calc(57px + env(safe-area-inset-bottom))' : '0px', ['--ui-op' as string]: v.uiOp, ['--ui-pe' as string]: v.uiPE, ['--title-op' as string]: v.titleOp, position: 'fixed', inset: 0, background: PAPER, color: INK, fontFamily: SANS, display: 'flex', flexDirection: 'column', alignItems: 'center', userSelect: 'none' }}>
       {/* Focus backdrop, only while zoomed: a tiny pre-blurred copy of the page stretched across the screen.
           (A CSS blur on a screen-sized layer had to be recomputed every frame and made zooming stutter.) */}
       {+v.fz > 0.001 && (

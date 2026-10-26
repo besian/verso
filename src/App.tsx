@@ -1,6 +1,6 @@
 import { Component, createRef } from 'react';
 import { flushSync } from 'react-dom';
-import type { ChangeEvent, DragEvent, MouseEvent, PointerEvent, WheelEvent } from 'react';
+import type { ChangeEvent, DragEvent, MouseEvent, PointerEvent, ReactNode, WheelEvent } from 'react';
 import { CONFIG, GRID_WIDTH, MAX_MEDIUMS, MAX_TAGS, MEDIUMS, PALETTE, SHAPES, mediumKey, tagSlug } from './data';
 import type { Account, ArchiveEntry, Book, OtherBook, PageNote, Shape, ShapeKey } from './data';
 import * as api from './backend';
@@ -212,7 +212,15 @@ export default class App extends Component<object, State> {
 
   /** Animation frames draw their state straight away: React would otherwise apply an update made in a frame a
    *  moment later, sometimes merging two frames into one, which shows as a lag and then a jump (zooming out). */
-  frameState(patch: Partial<State>) { flushSync(() => this.setState(patch as State)); }
+  /** One animation frame. Only the book moves, so the render reuses everything else from the last full one
+   *  (the screens and dialogs are skipped outright) and a full render follows once the animation stops. */
+  frameState(patch: Partial<State>) {
+    this.inFrame = true;
+    try { flushSync(() => this.setState(patch as State)); } finally { this.inFrame = false; }
+    clearTimeout(this.frameEndT); this.frameEndT = setTimeout(() => this.forceUpdate(), 120);
+  }
+  inFrame = false; frameEndT = 0 as unknown as ReturnType<typeof setTimeout>;
+  lastV: V | null = null; lastKids: ReactNode = null;
 
   // ---------- lifecycle ----------
   onResize = () => this.setState({ vw: window.innerWidth || 1200, vh: window.innerHeight || 800 });
@@ -434,6 +442,8 @@ export default class App extends Component<object, State> {
     }
   }
   componentDidUpdate(_: object, prev: State) {
+    // Animation frames change only where the book is; the full render after them catches up on the rest.
+    if (this.inFrame) return;
     const s = this.state;
     // The edit screen works on a draft: it's saved with Save, and closing it any other way puts the book back.
     if (!prev.managing && s.managing) {
@@ -1087,15 +1097,26 @@ export default class App extends Component<object, State> {
     this.focusOn(np, this.autoSide(np, dir > 0 ? 'L' : 'R'));
   }
   /** Book size: normal view (Hn) blended toward the focus view (Hf) by fz. */
-  dims(b?: AnyBook, flat?: boolean) {
-    const s = this.state, shp = this.shapeOf(b === undefined ? this.curBook() : b), sh = s.sh || s.vh * 0.5, sw = s.sw || s.vw, aspect = shp.a, fz = flat ? 0 : s.fz || 0;
+  dims(b?: AnyBook, flat?: boolean, at?: { fz: number; open: number }) {
+    const s = this.state, shp = this.shapeOf(b === undefined ? this.curBook() : b), sh = s.sh || s.vh * 0.5, sw = s.sw || s.vw, aspect = shp.a, fz = flat ? 0 : at ? at.fz : s.fz || 0;
     // Phones: a closed book is shown large, and shrinks as it opens so the whole spread fits the screen width.
-    const phone = sw < 640, open = phone && !flat && (b === undefined || b === this.curBook()) ? clamp01(Math.min(s.p, this.nLeaves() - s.p)) : 0;
+    const phone = sw < 640, open = phone && !flat && (b === undefined || b === this.curBook()) ? at ? at.open : clamp01(Math.min(s.p, this.nLeaves() - s.p)) : 0;
     const across = phone ? PHONE_CLOSED + (PHONE_OPEN - PHONE_CLOSED) * open : 0.29;
     const Hn = Math.max(phone ? 60 : 120, Math.min(sh * (phone ? 0.78 : 0.7) * shp.s, sw * across / aspect, 560 * shp.s) || 360) * s.zoom;
     // Focus: one page fills the screen, or both pages for a picture across two.
     const Hf = Math.max(200, Math.min(s.vh * 0.8, s.vw * 0.86 / (aspect * (s.fside === 'S' && (b === undefined || b === this.curBook()) ? 2 : 1))));
     const H = Hn + (Hf - Hn) * fz; return { H: Math.round(H), W: Math.round(H * aspect) };
+  }
+  /** The size the open book's pages are laid out at. While it zooms, or opens on a phone, the size on screen changes
+   *  every frame: the pages then keep the larger of the two end sizes and the whole book is scaled down to fit, since
+   *  re-laying-out and redrawing every page at a new size each frame was much of the cost of those animations. */
+  layoutDims() {
+    const s = this.state, d = this.dims(), fz = s.fz || 0, N = this.nLeaves(), open = clamp01(Math.min(s.p, N - s.p));
+    const zooming = fz > 0.001 && fz < 0.999, opening = (s.sw || s.vw) < 640 && open > 0.001 && open < 0.999;
+    if (!zooming && !opening) return d;
+    let big = d;
+    for (const z of zooming ? [0, 1] : [fz]) for (const o of opening ? [0, 1] : [open]) { const e = this.dims(undefined, false, { fz: z, open: o }); if (e.H > big.H) big = e; }
+    return big;
   }
 
   // ---------- focus (zoomed single page) ----------
@@ -2081,9 +2102,10 @@ export default class App extends Component<object, State> {
   }
 
   /** The 3D book, carousel, focus view and page manager. */
-  bookVals(): V {
-    const s = this.state, { images, p, books, active } = s, other = s.other, mode = s.mode || 'home';
-    const { W, H } = this.dims();
+  /** What changes from one animation frame to the next: where the book, its leaves and the shelf are. */
+  frameVals(): V {
+    const s = this.state, { p, books, active } = s, other = s.other;
+    const { W, H } = this.dims(), L = this.layoutDims(), scale = H / L.H;
     const N = this.nLeaves(), fan = CONFIG.fan, tilt = CONFIG.tilt, fz = s.fz || 0;
     const book = (other || books[active] || {}) as AnyBook;
 
@@ -2110,7 +2132,7 @@ export default class App extends Component<object, State> {
       const rad = -a * Math.PI / 180;
       // Leaves out of sight (under the open spread, waiting to be turned to) use the small copy of each photo;
       // the spread and the leaf turning use the full one. Less to decode and hold in memory on phones.
-      const small = i < Math.min(rest - 2, fp - 1) || i > Math.max(rest + 2, cp + 1), F = this.face(i, 0, W, small), B = this.face(i, 1, W, small);
+      const small = i < Math.min(rest - 2, fp - 1) || i > Math.max(rest + 2, cp + 1), F = this.face(i, 0, L.W, small), B = this.face(i, 1, L.W, small);
       // Mid-turn the page bends: the outer edge trails behind the turn, most at halfway.
       // Paper turn: the outer edge leads as the page lifts, then the curl relaxes as it lands.
       // Capped so the tip never swings past the pages lying on either side.
@@ -2125,10 +2147,10 @@ export default class App extends Component<object, State> {
         key: i, label: book.name, isCover: i === 0 && !book.coverImg, isCoverAny: i === 0, isBackCover: i === N - 1,
         transform: `rotateY(${a}deg) translateZ(${((N - i) * 0.5).toFixed(2)}px)`, frontBg: F.bg, backBg: B.bg,
         shadeF: (0.35 * Math.sin(rad) * (rad < Math.PI / 2 ? 1 : 0)).toFixed(3), shadeB: (0.3 * Math.max(0, Math.sin(rad)) * (rad > Math.PI / 2 ? 1 : 0)).toFixed(3),
-        numF: F.num, numB: B.num, noteF: F.note || '', noteB: B.note || '', noteFs: Math.max(9, Math.min(15, Math.round(H * 0.026))),
+        numF: F.num, numB: B.num, noteF: F.note || '', noteB: B.note || '', noteFs: Math.max(9, Math.min(15, Math.round(L.H * 0.026))),
         // On touch screens, tapping a zoomed page only brings the controls back (swipe to move between pages).
-        openFront: () => { if (!this.moved && !(IS_TOUCH && s.focus)) this.focusOn(i, 'R'); },
-        openBack: () => { if (!this.moved && !(IS_TOUCH && s.focus)) this.focusOn(i + 1, 'L'); },
+        openFront: () => { if (!this.moved && !(IS_TOUCH && this.state.focus)) this.focusOn(i, 'R'); },
+        openBack: () => { if (!this.moved && !(IS_TOUCH && this.state.focus)) this.focusOn(i + 1, 'L'); },
       };
     });
 
@@ -2163,6 +2185,76 @@ export default class App extends Component<object, State> {
       };
     });
 
+
+    return {
+      fz: fz.toFixed(3), uiOp: (1 - fz).toFixed(3), uiPE: fz > 0.5 ? 'none' : 'auto', railOp: fz.toFixed(3),
+      focusBg: (() => {
+        if (fz < 0.001) return '';
+        const r = Math.round(p), f = fL || r >= N - 1 ? this.face(Math.max(1, Math.min(N - 2, r - 1)), 1) : this.face(Math.max(1, r), 0);
+        const soft = f.idx >= 0 ? this.softCopy(this.thumbOf(book, s.images[f.idx])) : null;
+        return soft ? `url("${soft}") center/100% 100% no-repeat ${PAPER}` : `radial-gradient(circle at 30% 35%, ${book.color} 0, transparent 55%), radial-gradient(circle at 72% 68%, #C9C3B4 0, transparent 55%), ${PAPER}`;
+      })(),
+      // The real book carries the closed-book back board until opened so the carousel hand-over doesn't pop.
+      openShadowOp: clamp01(Math.min(p, N - p) * 3).toFixed(3), bodyOp: (1 - clamp01(Math.min(p, N - p) * 4)).toFixed(3),
+      // Closed on its back, the book is turned over: the spine is on the right, so the page block and board stick out on the left.
+      bodyBack: p > N / 2, bodyLeft: p > N / 2 ? -L.W : 0, boardColor: book.color || '#b8243a',
+      bookOp: sw ? 0 : 1, titleName: other ? other.name : (books[Math.round(car)] || book).name,
+      titleOp: ((sw ? 1 - Math.sin(Math.PI * (s.swT || 0)) * 0.85 : 1) * (1 - fz)).toFixed(3),
+      sideBooks, sbBase: `rotateX(${tilt}deg)`, ghostT: sideT(books.length), ghostW: ghostD.W, ghostH: ghostD.H, ghostTop: -ghostD.H / 2,
+      W: L.W, H: L.H, leaves,
+      // Zoomed in, the page is centred on the whole screen rather than on the book area below the title.
+      bookTransform: `translateY(${((s.vh / 2 - ((s.st ?? 0) + (s.sh || s.vh) / 2)) * fz).toFixed(1)}px) rotateX(${(tilt * (1 - fz) + 3 * fz).toFixed(2)}deg) translateX(${shift}px)${scale !== 1 ? ` scale(${scale.toFixed(4)})` : ''}`,
+      shadowLeft: -L.W * clamp01(p), shadowW: L.W * (clamp01(p) + clamp01(N - p)),
+      emptyOp: !s.images.length && !other && !sw ? 1 : 0,
+      onDown: (e: PointerEvent) => {
+        this.stPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (this.stPts.size === 2) {
+          // Two fingers: a pinch, not a page turn. Put any half-turned page back.
+          const [a, b] = [...this.stPts.values()]; this.pinch0 = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+          if (this.drag) { this.drag = null; this.animate(); }
+          return;
+        }
+        this.startMoving(); this.drag = { x: e.clientX, p0: this.state.p, id: e.pointerId }; this.moved = false; cancelAnimationFrame(this.raf);
+      },
+      onMove: (e: PointerEvent<HTMLDivElement>) => {
+        if (this.stPts.has(e.pointerId)) this.stPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (this.pinch0 && this.stPts.size >= 2) {
+          const [a, b] = [...this.stPts.values()], k = Math.hypot(b.x - a.x, b.y - a.y) / this.pinch0;
+          if (k > 1.25 && !this.state.focus) { this.pinch0 = 0; const fp = Math.max(1, Math.min(N - 1, Math.round(this.target))); this.focusOn(fp, this.autoSide(fp)); }
+          else if (k < 0.8 && this.state.focus) { this.pinch0 = 0; this.setFocus(false); }
+          return;
+        }
+        if (!this.drag) return; const dx = e.clientX - this.drag.x;
+        if (Math.abs(dx) > 4 && !this.moved) { this.moved = true; e.currentTarget.setPointerCapture?.(this.drag.id); }
+        this.frameState({ p: Math.max(-0.15, Math.min(N + 0.15, this.drag.p0 - dx / (W * 1.1))) });
+      },
+      onUp: (e: PointerEvent) => {
+        this.stPts.delete(e.pointerId); if (this.stPts.size < 2) this.pinch0 = 0;
+        if (!this.drag) return; const dx = e.clientX - this.drag.x, pp = this.state.p;
+        // Swiping past the front or back cover moves to the neighbouring sketchbook.
+        if (this.drag.p0 === 0 && dx > 90 && active > 0) { this.drag = null; return this.switchBook(active - 1); }
+        if (this.drag.p0 === N && dx < -90 && active < books.length - 1) { this.drag = null; return this.switchBook(active + 1); }
+        const tp = Math.max(0, Math.min(N, Math.abs(dx) > 30 ? (dx < 0 ? Math.ceil(pp - 0.1) : Math.floor(pp + 0.1)) : Math.round(pp)));
+        const p0 = Math.round(this.drag.p0), moved = this.moved;
+        this.drag = null; setTimeout(() => this.moved = false, 0);
+        // In focus view a swipe steps one page, like the arrow keys: from a left page to its right page first,
+        // and only then on to the next spread (a picture across both pages counts as one).
+        if (this.state.focus && moved) {
+          this.target = p0;
+          if (Math.abs(dx) > 30) return this.focusGo(dx < 0 ? 1 : -1);
+          return this.focusOn(p0, this.state.fside || 'R');
+        }
+        this.turnTo(tp, p0); this.animate();
+      },
+      onWheel: (e: WheelEvent) => { const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY; if (this.wheelLock || Math.abs(d) < 8) return; this.wheelLock = true; setTimeout(() => this.wheelLock = false, 380); this.go(d > 0 ? 1 : -1); },
+      zoomIn: () => { if (this.state.focus) return; const fp = Math.max(1, Math.min(N - 1, Math.round(this.state.p))); this.focusOn(fp, this.autoSide(fp)); },
+      zoomOut: () => this.state.focus ? this.setFocus(false) : this.setState(st => ({ zoom: Math.max(0.6, st.zoom - 0.15) })),
+    };
+  }
+
+  bookVals(): V {
+    const s = this.state, { images, books, active } = s, other = s.other, mode = s.mode || 'home';
+    const book = (other || books[active] || {}) as AnyBook;
     const notes = (book as Book).notes || {}, setNote = (u: string, patch: PageNote) => {
       const cur = this.state.books[this.state.active], n = { ...cur.notes?.[u], ...patch };
       this.updateBook({ notes: { ...cur.notes, [u]: n } });
@@ -2190,12 +2282,7 @@ export default class App extends Component<object, State> {
     const vis = !foc || (focusMode === 'auto-hide' ? s.ctrlShow !== false : focusMode === 'toggle' ? !!s.menuOpen : false);
 
     return {
-      fz: fz.toFixed(3), uiOp: (1 - fz).toFixed(3), uiPE: fz > 0.5 ? 'none' : 'auto', bgRefA: this.bgRefA,
-      focusBg: (() => {
-        const r = Math.round(p), f = fL || r >= N - 1 ? this.face(Math.max(1, Math.min(N - 2, r - 1)), 1) : this.face(Math.max(1, r), 0);
-        const soft = f.idx >= 0 ? this.softCopy(this.thumbOf(book, images[f.idx])) : null;
-        return soft ? `url("${soft}") center/100% 100% no-repeat ${PAPER}` : `radial-gradient(circle at 30% 35%, ${book.color} 0, transparent 55%), radial-gradient(circle at 72% 68%, #C9C3B4 0, transparent 55%), ${PAPER}`;
-      })(),
+      ...this.frameVals(), bgRefA: this.bgRefA,
       isMine: mode === 'mine', isOther: mode === 'other', isExplore: mode === 'explore', notOther: !other, showGhost: !other,
       navMineLine: mode === 'mine' ? INK : 'transparent', navMineFg: mode === 'mine' ? INK : STONE,
       navExLine: mode === 'explore' || mode === 'other' ? INK : 'transparent', navExFg: mode === 'explore' || mode === 'other' ? INK : STONE,
@@ -2207,19 +2294,12 @@ export default class App extends Component<object, State> {
       coverRef: this.coverRef, pickCover: () => this.coverRef.current?.click(),
       onCoverFile: (e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; const fr = new FileReader(); fr.onload = () => this.startEdit([fr.result as string], null, 'cover'); fr.readAsDataURL(f); },
       hasCoverImg: !!book.coverImg, removeCover: () => this.updateBook({ coverImg: null }),
-      // The real book carries the closed-book back board until opened so the carousel hand-over doesn't pop.
-      openShadowOp: clamp01(Math.min(p, N - p) * 3).toFixed(3), bodyOp: (1 - clamp01(Math.min(p, N - p) * 4)).toFixed(3),
-      // Closed on its back, the book is turned over: the spine is on the right, so the page block and board stick out on the left.
-      bodyBack: p > N / 2, bodyLeft: p > N / 2 ? -W : 0, boardColor: book.color || '#b8243a',
-      bookOp: sw ? 0 : 1, titleName: other ? other.name : (books[Math.round(car)] || book).name,
-      titleOp: ((sw ? 1 - Math.sin(Math.PI * (s.swT || 0)) * 0.85 : 1) * (1 - fz)).toFixed(3),
       bookName: book.name,
       otherMature: !!(other as OtherBook | null)?.mature,
       bookMeta: (other ? `by ${(other as OtherBook).artist} · ${(other as OtherBook).pages} pages` : books.length > 1 ? `${images.length} ${images.length === 1 ? 'page' : 'pages'} · ${active + 1} of ${books.length}` : `${images.length} ${images.length === 1 ? 'page' : 'pages'}`) + (!other && (book as Book).linkOnly ? ' · Link only' : !other && (book as Book).isPublic === false ? ' · Private' : '') + ((other ? (other as OtherBook).mature : (book as Book).mature || (book as Book).matureLock) ? ' · Mature' : '')
         + (!other && (book as Book).role === 'collab' ? ` · ${(book as Book).owner?.name}’s, shared with you` : !other && (book as Book).collabs?.length ? ` · with ${names((book as Book).collabs)}` : ''),
       multi: !other && books.length > 1, prevBook: () => this.switchBook(active - 1), nextBook: () => this.switchBook(active + 1),
       prevOp: active > 0 ? 1 : 0.3, nextOp: active < books.length - 1 ? 1 : 0.3,
-      sideBooks, sbBase: `rotateX(${tilt}deg)`, ghostT: sideT(books.length), ghostW: ghostD.W, ghostH: ghostD.H, ghostTop: -ghostD.H / 2,
       newBook: this.openNewPick, stopPD: (e: PointerEvent) => e.stopPropagation(),
       vw: s.vw, isTouch: IS_TOUCH,
       tabBar: m && !!s.acct && mode !== 'auth' && !s.embed,
@@ -2375,58 +2455,11 @@ export default class App extends Component<object, State> {
             this.share$(async () => { await api.endShare(b.id, s.acct?.uid || ''); this.setState(st => { const books = st.books.filter(x => x.id !== b.id), k = Math.max(0, Math.min(st.active, books.length - 1)); return { books, active: k, images: books[k]?.images || [], managing: false }; }); }, `You left “${b.name}”`) }),
         };
       })(),
-      W, H, leaves, stageRef: this.stageRef, fileRef: this.fileRef,
-      // Zoomed in, the page is centred on the whole screen rather than on the book area below the title.
-      bookTransform: `translateY(${((s.vh / 2 - ((s.st ?? 0) + (s.sh || s.vh) / 2)) * fz).toFixed(1)}px) rotateX(${(tilt * (1 - fz) + 3 * fz).toFixed(2)}deg) translateX(${shift}px)`,
-      shadowLeft: -W * clamp01(p), shadowW: W * (clamp01(p) + clamp01(N - p)),
-      emptyOp: !images.length && !other && !sw ? 1 : 0,
-      onDown: (e: PointerEvent) => {
-        this.stPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-        if (this.stPts.size === 2) {
-          // Two fingers: a pinch, not a page turn. Put any half-turned page back.
-          const [a, b] = [...this.stPts.values()]; this.pinch0 = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-          if (this.drag) { this.drag = null; this.animate(); }
-          return;
-        }
-        this.startMoving(); this.drag = { x: e.clientX, p0: s.p, id: e.pointerId }; this.moved = false; cancelAnimationFrame(this.raf);
-      },
-      onMove: (e: PointerEvent<HTMLDivElement>) => {
-        if (this.stPts.has(e.pointerId)) this.stPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-        if (this.pinch0 && this.stPts.size >= 2) {
-          const [a, b] = [...this.stPts.values()], k = Math.hypot(b.x - a.x, b.y - a.y) / this.pinch0;
-          if (k > 1.25 && !this.state.focus) { this.pinch0 = 0; const fp = Math.max(1, Math.min(N - 1, Math.round(this.target))); this.focusOn(fp, this.autoSide(fp)); }
-          else if (k < 0.8 && this.state.focus) { this.pinch0 = 0; this.setFocus(false); }
-          return;
-        }
-        if (!this.drag) return; const dx = e.clientX - this.drag.x;
-        if (Math.abs(dx) > 4 && !this.moved) { this.moved = true; e.currentTarget.setPointerCapture?.(this.drag.id); }
-        this.setState({ p: Math.max(-0.15, Math.min(N + 0.15, this.drag.p0 - dx / (W * 1.1))) });
-      },
-      onUp: (e: PointerEvent) => {
-        this.stPts.delete(e.pointerId); if (this.stPts.size < 2) this.pinch0 = 0;
-        if (!this.drag) return; const dx = e.clientX - this.drag.x, pp = this.state.p;
-        // Swiping past the front or back cover moves to the neighbouring sketchbook.
-        if (this.drag.p0 === 0 && dx > 90 && active > 0) { this.drag = null; return this.switchBook(active - 1); }
-        if (this.drag.p0 === N && dx < -90 && active < books.length - 1) { this.drag = null; return this.switchBook(active + 1); }
-        const tp = Math.max(0, Math.min(N, Math.abs(dx) > 30 ? (dx < 0 ? Math.ceil(pp - 0.1) : Math.floor(pp + 0.1)) : Math.round(pp)));
-        const p0 = Math.round(this.drag.p0), moved = this.moved;
-        this.drag = null; setTimeout(() => this.moved = false, 0);
-        // In focus view a swipe steps one page, like the arrow keys: from a left page to its right page first,
-        // and only then on to the next spread (a picture across both pages counts as one).
-        if (this.state.focus && moved) {
-          this.target = p0;
-          if (Math.abs(dx) > 30) return this.focusGo(dx < 0 ? 1 : -1);
-          return this.focusOn(p0, this.state.fside || 'R');
-        }
-        this.turnTo(tp, p0); this.animate();
-      },
-      onWheel: (e: WheelEvent) => { const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY; if (this.wheelLock || Math.abs(d) < 8) return; this.wheelLock = true; setTimeout(() => this.wheelLock = false, 380); this.go(d > 0 ? 1 : -1); },
-      zoomIn: () => { if (this.state.focus) return; const fp = Math.max(1, Math.min(N - 1, Math.round(p))); this.focusOn(fp, this.autoSide(fp)); },
-      zoomOut: () => this.state.focus ? this.setFocus(false) : this.setState(st => ({ zoom: Math.max(0.6, st.zoom - 0.15) })),
+      stageRef: this.stageRef, fileRef: this.fileRef,
       ctrlOp: vis ? 1 : 0, ctrlY: vis ? 0 : 24, ctrlPE: vis ? 'auto' : 'none',
       showHandle: foc && focusMode === 'toggle', handleLbl: s.menuOpen ? 'Hide menu' : 'Show menu',
       toggleMenu: () => this.setState(st => ({ menuOpen: !st.menuOpen })),
-      showRail: foc && focusMode === 'side rail', railOp: fz.toFixed(3),
+      showRail: foc && focusMode === 'side rail',
       wake: () => {
         if (!foc || focusMode !== 'auto-hide') return; if (this.state.ctrlShow === false) this.setState({ ctrlShow: true });
         clearTimeout(this.wakeT); this.wakeT = setTimeout(() => this.state.focus && this.setState({ ctrlShow: false }), 1800);
@@ -2441,6 +2474,7 @@ export default class App extends Component<object, State> {
   render() {
     // Blank paper until we know whether someone is signed in, so the landing page doesn't flash first.
     if (!this.state.authReady) return <div style={{ position: 'fixed', inset: 0, background: PAPER }} />;
+    if (this.inFrame && this.lastV) return <Stage v={{ ...this.lastV, ...this.frameVals(), $frame: true }}>{this.lastKids}</Stage>;
     const mode = this.state.mode || 'home';
     const v: V = {
       ...this.editorVals(),
@@ -2452,8 +2486,8 @@ export default class App extends Component<object, State> {
       ...(mode === 'messages' && this.state.acct ? this.messagesVals() : {}),
       ...this.accountVals(),
     };
-    return (
-      <Stage v={v}>
+    const kids = (
+      <>
         {(v.isLanding || v.isHome) && <HomeScreen v={v} />}
         {v.isExplore && <Explore v={v} />}
         {v.isProfile && <Profile v={v} />}
@@ -2485,7 +2519,9 @@ export default class App extends Component<object, State> {
         <input ref={this.fileRef} type="file" accept="image/*" multiple onChange={v.onFiles} style={{ display: 'none' }} />
         {/* Phones: opens the camera straight away. */}
         <input ref={this.camRef} type="file" accept="image/*" capture="environment" onChange={v.onFiles} style={{ display: 'none' }} />
-      </Stage>
+      </>
     );
+    this.lastV = v; this.lastKids = kids;
+    return <Stage v={v}>{kids}</Stage>;
   }
 }
