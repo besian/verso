@@ -107,6 +107,8 @@ interface State {
   /** Focus view: which page is centred, the left or right one, or 'S' for a picture across both (centred on the fold). */
   focus?: boolean; fz?: number; fside?: 'L' | 'R' | 'S'; fsx?: number; ctrlShow?: boolean; menuOpen?: boolean;
   edit?: EditState | null; edTool?: string; edAdjTool?: string; edPeek?: boolean;
+  /** Phones: the room the editor has for the page, between its title and its controls. */
+  edArea?: { w: number; h: number } | null;
   /** Messages: your conversations, the open one (or a new one with chatNew), its messages and the reply being written. */
   /** From the archive (Explore), and the moderator's add/edit form for it. */
   /** Fletora team accounts (verified tick). */
@@ -1208,7 +1210,14 @@ export default class App extends Component<object, State> {
   frame() {
     const { vw, vh } = this.state, a = this.edAspect();
     // Phones: the frame fills the width, capped so the controls below still fit.
-    if (vw < 640) { let fw = vw - 32, fh = fw / a; const e = this.state.edit, maxH = vh * (e?.mode === 'write' && e.pad ? 0.34 : e?.mode === 'draw' ? 0.4 : 0.5); if (fh > maxH) { fh = maxH; fw = fh * a; } return { fw: Math.round(fw), fh: Math.round(fh) }; }
+    // Phones: the page fills the room measured between the title and the controls (less a line for the hint, and
+    // the write pad's share), so it never runs into them whatever the screen's height.
+    if (vw < 640) {
+      const e = this.state.edit, box = this.state.edArea, room = box ? box.h - (e?.mode === 'draw' ? 4 : 28) : vh * 0.45;
+      const maxH = e?.mode === 'write' && e.pad ? room * 0.55 : room;
+      let fw = Math.min(vw - 32, box?.w || vw), fh = fw / a; if (fh > maxH) { fh = maxH; fw = fh * a; }
+      return { fw: Math.max(1, Math.round(fw)), fh: Math.max(1, Math.round(fh)) };
+    }
     // Larger screens: the page as big as the screen allows beside the controls (a profile photo stays modest).
     const ed = this.state.edit, fh = Math.round(Math.max(200, ed?.target === 'avatar' ? Math.min(vh * 0.58, 520) : ed?.mode === 'write' && ed.pad ? vh * 0.5 : vh - 96));
     const maxW = Math.max(240, vw - 152 - Math.min(440, Math.max(340, vw * 0.28))); return fh * a > maxW ? { fw: Math.round(maxW), fh: Math.round(maxW / a) } : { fh, fw: Math.round(fh * a) };
@@ -1238,6 +1247,13 @@ export default class App extends Component<object, State> {
   }
   // ---------- painting ----------
   /** The paint layer for the picture being edited: one per picture, and made again if the frame changes shape. */
+  edAreaEl: HTMLElement | null = null; edAreaRo: ResizeObserver | null = null;
+  edAreaRef = (el: HTMLDivElement | null) => {
+    if (el === this.edAreaEl) return; this.edAreaRo?.disconnect(); this.edAreaEl = el;
+    if (!el || !window.ResizeObserver) return;
+    this.edAreaRo = new ResizeObserver(([en]) => { const w = Math.round(en.contentRect.width), h = Math.round(en.contentRect.height), o = this.state.edArea; if (!o || o.w !== w || o.h !== h) this.setState({ edArea: { w, h } }); });
+    this.edAreaRo.observe(el);
+  };
   painter: Painter | null = null; painterKey = ''; editSeq = 0; recentColors: string[] = [];
   painterKeyNow() { const e = this.state.edit; return e ? `${this.editSeq}:${e.i}:${this.edAspect().toFixed(4)}` : ''; }
   livePainter() { return this.painter && this.painterKey === this.painterKeyNow() ? this.painter : null; }
@@ -2104,7 +2120,7 @@ export default class App extends Component<object, State> {
     const ed = this.state.edit; if (!ed) return { editing: false };
     const fr = this.frame(), bs = this.baseSize(), num = (f: 'scale' | 'rot' | 'skx' | 'sky') => (e: ChangeEvent<HTMLInputElement>) => this.setEd({ [f]: parseFloat(e.target.value) });
     return {
-      editing: true, fw: fr.fw, fh: fr.fh, bw: bs.bw, bh: bs.bh, edBg: `url("${this.blobUrl(ed.queue[ed.i])}") center/100% 100% no-repeat`,
+      editing: true, edAreaRef: this.edAreaRef, fw: fr.fw, fh: fr.fh, bw: bs.bw, bh: bs.bh, edBg: `url("${this.blobUrl(ed.queue[ed.i])}") center/100% 100% no-repeat`,
       edTransform: `translate(${ed.tx}px, ${ed.ty}px) rotate(${ed.rot}deg) scale(${ed.scale}) skew(${ed.skx}deg, ${ed.sky}deg)`,
       edAvatar: ed.target === 'avatar', edOne: !!ed.paper || ed.target === 'avatar' || ed.target === 'cover',
       // Across two pages: only for a new picture (not a cover, profile photo, blank page or one being re-fitted).

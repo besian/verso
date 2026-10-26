@@ -954,7 +954,8 @@ function MobileEditor({ v }: { v: V }) {
   const choose = (k: string) => adjust ? v.setEdAdjTool(k) : v.setEdTool(k);
   const bar: CSSProperties = { background: 'none', border: 'none', padding: '8px 0', color: INK, font: `500 15px ${SANS}`, cursor: 'pointer' };
   const outline: CSSProperties = { flex: 1, height: 42, borderRadius: 2, border: '1.5px solid rgba(var(--ink-rgb),.5)', background: 'none', color: INK, font: `500 14px ${SANS}`, cursor: 'pointer' };
-  const hint = pick ? 'Choose how to fill this page' : draw ? 'Draw with your finger or a stylus' : write ? (v.edPad ? 'Write in the pad · tap the page to move it' : 'Write with your finger, then convert · drag text to move it') : adjust ? 'Whites cleans up the grey of a photographed page' : 'Drag to move · pinch to zoom · twist to rotate';
+  const [wheel, setWheel] = useState(false);
+  const hint = pick ? 'Choose how to fill this page' : draw ? '' : write ? (v.edPad ? 'Write in the pad · tap the page to move it' : 'Write with your finger, then convert · drag text to move it') : adjust ? 'Whites cleans up the grey of a photographed page' : 'Drag to move · pinch to zoom · twist to rotate';
   return (
     <div style={{ position: 'absolute', inset: 0, background: PAPER, zIndex: 20, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', padding: '0 16px', paddingBottom: 'calc(16px + env(safe-area-inset-bottom))', overflow: 'hidden' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8, padding: '12px 0 8px' }}>
@@ -965,14 +966,22 @@ function MobileEditor({ v }: { v: V }) {
         </div>
         {v.applyLbl === 'Add to sketchbook' && !v.edOne ? <button onClick={v.skipEdit} style={{ ...bar, justifySelf: 'end', color: 'rgba(var(--ink-rgb),.75)' }}>Skip</button> : <span />}
       </div>
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-        <EditFrame v={v} radius="2px 8px 8px 2px" shadow="0 18px 40px rgba(10,10,30,.3)" />
+      {/* The page gets whatever room is left here (measured: see frame() in App). */}
+      <div ref={v.edAreaRef} style={{ position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+        <EditFrame v={v} radius="2px 8px 8px 2px" shadow="0 12px 30px rgba(10,10,30,.25)" />
         {v.edPad && <WritePad v={v} />}
-        <div style={{ fontSize: 12, color: 'rgba(var(--ink-rgb),.6)' }}>{hint}</div>
+        {hint && <div style={{ fontSize: 12, color: 'rgba(var(--ink-rgb),.6)' }}>{hint}</div>}
+        {draw && v.edEyedrop && <span style={{ position: 'absolute', top: 6, left: '50%', transform: 'translateX(-50%)', padding: '5px 12px', borderRadius: 12, background: 'rgba(34,35,32,.85)', color: '#F6F2E8', font: `500 12px ${SANS}`, whiteSpace: 'nowrap' }}>Tap the page to pick up a colour</span>}
+        {draw && wheel && (
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 6, padding: 12, background: PAPER, border: '1px solid rgba(var(--ink-rgb),.18)', borderRadius: 6, boxShadow: '0 10px 30px rgba(20,20,30,.22)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <ColourWheel color={v.penColor} onChange={v.setColor} size={112} />
+            <button onClick={() => setWheel(false)} style={{ ...outline, flex: 'none', height: 36 }}>Done</button>
+          </div>
+        )}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 10 }}>
-        <ModeSwitch v={v} height={34} />
-        {pick ? <PickMode v={v} mob /> : draw ? <DrawTools v={v} outline={outline} mob /> : write ? <WriteTools v={v} outline={outline} mob /> : <>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: draw ? 10 : 12, paddingTop: 10 }}>
+        <ModeSwitch v={v} height={draw ? 32 : 34} />
+        {pick ? <PickMode v={v} mob /> : draw ? <DrawBar v={v} wheel={wheel} setWheel={setWheel} /> : write ? <WriteTools v={v} outline={outline} mob /> : <>
         {!adjust && <SpreadSwitch v={v} height={32} />}
         <div role="tablist" aria-label={adjust ? 'Adjustment' : 'Tool'} style={{ display: 'flex', gap: 4, overflowX: 'auto', scrollbarWidth: 'none' } as CSSProperties}>
           {tools.map(t => (
@@ -990,7 +999,51 @@ function MobileEditor({ v }: { v: V }) {
         </div>
         {!adjust && <AutoNote v={v} />}
         </>}
-        {!pick && <button onClick={v.applyEdit} style={{ height: 52, borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 16px ${SANS}`, cursor: 'pointer' }}>{v.applyLbl}</button>}
+        {!pick && <button onClick={v.applyEdit} style={{ height: draw ? 46 : 52, borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 16px ${SANS}`, cursor: 'pointer' }}>{v.applyLbl}</button>}
+      </div>
+    </div>
+  );
+}
+
+const BRUSH_ICONS: Record<string, string> = {
+  pen: 'M4.5 19.5l1.2-4.2L15.5 5.5l3 3-9.8 9.8zM13.5 7.5l3 3',
+  pencil: 'M4.5 19.5l1-3.8L16 5.2a1.9 1.9 0 0 1 2.8 2.8L8.3 18.5zM14.2 7l2.8 2.8M5.5 15.7l2.8 2.8',
+  marker: 'M8.5 15.5l-4 4h5l1.3-1.3M8.5 15.5l7.8-7.8 3.3 3.3-7.8 7.8zM14.8 6.2l3 -3 3 3-3 3',
+  water: 'M12 3.5c3.2 4.2 5.8 7.4 5.8 10.4a5.8 5.8 0 0 1-11.6 0c0-3 2.6-6.2 5.8-10.4z',
+  oil: 'M20.5 3.5l-6.5 6.5M15.5 12l-3.5-3.5M12 8.5c-2.3-.5-4.8 1.1-5.2 3.7-.3 2-1.3 3.7-3.3 4.8 3.8 1.9 9.8 1.2 10-3.8z',
+  blend: 'M3.5 9.5c2.5-3 4.5 3 8.5 0s6-3 8.5 0M3.5 15c2.5-3 4.5 3 8.5 0s6-3 8.5 0',
+  eraser: 'M9 19.5h11M4.8 14.7l8.5-8.5a1.5 1.5 0 0 1 2.1 0l3.9 3.9a1.5 1.5 0 0 1 0 2.1l-7 7H9.4zM9.4 10.1l6 6',
+};
+/** Phones, Draw: a toolbar of brushes with undo and clear, a row of colours, and size and opacity side by side. */
+function DrawBar({ v, wheel, setWheel }: { v: V; wheel: boolean; setWheel: (f: (w: boolean) => boolean) => void }) {
+  const icon = (d: string) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
+  const btn = (on: boolean, off?: boolean): CSSProperties => ({ width: 38, height: 38, flexShrink: 0, padding: 0, border: 'none', borderRadius: 10, background: on ? INK : 'none', color: on ? PAPER : INK, opacity: off ? 0.35 : 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' });
+  const dot = (c: string, on: boolean): CSSProperties => ({ width: 28, height: 28, flexShrink: 0, borderRadius: '50%', padding: 0, cursor: 'pointer', background: c, border: '1px solid rgba(34,35,32,.25)', boxShadow: on ? `0 0 0 2px ${PAPER}, 0 0 0 3.5px ${INK}` : 'none' });
+  const names = Object.fromEntries(DRAW_COLORS), swatches = [...v.recentColors, ...DRAW_COLORS.map(([c]) => c).filter(c => !v.recentColors.includes(c))].slice(0, 7);
+  const strength = v.penTool === 'blend' || v.penTool === 'eraser';
+  const tool = DRAW_TOOLS.find(([k]) => k === v.penTool)?.[1] || '';
+  const slider = (name: string, lbl: string, min: number, max: number, value: number, onChange: ChangeEventHandler<HTMLInputElement>) => (
+    <label style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, fontSize: 12, color: 'rgba(var(--ink-rgb),.7)' }}>
+      <span style={{ flexShrink: 0 }}>{name}</span>
+      <input type="range" min={min} max={max} step={1} value={value} onChange={onChange} aria-valuetext={lbl} style={{ flex: 1, minWidth: 0, accentColor: INK, height: 26 }} />
+    </label>
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div role="toolbar" aria-label={`Brushes · ${tool}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 3, border: '1px solid rgba(var(--ink-rgb),.15)', borderRadius: 13 }}>
+        {DRAW_TOOLS.map(([k, l]) => <button key={k} onClick={() => v.setTool(k)} title={l} aria-label={l} aria-pressed={v.penTool === k} style={btn(v.penTool === k)}>{icon(BRUSH_ICONS[k])}</button>)}
+        <span style={{ width: 1, height: 24, background: 'rgba(var(--ink-rgb),.15)', flexShrink: 0 }} />
+        <button onClick={v.undoMark} disabled={!v.hasMarks} title="Undo" aria-label="Undo" style={btn(false, !v.hasMarks)}>{icon('M9 5L4 10l5 5M4 10h10a5 5 0 0 1 0 10h-3')}</button>
+        <button onClick={v.clearMarks} title="Clear the drawing" aria-label="Clear the drawing" style={btn(false)}>{icon('M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13')}</button>
+      </div>
+      <div role="radiogroup" aria-label="Colour" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 3px', opacity: v.penNoColor ? 0.4 : 1 }}>
+        {swatches.map(c => <button key={c} role="radio" aria-checked={v.penColor === c} title={names[c] || c} aria-label={names[c] || c} onClick={() => v.setColor(c)} style={dot(c, v.penColor === c && !wheel)} />)}
+        <button onClick={() => setWheel(w => !w)} title="Colour wheel" aria-label="Colour wheel" aria-expanded={wheel} style={dot('conic-gradient(red, yellow, lime, cyan, blue, magenta, red)', wheel)} />
+        <button onClick={v.toggleEyedrop} title="Pick a colour from the page" aria-label="Pick a colour from the page" aria-pressed={v.edEyedrop} style={{ ...btn(v.edEyedrop), width: 32, height: 32, borderRadius: '50%', border: `1px solid ${v.edEyedrop ? INK : 'rgba(var(--ink-rgb),.25)'}` }}>{icon('M14.5 4.5l5 5M17 2.5l4.5 4.5-3 3-4.5-4.5zM15 8.5l-9 9-1.5 4 4-1.5 9-9')}</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        {slider('Size', String(v.penSize), 1, 40, v.penSize, v.onPenSize)}
+        {slider(strength ? 'Strength' : 'Opacity', `${v.penOpacity}%`, 5, 100, v.penOpacity, v.onPenOpacity)}
       </div>
     </div>
   );
