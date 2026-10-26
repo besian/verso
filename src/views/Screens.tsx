@@ -119,7 +119,7 @@ function FollowingFeed({ v }: { v: V }) {
           ) : v.exFeed.map((f: V) => (
             <article key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: v.exGap, borderBottom: '1px solid rgba(var(--ink-rgb),.15)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                <button onClick={f.openArtist} aria-label={`${f.artist}’s profile`} style={{ width: 38, height: 38, flexShrink: 0, borderRadius: '50%', border: 'none', background: INK, color: PAPER, font: `600 12px ${SANS}`, cursor: 'pointer' }}>{f.init}</button>
+                <button onClick={f.openArtist} aria-label={`${f.artist}’s profile`} style={{ width: 38, height: 38, flexShrink: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.15)', boxSizing: 'border-box', padding: 0, background: f.av || INK, color: PAPER, font: `600 12px ${SANS}`, cursor: 'pointer' }}>{f.av ? '' : f.init}</button>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
                   <span style={{ fontSize: 14, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     <button onClick={f.openArtist} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `600 14px ${SANS}`, cursor: 'pointer' }}>{f.artist}</button>

@@ -20,7 +20,8 @@ export function CommentsPanel({ v }: { v: V }) {
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [v.cmList.length]);
   const panel: CSSProperties = mob
     ? { position: 'absolute', left: 0, right: 0, bottom: 0, height: '62%', borderRadius: '14px 14px 0 0', borderTop: '1px solid rgba(var(--ink-rgb),.15)', boxShadow: '0 -16px 40px rgba(20,20,30,.18)' }
-    : { position: 'absolute', top: 0, right: 0, bottom: 0, width: 380, borderLeft: '1px solid rgba(var(--ink-rgb),.15)', boxShadow: '-16px 0 40px rgba(20,20,30,.1)' };
+    // Below the top bar, so the bell and your profile stay in reach.
+    : { position: 'absolute', top: 68, right: 0, bottom: 0, width: 380, borderLeft: '1px solid rgba(var(--ink-rgb),.15)', borderTop: '1px solid rgba(var(--ink-rgb),.15)', boxShadow: '-16px 0 40px rgba(20,20,30,.1)' };
   return (
     <aside aria-label="Comments" onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()} style={{ ...panel, zIndex: 14, background: PAPER, display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
       <div style={{ padding: mob ? '14px 16px 10px' : '22px 22px 12px', display: 'flex', flexDirection: 'column', gap: 10, borderBottom: '1px solid rgba(var(--ink-rgb),.12)' }}>
@@ -42,7 +43,7 @@ export function CommentsPanel({ v }: { v: V }) {
         )}
         {v.cmList.map((c: V) => (
           <div key={c.key} style={{ display: 'flex', gap: 12, padding: '14px 0', borderBottom: '1px solid rgba(var(--ink-rgb),.08)' }}>
-            <button onClick={c.openAuthor} aria-label={`${c.name}’s profile`} style={{ width: 32, height: 32, flexShrink: 0, borderRadius: '50%', border: 'none', background: INK, color: PAPER, font: `600 11px ${SANS}`, cursor: 'pointer' }}>{c.initials}</button>
+            <button onClick={c.openAuthor} aria-label={`${c.name}’s profile`} style={{ width: 32, height: 32, flexShrink: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.15)', boxSizing: 'border-box', padding: 0, background: c.av || INK, color: PAPER, font: `600 11px ${SANS}`, cursor: 'pointer' }}>{c.av ? '' : c.initials}</button>
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                 <button onClick={c.openAuthor} className={hover(`color:${MARK}`)} style={{ ...linkBtn(INK), font: `600 13.5px ${SANS}` }}>{c.name}</button>
@@ -50,8 +51,13 @@ export function CommentsPanel({ v }: { v: V }) {
                 {c.showPage && <button onClick={c.goPage} className={hover(`color:${MARK}`)} style={{ ...linkBtn(MARK), ...label(MARK, 10) }}>{c.page}</button>}
               </div>
               <div style={{ fontSize: 14.5, lineHeight: 1.5, color: INK, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{c.text}</div>
-              {(c.canDelete || c.canReport) && (
-                <div style={{ display: 'flex', gap: 14, marginTop: 2 }}>
+              {(
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 2 }}>
+                  <button onClick={c.like} aria-pressed={c.liked} aria-label={`${c.liked ? 'Unlike' : 'Like'} comment, ${c.likes} ${c.likes === 1 ? 'like' : 'likes'}`} className={hover(`color:${MARK}`)}
+                    style={{ ...linkBtn(c.liked ? MARK : STONE), display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill={c.liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z" /></svg>
+                    {c.likes > 0 ? c.likes : 'Like'}
+                  </button>
                   {c.canDelete && <button onClick={c.del} className={hover(`color:${MARK}`)} style={linkBtn(STONE)}>Delete</button>}
                   {c.canReport && <button onClick={c.report} className={hover(`color:${MARK}`)} style={linkBtn(STONE)}>Report</button>}
                 </div>

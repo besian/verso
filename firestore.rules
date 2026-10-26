@@ -83,6 +83,10 @@ service cloud.firestore {
             || (request.resource.data.type == 'comment' && nid == 'comment_' + request.resource.data.commentId && str(request.resource.data.text, 140)
               && getAfter(/databases/$(database)/documents/books/$(request.resource.data.bookId)/comments/$(request.resource.data.commentId)).data.uid == request.auth.uid
               && get(/databases/$(database)/documents/books/$(request.resource.data.bookId)).data.ownerId == uid)
+            // A like on a comment: once per person per comment, to the comment's author, in the same write as the like.
+            || (request.resource.data.type == 'commentLike' && nid == 'clike_' + request.resource.data.commentId + '_' + request.auth.uid && str(request.resource.data.text, 140)
+              && getAfter(/databases/$(database)/documents/books/$(request.resource.data.bookId)/comments/$(request.resource.data.commentId)).data.uid == uid
+              && request.auth.uid in getAfter(/databases/$(database)/documents/books/$(request.resource.data.bookId)/comments/$(request.resource.data.commentId)).data.get('likes', []))
             || (request.resource.data.type == 'follow' && nid == 'follow_' + request.auth.uid)
             || (request.resource.data.type == 'goal' && uid == request.auth.uid && nid == 'goal_' + request.resource.data.goal));
       }
@@ -401,7 +405,14 @@ service cloud.firestore {
           && request.resource.data.at is int
           && !exists(/databases/$(database)/documents/users/$(bookDoc().ownerId)/blocked/$(request.auth.uid));
         allow delete: if signedIn() && (resource.data.uid == request.auth.uid || bookDoc().ownerId == request.auth.uid || isAdmin());
-        allow update: if false;
+        // Likes: `likes` lists who liked it; each person adds or takes away only themselves.
+        allow update: if signedIn() && !suspended() && bookOpen(bookDoc())
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+          && request.resource.data.likes is list && request.resource.data.likes.size() <= 5000
+          && ((!(request.auth.uid in resource.data.get('likes', []))
+              && request.resource.data.likes.toSet() == resource.data.get('likes', []).toSet().union([request.auth.uid].toSet()))
+            || ((request.auth.uid in resource.data.get('likes', []))
+              && request.resource.data.likes.toSet() == resource.data.get('likes', []).toSet().difference([request.auth.uid].toSet())));
       }
     }
   }

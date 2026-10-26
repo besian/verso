@@ -13,7 +13,7 @@ import {
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import {
-  collection, connectFirestoreEmulator, deleteDoc, deleteField, doc, getDoc, getDocs, getFirestore, increment, limit, onSnapshot,
+  arrayRemove, arrayUnion, collection, connectFirestoreEmulator, deleteDoc, deleteField, doc, getDoc, getDocs, getFirestore, increment, limit, onSnapshot,
   limitToLast, orderBy, query, runTransaction, serverTimestamp, setDoc, startAfter, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
 import type { DocumentData, QueryConstraint, QueryDocumentSnapshot } from 'firebase/firestore';
@@ -639,7 +639,7 @@ export function watchSize(path: string[], cb: (n: number) => void): () => void {
 
 // ---------- likes, counts, notifications ----------
 
-export interface Notif { id: string; type: 'like' | 'follow' | 'goal' | 'invite' | 'comment'; from: string; fromName: string; fromHandle: string; bookId?: string; bookName?: string; goal?: string; at: number; read: boolean; commentId?: string; text?: string; page?: string }
+export interface Notif { id: string; type: 'like' | 'follow' | 'goal' | 'invite' | 'comment' | 'commentLike'; from: string; fromName: string; fromHandle: string; bookId?: string; bookName?: string; goal?: string; at: number; read: boolean; commentId?: string; text?: string; page?: string }
 const note = (me: Account, type: 'like' | 'follow', book?: { id: string; name: string }) => ({
   type, from: me.uid, fromName: me.name, fromHandle: me.handle, ...(book ? { bookId: book.id, bookName: book.name } : {}), at: Date.now(), read: false,
 });
@@ -660,7 +660,7 @@ export async function setLike(me: Account, book: { id: string; ownerId: string; 
 }
 
 // ---------- comments on pages ----------
-export interface Comment { id: string; uid: string; name: string; handle: string; page: string; text: string; at: number }
+export interface Comment { id: string; uid: string; name: string; handle: string; page: string; text: string; at: number; likes?: string[] }
 export const COMMENT_MAX = 500;
 /** A short, stable code for a page's picture, so a comment stays with its page when pages are moved around. */
 export function pageKey(u: string) {
@@ -683,6 +683,14 @@ export async function addComment(me: Account, book: { id: string; ownerId: strin
     text: text.length > 140 ? text.slice(0, 139) + '…' : text, page: String(pageNo), at, read: false,
   });
   await batch.commit();
+}
+/** Likes or unlikes a comment; the first like from someone tells the comment's author (once). */
+export async function likeComment(me: Account, book: { id: string; name: string }, c: Comment, pageNo: number, on: boolean) {
+  await updateDoc(doc(need().db, 'books', book.id, 'comments', c.id), { likes: on ? arrayUnion(me.uid) : arrayRemove(me.uid) });
+  if (on && c.uid !== me.uid) notifyOnce(c.uid, `clike_${c.id}_${me.uid}`, {
+    type: 'commentLike', from: me.uid, fromName: me.name, fromHandle: me.handle, bookId: book.id, bookName: book.name, commentId: c.id,
+    text: c.text.length > 140 ? c.text.slice(0, 139) + '…' : c.text, page: String(pageNo), at: Date.now(), read: false,
+  });
 }
 export async function deleteComment(bookId: string, id: string) { await deleteDoc(doc(need().db, 'books', bookId, 'comments', id)); }
 

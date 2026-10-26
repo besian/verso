@@ -1361,6 +1361,16 @@ export default class App extends Component<object, State> {
   // ---------- explore ----------
   /** Explore's list: the loaded pages (already in order from the server) or the medium/tag results, then the search. */
   // ---------- comments ----------
+  /** Profile pictures by uid for comments and the Following feed, looked up once each (null: none, or not yet). */
+  avatars = new Map<string, string | null>(); avTimer = 0 as unknown as ReturnType<typeof setTimeout>;
+  avatarOf(uid: string): string | null {
+    if (uid === this.state.acct?.uid) return this.state.acct?.av || null;
+    if (!this.avatars.has(uid)) {
+      this.avatars.set(uid, null);
+      api.getProfile(uid).then(p => { if (p?.av) { this.avatars.set(uid, p.av); clearTimeout(this.avTimer); this.avTimer = setTimeout(() => this.forceUpdate(), 30); } }).catch(() => {});
+    }
+    return this.avatars.get(uid) || null;
+  }
   /** Turns the open book to the opening that shows picture i. */
   goToPage(i: number) { if (i < 0) return; this.turnTo(Math.max(1, Math.min(this.nLeaves() - 1, Math.floor((i + 1) / 2) + 1))); this.animate(); }
   /** The pictures on show: the open spread's two pages, or in focus just the page zoomed in on. */
@@ -1399,6 +1409,9 @@ export default class App extends Component<object, State> {
         const i = keyAt.get(c.page);
         return {
           key: c.id, name: c.name || '@' + c.handle, handle: '@' + c.handle, initials: (c.name || c.handle || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase(),
+          av: (() => { const a = this.avatarOf(c.uid); return a ? avatarBg(a) : ''; })(),
+          likes: (c.likes || []).length, liked: !!me && (c.likes || []).includes(me),
+          like: () => { const a = s.acct; if (!a) return this.openJoin(); api.likeComment(a, book, c, (i ?? 0) + 1, !(c.likes || []).includes(a.uid)).catch(e => { console.error(e); this.toast('Couldn’t save that. Try again.'); }); },
           when: when(c.at), text: c.text, mine: c.uid === me, page: i == null ? 'an earlier page' : `Page ${i + 1}`, showPage: !!s.cmAll || shown.length === 2,
           goPage: () => i != null && this.goToPage(i),
           openAuthor: () => this.openProfile({ uid: c.uid, name: c.name, handle: c.handle }),
@@ -1429,7 +1442,7 @@ export default class App extends Component<object, State> {
       exFeed: on ? feed.map(b => {
         const shp = this.shapeOf(b), n = b.images.length, from = Math.max(0, n - (mob ? 4 : 6));
         return {
-          key: b.id, artist: b.artist, handle: b.handle ? '@' + b.handle : '', init: ini(b.artist), name: b.name, when: ago(b.updatedAt || 0), mature: !!b.mature,
+          key: b.id, artist: b.artist, handle: b.handle ? '@' + b.handle : '', init: ini(b.artist), av: (() => { const a = b.ownerId ? this.avatarOf(b.ownerId) : null; return a ? avatarBg(a) : ''; })(), name: b.name, when: ago(b.updatedAt || 0), mature: !!b.mature,
           meta: `${n} ${n === 1 ? 'page' : 'pages'}${(b.mediums || []).length ? ' · ' + (b.mediums || []).join(', ') : ''}`,
           open: () => this.openOtherBook(b, 'explore'), openArtist: () => this.openProfile(this.whoOf(b)),
           pages: b.images.slice(from).map((u, k) => ({ key: from + k, num: String(from + k + 1), bg: `url("${this.blobUrl(this.thumbOf(b, u))}") center/cover no-repeat #f3efe6`, w: Math.round(h * shp.a), h, open: () => openAt(b, from + k) })).reverse(),
@@ -1813,10 +1826,15 @@ export default class App extends Component<object, State> {
       ntItems: list.map(n => ({
         key: n.id, unread: !n.read, when: ago(n.at), goal: n.type === 'goal',
         who: n.type === 'goal' ? '' : n.fromName || '@' + n.fromHandle,
-        text: n.type === 'comment' ? <>commented on page {n.page} of <i>{n.bookName}</i>: “{n.text}”</> : n.type === 'like' ? <>liked <i>{n.bookName}</i></> : n.type === 'invite' ? <>invited you to draw in <i>{n.bookName}</i></> : n.type === 'follow' ? 'started following you' : n.goal === 'likes100' ? `You reached ${GOAL} likes. Thank you for sharing your pages.` : `You reached ${GOAL} followers. People are following along.`,
+        text: n.type === 'comment' ? <>commented on page {n.page} of <i>{n.bookName}</i>: “{n.text}”</> : n.type === 'commentLike' ? <>liked your comment on <i>{n.bookName}</i>: “{n.text}”</> : n.type === 'like' ? <>liked <i>{n.bookName}</i></> : n.type === 'invite' ? <>invited you to draw in <i>{n.bookName}</i></> : n.type === 'follow' ? 'started following you' : n.goal === 'likes100' ? `You reached ${GOAL} likes. Thank you for sharing your pages.` : `You reached ${GOAL} followers. People are following along.`,
         open: () => {
           this.setState({ notifOpen: false });
           if (n.type === 'invite' && n.bookId) { const j = s.books.findIndex(b => b.id === n.bookId); if (j >= 0) { this.goMode('mine'); this.setState({ active: j, images: s.books[j].images }); } else this.setState({ notifOpen: true }); }
+          else if (n.type === 'commentLike' && n.bookId) {
+            // Your comment may be on your own sketchbook or someone else's.
+            const j = s.books.findIndex(b => b.id === n.bookId), at = () => this.setState({ cmOpen: true, cmAll: false }, () => setTimeout(() => this.goToPage(Number(n.page || 1) - 1), 80));
+            if (j >= 0) { this.goMode('mine'); this.setState({ active: j, images: s.books[j].images }, at); } else { this.openBookById(n.bookId); setTimeout(at, 600); }
+          }
           else if (n.type === 'comment' && n.bookId) {
             const j = s.books.findIndex(b => b.id === n.bookId); if (j < 0) return;
             this.goMode('mine'); this.setState({ active: j, images: s.books[j].images, cmOpen: true, cmAll: false }, () => this.goToPage(Number(n.page || 1) - 1));
