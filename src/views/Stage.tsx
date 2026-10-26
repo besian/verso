@@ -1,4 +1,4 @@
-import { Fragment, memo, useEffect, useState } from 'react';
+import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { V } from '../App';
 import ClosedBook from '../ClosedBook';
@@ -23,14 +23,14 @@ function Icon({ d, fill }: { d: string; fill?: boolean }) {
 const actLink: CSSProperties = { padding: 0, border: 'none', background: 'none', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: INK, cursor: 'pointer' };
 const arrowBtn: CSSProperties = { width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'rgba(var(--ink-rgb),.12)', color: INK, font: `500 16px ${SANS}`, cursor: 'pointer' };
 
-// Zoomed in, the bars and title fade out. Their opacity comes from custom properties set on the stage, so that
-// during animation frames (v.$frame) they needn't render at all: see frameState in App.
-const UI_OP = 'var(--ui-op)', UI_PE = 'var(--ui-pe)' as CSSProperties['pointerEvents'];
+// Zoomed in, the bars and title fade out. Their fade is written straight onto the elements marked data-fade by the
+// stage (see useFades), so that during animation frames (v.$frame) they needn't render at all: see frameState in App.
+// (A custom property on the stage did the same, but changing it restyled every element on the screen each frame.)
 const skipOnFrame = (_: { v: V }, next: { v: V }) => !!next.v.$frame;
 
 const TopBar = memo(function TopBar({ v }: { v: V }) {
   return (
-    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: `${v.mTop}px ${v.mPad}px 12px`, background: PAPER, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, zIndex: 5, opacity: UI_OP, pointerEvents: UI_PE }}>
+    <div data-fade="ui" style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: `${v.mTop}px ${v.mPad}px 12px`, background: PAPER, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, zIndex: 5 }}>
       {/* Viewing someone's sketchbook: the way back sits just under the logo. */}
       {v.isOther && v.notMob && !v.embed && (
         <button onClick={v.goExplore} title="Back to Explore" aria-label="Back to Explore" className={hover(`color:${MARK};border-color:${MARK}`)} style={{ position: 'absolute', left: v.mPad, top: 'calc(100% + 6px)', width: 36, height: 36, padding: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.25)', background: 'none', color: INK, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -111,7 +111,7 @@ const TabBar = memo(function TabBar({ v }: { v: V }) {
   );
   const svg = (k: string) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{TB_ICONS[k]}</svg>;
   return (
-    <nav aria-label="Main" onClick={e => e.stopPropagation()} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 12, display: 'flex', alignItems: 'stretch', padding: '0 6px env(safe-area-inset-bottom)', background: PAPER, borderTop: '1px solid rgba(var(--ink-rgb),.14)', opacity: UI_OP, pointerEvents: UI_PE }}>
+    <nav data-fade="ui" aria-label="Main" onClick={e => e.stopPropagation()} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 12, display: 'flex', alignItems: 'stretch', padding: '0 6px env(safe-area-inset-bottom)', background: PAPER, borderTop: '1px solid rgba(var(--ink-rgb),.14)' }}>
       {item('explore', 'Explore', v.tbOn === 'explore', v.goExplore, svg('explore'))}
       {item('mine', 'Yours', v.tbOn === 'mine', v.goMine, svg('mine'))}
       {item('msgs', 'Messages', !!v.isMessagesMode, v.ntOpenMsgs, <span style={{ position: 'relative', display: 'flex' }}>{svg('msgs')}
@@ -124,7 +124,7 @@ const TabBar = memo(function TabBar({ v }: { v: V }) {
 /** First few times on a touch screen: how to turn pages and zoom. */
 const SwipeHint = memo(function SwipeHint({ v }: { v: V }) {
   // Zero-height wrapper: the hint floats above the controls, so showing or hiding it never moves the book.
-  return <div style={{ position: 'relative', height: 0, width: '100%', zIndex: 2 }}><div role="status" style={{ position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap', padding: '7px 14px', borderRadius: 16, background: 'rgba(var(--ink-rgb),.08)', fontSize: 13, color: INK, opacity: UI_OP, pointerEvents: 'none' }}>Swipe to turn pages · pinch to zoom in</div></div>;
+  return <div style={{ position: 'relative', height: 0, width: '100%', zIndex: 2 }}><div data-fade="op" role="status" style={{ position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap', padding: '7px 14px', borderRadius: 16, background: 'rgba(var(--ink-rgb),.08)', fontSize: 13, color: INK, pointerEvents: 'none' }}>Swipe to turn pages · pinch to zoom in</div></div>;
 }, skipOnFrame);
 
 /** Messages, next to the bell: opens your conversations, with a count of unread ones and requests. */
@@ -181,9 +181,9 @@ function Bell({ v, sheet }: { v: V; sheet?: boolean }) {
 
 const Title = memo(function Title({ v }: { v: V }) {
   return (
-    <div style={{ position: 'relative', marginTop: v.mTitleTop, maxWidth: '100%', boxSizing: 'border-box', padding: `0 ${v.mPad}px`, display: 'flex', alignItems: 'center', gap: v.mGap, opacity: UI_OP, pointerEvents: UI_PE }}>
+    <div data-fade="ui" style={{ position: 'relative', marginTop: v.mTitleTop, maxWidth: '100%', boxSizing: 'border-box', padding: `0 ${v.mPad}px`, display: 'flex', alignItems: 'center', gap: v.mGap }}>
       {v.multi && <button onClick={v.prevBook} title="Previous sketchbook" style={{ ...arrowBtn, opacity: v.prevOp }}>‹</button>}
-      <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', minWidth: 0, opacity: 'var(--title-op)' }}>
+      <div data-fade="title" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', minWidth: 0 }}>
         <div style={{ fontSize: v.mTitleSize, fontFamily: SERIF, fontWeight: 400, letterSpacing: '-.01em', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.titleName}</div>
         <div style={label()}>
           {v.isOther && v.bkArch
@@ -229,7 +229,7 @@ const Title = memo(function Title({ v }: { v: V }) {
 /** Inside an embed: the sketchbook's name and artist, linking back to fletora. */
 const EmbedTitle = memo(function EmbedTitle({ v }: { v: V }) {
   return (
-    <div style={{ marginTop: 14, padding: '0 14px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, textAlign: 'center', opacity: UI_OP, pointerEvents: UI_PE, maxWidth: '100%', boxSizing: 'border-box' }}>
+    <div data-fade="ui" style={{ marginTop: 14, padding: '0 14px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, textAlign: 'center', maxWidth: '100%', boxSizing: 'border-box' }}>
       <div style={{ ...{ font: `400 ${v.notMob ? 30 : 24}px/1.1 ${SERIF}` }, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.titleName}</div>
       <a href={v.embedHref} target="_blank" rel="noopener" style={{ ...label(INK, 10), textDecoration: 'none' }}>by {v.artist} · open on fletora<span style={{ color: MARK }}>.</span> ↗</a>
     </div>
@@ -293,7 +293,7 @@ function FrontFace({ leaf, onClick, style }: { leaf: V; onClick?: () => void; st
       {leaf.isCoverAny && <div style={{ position: 'absolute', right: '13%', top: 0, bottom: 0, width: 8, background: '#1d1d26', boxShadow: '-2px 0 3px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.25)', pointerEvents: 'none' }} />}
       {leaf.isCover && <div className="cover-label" style={{ position: 'absolute', left: '16%', right: '26%', top: '14%', padding: '10px 12px', background: '#f6f2e9', borderRadius: 2, boxShadow: '0 1px 2px rgba(0,0,0,.2)', color: '#222320', fontSize: 15, fontWeight: 600, letterSpacing: '-.01em', pointerEvents: 'none' }}>{leaf.label}</div>}
       <PageNote text={leaf.noteF} fs={leaf.noteFs} side="R" />
-      <div style={{ ...fill, background: '#000', opacity: leaf.shadeF, pointerEvents: 'none' }} />
+      <div style={{ ...fill, background: '#000', opacity: leaf.shadeF, pointerEvents: 'none', willChange: 'opacity' }} />
       <div style={{ ...leafNum, right: 14 }}>{leaf.numF}</div>
     </div>
   );
@@ -306,7 +306,7 @@ function BackFace({ leaf, onClick, style }: { leaf: V; onClick?: () => void; sty
       <DogEar ear={leaf.wearB?.ear} />
       {leaf.isBackCover && <div style={{ position: 'absolute', left: '13%', top: 0, bottom: 0, width: 8, background: '#1d1d26', boxShadow: '-2px 0 3px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.25)', pointerEvents: 'none' }} />}
       <PageNote text={leaf.noteB} fs={leaf.noteFs} side="L" />
-      <div style={{ ...fill, background: '#000', opacity: leaf.shadeB, pointerEvents: 'none' }} />
+      <div style={{ ...fill, background: '#000', opacity: leaf.shadeB, pointerEvents: 'none', willChange: 'opacity' }} />
       <div style={{ ...leafNum, left: 14 }}>{leaf.numB}</div>
     </div>
   );
@@ -335,7 +335,7 @@ function CurledLeaf({ leaf, W, H }: { leaf: V; W: number; H: number }) {
         {full
           ? <div style={{ position: 'absolute', top: 0, left, width: W, height: H }}>{back ? <BackFace leaf={leaf} style={{ transform: 'none', backfaceVisibility: 'visible' }} /> : <FrontFace leaf={leaf} style={{ backfaceVisibility: 'visible' }} />}</div>
           : <div style={{ position: 'absolute', top: 0, left, width: W, height: H, borderRadius: back ? '10px 2px 2px 10px' : '2px 10px 10px 2px', background: (back ? leaf.overlayB : leaf.overlayF) ? `${back ? leaf.overlayB : leaf.overlayF},${back ? leaf.backBg : leaf.frontBg}` : back ? leaf.backBg : leaf.frontBg }} />}
-        <div style={{ ...fill, background: '#1e1810', opacity: full ? +(leaf.curlAmt * (back ? 0.16 : 0.22) * (k / n) ** 2).toFixed(3) : +shade.toFixed(3), pointerEvents: 'none' }} />
+        <div style={{ ...fill, background: '#1e1810', opacity: full ? +(leaf.curlAmt * (back ? 0.16 : 0.22) * (k / n) ** 2).toFixed(3) : +shade.toFixed(3), pointerEvents: 'none', willChange: 'opacity' }} />
       </div>
     );
   };
@@ -366,7 +366,7 @@ const HIDDEN: CSSProperties = { visibility: 'hidden' };
 
 function Book3D({ v }: { v: V }) {
   return (
-    <div style={{ position: 'relative', width: 0, height: v.H, transformStyle: 'preserve-3d', transform: v.bookTransform, opacity: v.bookOp }}>
+    <div style={{ position: 'relative', width: 0, height: v.H, transformStyle: 'preserve-3d', transform: v.bookTransform, opacity: v.bookOp, willChange: 'transform' }}>
       <div style={{ position: 'absolute', left: v.shadowLeft, top: 0, width: v.shadowW, height: v.H, transform: 'translateZ(-2px) translateY(26px) scale(1.12)', background: 'radial-gradient(closest-side, rgba(var(--ink-rgb),.17), rgba(var(--ink-rgb),.08) 60%, transparent)', opacity: v.openShadowOp }} />
       <div style={{ position: 'absolute', left: v.bodyLeft, top: 0, width: v.W, height: v.H, transform: 'translateZ(-1px)', opacity: v.bodyOp, pointerEvents: 'none' }}>
         <div style={{ ...fill, transform: v.bodyBack ? 'translate(-7px,6px)' : 'translate(7px,6px)', borderRadius: v.bodyBack ? '11px 3px 3px 11px' : '3px 11px 11px 3px', background: v.boardColor, filter: 'brightness(.6)', boxShadow: '0 24px 40px rgba(34,35,32,.16)' }} />
@@ -405,7 +405,7 @@ const KeyGuide = memo(function KeyGuide({ v }: { v: V }) {
   const rows: [string[], string, string][] = [[['←', '→'], 'Turn pages', 'Turn'], [['↑'], 'Open · zoom in', 'Open · zoom'], [['↓'], 'Zoom out · close', 'Zoom out · close']];
   if (v.multi) rows.push([['⇧', '←', '→'], 'Switch sketchbook', 'Switch book']);
   return (
-    <div aria-label="Keyboard shortcuts" style={{ position: 'absolute', left: full ? 24 : 16, bottom: full ? 24 : 18, zIndex: 2, display: 'grid', gridTemplateColumns: 'auto auto', columnGap: full ? 14 : 10, rowGap: full ? 7 : 5, alignItems: 'center', opacity: UI_OP, pointerEvents: 'none', ...label(STONE, full ? 10 : 9) }}>
+    <div data-fade="op" aria-label="Keyboard shortcuts" style={{ position: 'absolute', left: full ? 24 : 16, bottom: full ? 24 : 18, zIndex: 2, display: 'grid', gridTemplateColumns: 'auto auto', columnGap: full ? 14 : 10, rowGap: full ? 7 : 5, alignItems: 'center', pointerEvents: 'none', ...label(STONE, full ? 10 : 9) }}>
       {rows.map(([keys, long, short]) => (
         <Fragment key={long}>
           <span style={{ display: 'flex', gap: 3 }}>{keys.map(k => <span key={k} style={full ? kbd : { ...kbd, minWidth: 18, height: 18, fontSize: 11 }}>{k}</span>)}</span>
@@ -418,13 +418,22 @@ const KeyGuide = memo(function KeyGuide({ v }: { v: V }) {
 
 /** App shell: focus backdrop, top bar, book title, the 3D stage and its controls. Screens and overlays render as children above it. */
 export default function Stage({ v, children }: { v: V; children: ReactNode }) {
+  const root = useRef<HTMLDivElement>(null);
+  // Every render, so anything just shown starts at the right fade.
+  useLayoutEffect(() => {
+    root.current?.querySelectorAll<HTMLElement>('[data-fade]').forEach(el => {
+      const k = el.dataset.fade, op = String(k === 'title' ? v.titleOp : v.uiOp);
+      if (el.style.opacity !== op) el.style.opacity = op;
+      if (k === 'ui' && el.style.pointerEvents !== v.uiPE) el.style.pointerEvents = v.uiPE;
+    });
+  });
   return (
-    <div onDragOver={v.onDragOver} onDrop={v.onDrop} onMouseMove={v.wake} onPointerDown={v.wake} onClick={v.closeMore} style={{ ['--tabbar' as string]: v.tabBar ? 'calc(57px + env(safe-area-inset-bottom))' : '0px', ['--ui-op' as string]: v.uiOp, ['--ui-pe' as string]: v.uiPE, ['--title-op' as string]: v.titleOp, position: 'fixed', inset: 0, background: PAPER, color: INK, fontFamily: SANS, display: 'flex', flexDirection: 'column', alignItems: 'center', userSelect: 'none' }}>
+    <div ref={root} onDragOver={v.onDragOver} onDrop={v.onDrop} onMouseMove={v.wake} onPointerDown={v.wake} onClick={v.closeMore} style={{ ['--tabbar' as string]: v.tabBar ? 'calc(57px + env(safe-area-inset-bottom))' : '0px', position: 'fixed', inset: 0, background: PAPER, color: INK, fontFamily: SANS, display: 'flex', flexDirection: 'column', alignItems: 'center', userSelect: 'none' }}>
       {/* Focus backdrop, only while zoomed: a tiny pre-blurred copy of the page stretched across the screen.
           (A CSS blur on a screen-sized layer had to be recomputed every frame and made zooming stutter.) */}
       {+v.fz > 0.001 && (
-        <div style={{ ...fill, overflow: 'hidden', pointerEvents: 'none', opacity: v.fz }}>
-          <div ref={v.bgRefA} style={{ position: 'absolute', inset: '-25%', background: v.focusBg, transition: 'background .9s' }} />
+        <div style={{ ...fill, overflow: 'hidden', pointerEvents: 'none', opacity: v.fz, willChange: 'opacity' }}>
+          <div ref={v.bgRefA} style={{ position: 'absolute', inset: '-25%', background: v.focusBg, willChange: 'transform' }} />
           <div style={{ ...fill, background: 'rgba(var(--paper-rgb),.74)' }} />
         </div>
       )}

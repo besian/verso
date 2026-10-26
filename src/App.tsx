@@ -152,7 +152,9 @@ const LEAF_WINDOW = 3;
 const PHONE_CLOSED = 0.6, PHONE_OPEN = 0.44;
 const IS_TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 /** Zooming into a page, and sliding between the two pages of a spread while zoomed (ms). */
-const FOCUS_MS = 300, FOCUS_OUT_MS = 340, FOCUS_SHIFT_MS = 280;
+// With "Reduce motion" turned on, page turns, zooms and the shelf move in about a third of the time.
+const MOTION = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.35 : 1;
+const FOCUS_MS = 300 * MOTION, FOCUS_OUT_MS = 340 * MOTION, FOCUS_SHIFT_MS = 280 * MOTION;
 /** Likes and followers each artist is working toward. */
 const GOAL = 100;
 // border-box: the photo also fills under the thin avatar border, so the dark fallback colour never shows at the edge.
@@ -901,7 +903,7 @@ export default class App extends Component<object, State> {
     if (j < 0 || j >= books.length || j === from || this.state.switching) return;
     const slide = () => {
       this.setState({ switching: true, car: from });
-      const dur = 520 + 140 * Math.min(3, Math.abs(j - from)), t0 = performance.now();
+      const dur = (520 + 140 * Math.min(3, Math.abs(j - from))) * MOTION, t0 = performance.now();
       const tick = (now: number) => {
         const t = Math.min(1, (now - t0) / dur), e = t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
         if (t < 1) { this.frameState({ car: from + (j - from) * e, swT: t }); this.raf = requestAnimationFrame(tick); }
@@ -1051,7 +1053,7 @@ export default class App extends Component<object, State> {
   animate(onDone?: () => void) {
     cancelAnimationFrame(this.raf); this.startMoving(); this.tweenAt = performance.now();
     const from = this.state.p, dist = Math.abs(this.target - from);
-    const dur = Math.max(200, Math.min(900, 430 * Math.sqrt(dist))); let t0 = 0;
+    const dur = Math.max(200, Math.min(900, 430 * Math.sqrt(dist))) * MOTION; let t0 = 0;
     const step = (now: number) => {
       t0 = t0 || now; const to = this.target, k = Math.min(1, (now - t0) / dur), e = 1 - (1 - k) * (1 - k);
       if (k >= 1 || dist < 0.002) { this.tweenAt = 0; this.setState({ p: to }); onDone?.(); return; }
@@ -1167,7 +1169,9 @@ export default class App extends Component<object, State> {
   drift(el: (HTMLDivElement & { _anim?: Animation }) | null, kf: Keyframe[], dur: number) {
     if (el && !el._anim && el.animate) el._anim = el.animate(kf, { duration: dur, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out' });
   }
-  bgRefA = (el: HTMLDivElement | null) => this.drift(el, [{ transform: 'translate(-6%,-4%) rotate(0deg) scale(1.1)' }, { transform: 'translate(5%,4%) rotate(10deg) scale(1.3)' }], 16000);
+  // The backdrop only slides: a layer that turns or changes size has to be redrawn every frame, and this one covers
+  // the screen (it was most of the cost of zooming in on phones).
+  bgRefA = (el: HTMLDivElement | null) => this.drift(el, [{ transform: 'translate(-6%,-4%) scale(1.2)' }, { transform: 'translate(5%,4%) scale(1.2)' }], 16000);
 
   // ---------- fit-your-page editor ----------
   startEdit(queue: string[], replaceIdx: number | null, target?: 'cover' | 'avatar', mode: EdMode = 'fit') {
