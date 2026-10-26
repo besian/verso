@@ -2685,7 +2685,7 @@ export default class App extends Component<object, State> {
         };
       })(),
       stageRef: this.stageRef, fileRef: this.fileRef,
-      ctrlOp: vis ? 1 : 0, ctrlY: vis ? 0 : 24, ctrlPE: vis ? 'auto' : 'none',
+      ctrlOp: vis ? 1 : 0, ctrlY: vis ? 0 : 24, ctrlPE: vis ? 'auto' : 'none', inFocus: foc,
       showHandle: foc && focusMode === 'toggle', handleLbl: s.menuOpen ? 'Hide menu' : 'Show menu',
       toggleMenu: () => this.setState(st => ({ menuOpen: !st.menuOpen })),
       showRail: foc && focusMode === 'side rail',

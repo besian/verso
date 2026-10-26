@@ -190,12 +190,11 @@ const Title = memo(function Title({ v }: { v: V }) {
           {v.isOther && v.bkArch
             ? <>by {v.artist}{v.bkArch.years ? ` · ${v.bkArch.years}` : ''} · {v.otherPages} pages</>
             : v.isOther
-            ? <>by <button onClick={v.openArtist} title="View profile" className={'tap ' + hover(`color:${MARK};border-color:${MARK}`)} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: INK, cursor: 'pointer' }}>{v.artist}</button>{v.bkVerified && <Verified size={13} />} · {v.otherPages} pages{v.otherMature && ' · Mature'}</>
-            : v.bookMeta}
+            ? <>by <button onClick={v.openArtist} title="View profile" className={'tap ' + hover(`color:${MARK};border-color:${MARK}`)} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: INK, cursor: 'pointer' }}>{v.artist}</button>{v.bkVerified && <Verified size={13} />} · {v.otherPages} pages{v.otherMature && ' · Mature'}{v.bkMediums && ` · ${v.bkMediums}`}</>
+            : <>{v.bookMeta}{v.bkMediums && ` · ${v.bkMediums}`}</>}
         </div>
-        {(v.bkMediums || v.bkTags.length > 0) && (
+        {v.bkTags.length > 0 && (
           <div style={{ display: 'flex', gap: '2px 12px', flexWrap: 'wrap', justifyContent: 'center', fontSize: 13, color: 'rgba(var(--ink-rgb),.7)' }}>
-            {v.bkMediums && <span>{v.bkMediums}</span>}
             {v.bkTags.map((t: V) => <button key={t.key} onClick={t.open} className={'tap ' + hover(`color:${MARK}`)} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>{t.label}</button>)}
           </div>
         )}
@@ -206,7 +205,7 @@ const Title = memo(function Title({ v }: { v: V }) {
             {v.notMob && v.bkArch.note && <span style={{ fontSize: 13, lineHeight: 1.45, color: 'rgba(var(--ink-rgb),.7)', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden' } as CSSProperties}>{v.bkArch.note}</span>}
           </div>
         )}
-        {(v.isOther || (v.isMine && v.bkCanShare)) && (
+        {(v.isOther || v.isMine) && (
           // Like, save and share as icons side by side; embed, report and the rest under ⋯.
           <div style={{ display: 'flex', gap: v.notMob ? 14 : 18, alignItems: 'center', marginTop: v.notMob ? 2 : 6, ...label(INK, v.notMob ? 10 : 11) }}>
             {v.bkArch && v.isOther ? null : v.isOther
@@ -214,10 +213,11 @@ const Title = memo(function Title({ v }: { v: V }) {
               : <span title="Likes" style={iconAct}><Icon d={HEART} />{v.bkLikes}</span>}
             {v.isOther && <button onClick={v.bkSave} aria-pressed={v.bkSaved} title={v.bkSaved ? 'Saved' : 'Save'} aria-label={v.bkSaved ? 'Saved' : 'Save'} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct, color: v.bkSaved ? MARK : INK }}><Icon d={BOOKMARK} fill={v.bkSaved} /></button>}
             {v.cmOn && <button onClick={v.cmToggle} title="Comments" aria-label={`Comments, ${v.cmCount}`} aria-pressed={v.cmOpen} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct, color: v.cmOpen ? MARK : INK }}><Icon d={COMMENT_ICON} fill={v.cmOpen} />{v.cmCount}</button>}
-            <button onClick={v.bkShare} title="Share" aria-label="Share" className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct }}><Icon d={SHARE} /></button>
+            {(v.isOther || v.bkCanShare) && <button onClick={v.bkShare} title="Share" aria-label="Share" className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct }}><Icon d={SHARE} /></button>}
             <MoreMenu open={v.bkMoreOpen} onToggle={v.bkMore} items={[
               ...(v.bkArch?.url ? [{ label: `View at the source ↗`, onClick: () => window.open(v.bkArch.url, '_blank', 'noopener') }] : []),
-              { label: 'Embed on a website', onClick: v.bkEmbed },
+              ...(v.isOther || v.bkCanShare ? [{ label: 'Embed on a website', onClick: v.bkEmbed }] : []),
+              { label: v.sndOn ? 'Turn page sounds off' : 'Turn page sounds on', onClick: v.toggleSound },
               ...(v.bkIsAdmin ? [{ label: v.bkArchLbl, onClick: v.bkArchEdit }] : []),
               ...(v.isOther ? [...(v.bkIsAdmin ? [{ label: v.bkPickLbl, onClick: v.bkPick }] : []), ...(v.bkArch ? [] : [{ label: 'Report sketchbook', onClick: v.bkReport }, { label: v.bkBlockLbl, onClick: v.bkBlock, danger: true }])] : [])]} />
           </div>
@@ -384,22 +384,18 @@ function Book3D({ v }: { v: V }) {
 }
 
 const Controls = memo(function Controls({ v }: { v: V }) {
+  // One thing at a time. Open: your Pages button (on larger screens, zoom out and in either side of it; on phones
+  // tapping a page zooms in). Zoomed in: the way back out, and the comments, as the title row is hidden then.
+  const z = v.inFocus, comments = z && v.cmOn;
   return (
-    <div style={{ position: 'relative', zIndex: 2, display: 'flex', gap: 12, marginBottom: `calc(${v.mBottom}px + env(safe-area-inset-bottom))`, flexShrink: 0, padding: 6, opacity: v.ctrlOp, transform: `translateY(${v.ctrlY}px)`, pointerEvents: v.ctrlPE, transition: 'opacity .35s,transform .35s cubic-bezier(.2,.8,.2,1)' }}>
-      <button onClick={v.zoomOut} title="Zoom out" className={hover('transform:scale(1.08)')} style={roundDark(44, 22)}>−</button>
-      {v.notOther && <button onClick={v.openManager} title="Pages" className={hover('transform:scale(1.06)')} style={{ width: 88, height: 44, borderRadius: 22, border: 'none', background: MARK, color: PAPER, font: `500 20px ${SANS}`, cursor: 'pointer' }}>✎</button>}
-      <button onClick={v.zoomIn} title="Zoom in" className={hover('transform:scale(1.08)')} style={roundDark(44, 22)}>+</button>
-      {/* Comments on the page on show; most useful zoomed in, where the title (and its comments button) is hidden. */}
-      {v.cmOn && <button onClick={v.cmToggle} title="Comments" aria-label={`Comments, ${v.cmCount}`} aria-pressed={v.cmOpen} className={hover('transform:scale(1.08)')} style={{ ...roundDark(44, 14), position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', background: v.cmOpen ? MARK : INK }}>
+    <div style={{ position: 'relative', zIndex: 2, display: 'flex', gap: 12, minHeight: 44, marginBottom: `calc(${v.mBottom}px + env(safe-area-inset-bottom))`, flexShrink: 0, padding: 6, opacity: v.ctrlOp, transform: `translateY(${v.ctrlY}px)`, pointerEvents: v.ctrlPE, transition: 'opacity .35s,transform .35s cubic-bezier(.2,.8,.2,1)' }}>
+      {(z || v.notMob) && <button onClick={v.zoomOut} title={z ? 'Zoom out' : 'Smaller'} aria-label="Zoom out" className={hover('transform:scale(1.08)')} style={roundDark(44, 22)}>−</button>}
+      {!z && v.notOther && <button onClick={v.openManager} title="Pages" aria-label="Pages" className={hover('transform:scale(1.06)')} style={{ width: 88, height: 44, borderRadius: 22, border: 'none', background: MARK, color: PAPER, font: `500 20px ${SANS}`, cursor: 'pointer' }}>✎</button>}
+      {!z && v.notMob && <button onClick={v.zoomIn} title="Zoom in" aria-label="Zoom in" className={hover('transform:scale(1.08)')} style={roundDark(44, 22)}>+</button>}
+      {comments && <button onClick={v.cmToggle} title="Comments" aria-label={`Comments, ${v.cmCount}`} aria-pressed={v.cmOpen} className={hover('transform:scale(1.08)')} style={{ ...roundDark(44, 14), position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', background: v.cmOpen ? MARK : INK }}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={COMMENT_ICON} /></svg>
         {v.cmCount > 0 && <span style={{ position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18, padding: '0 5px', boxSizing: 'border-box', borderRadius: 9, background: MARK, color: PAPER, font: `600 10px/18px ${SANS}`, boxShadow: `0 0 0 2px ${PAPER}` }}>{v.cmCount > 99 ? '99+' : v.cmCount}</span>}
       </button>}
-      <button onClick={v.toggleSound} title={v.sndOn ? 'Mute page sounds' : 'Turn on page sounds'} aria-pressed={v.sndOn} className={hover(`color:${MARK}`)} style={{ position: 'absolute', left: '100%', top: '50%', transform: 'translateY(-50%)', width: 36, height: 36, marginLeft: 4, padding: 0, border: 'none', borderRadius: '50%', background: 'none', color: v.sndOn ? INK : STONE, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" />
-          {v.sndOn ? <><path d="M15.5 9a4 4 0 0 1 0 6" /><path d="M18 6.5a7.5 7.5 0 0 1 0 11" /></> : <path d="M16 9.5l5 5M21 9.5l-5 5" />}
-        </svg>
-      </button>
     </div>
   );
 }, skipOnFrame);
