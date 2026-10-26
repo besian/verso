@@ -19,8 +19,10 @@ import { LINE_H, drawTexts, inkPng, readInk, textFromInk, textWidth, wrapLines }
 import type { PageText, Stroke } from './handwriting';
 import { RULED, paperUrl } from './paper';
 import { MAX_SOCIALS, PLATFORM, PLATFORMS, cleanHandle, socialLinks } from './socials';
-import { DEFAULT_PEN, drawMarks, markFor, pathD, touched } from './draw';
-import type { Mark, Pen, Tool } from './draw';
+import { drawMarks, pathD } from './draw';
+import { DEFAULT_PEN, NO_COLOR, Painter } from './paint';
+import type { Mark } from './draw';
+import type { Pen, Tool } from './paint';
 import type { Paper } from './paper';
 import type { Wear } from './wear';
 import { INK, MARK, PAPER, STONE } from './theme';
@@ -57,6 +59,8 @@ interface EditState {
   spread?: boolean;
   /** A new photo of a page: the page's corners found in it, and the settings that straighten and crop it to the frame. */
   autoP?: Pt[] | null; auto?: Fit | null;
+  /** Draw mode: bumped after each stroke, undo or clear (the paint itself is in the Painter); picking a colour off the page. */
+  painted?: number; eyedrop?: boolean;
 }
 type EdMode = 'fit' | 'adjust' | 'write' | 'draw' | 'pick';
 
@@ -1179,6 +1183,7 @@ export default class App extends Component<object, State> {
 
   // ---------- fit-your-page editor ----------
   startEdit(queue: string[], replaceIdx: number | null, target?: 'cover' | 'avatar', mode: EdMode = 'fit') {
+    this.editSeq++;
     this.setState({ edit: { queue, i: 0, replaceIdx, target, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, adj: NO_ADJUST, mode, ink: [], texts: [], sel: null, marks: [], pen: this.lastPen, pad: true } });
     this.loadEditImg(queue[0]);
   }
@@ -1203,7 +1208,7 @@ export default class App extends Component<object, State> {
   frame() {
     const { vw, vh } = this.state, a = this.edAspect();
     // Phones: the frame fills the width, capped so the controls below still fit.
-    if (vw < 640) { let fw = vw - 32, fh = fw / a; const e = this.state.edit, maxH = vh * (e?.mode === 'write' && e.pad ? 0.34 : 0.5); if (fh > maxH) { fh = maxH; fw = fh * a; } return { fw: Math.round(fw), fh: Math.round(fh) }; }
+    if (vw < 640) { let fw = vw - 32, fh = fw / a; const e = this.state.edit, maxH = vh * (e?.mode === 'write' && e.pad ? 0.34 : e?.mode === 'draw' ? 0.42 : 0.5); if (fh > maxH) { fh = maxH; fw = fh * a; } return { fw: Math.round(fw), fh: Math.round(fh) }; }
     const ed = this.state.edit, fh = Math.round(Math.max(200, Math.min(vh * (ed?.mode === 'write' && ed.pad ? 0.5 : 0.58), 520)));
     // A two-page frame is capped to the room beside the controls.
     const maxW = Math.max(320, vw - 380); return fh * a > maxW ? { fw: Math.round(maxW), fh: Math.round(maxW / a) } : { fh, fw: Math.round(fh * a) };
@@ -1219,19 +1224,40 @@ export default class App extends Component<object, State> {
   setEd(patch: Partial<EditState>) { this.setState(s => ({ edit: { ...s.edit!, ...patch } })); }
   /** Renders the framed image exactly as shown into a page 1600px tall, or with Plus up to 3200px when the photo
    *  has that much detail in the frame (a phone photo usually does; a small image isn't blown up). */
+  /** The photo as fitted and adjusted, onto a page of W × H (the saved page, and what the paint brushes pick up). */
+  drawPhoto(ctx: CanvasRenderingContext2D, W: number, H: number) {
+    const e = this.state.edit, im = this.editImg; if (!e) return;
+    const { fh } = this.frame(), { bw, bh } = this.baseSize(), k = H / fh, r = Math.PI / 180;
+    ctx.save(); ctx.fillStyle = '#f3efe6'; ctx.fillRect(0, 0, W, H);
+    if (im) {
+      ctx.translate(W / 2 + e.tx * k, H / 2 + e.ty * k); ctx.rotate(e.rot * r); ctx.scale(e.scale, e.scale);
+      ctx.transform(1, Math.tan(e.sky * r), Math.tan(e.skx * r), 1, 0, 0);
+      ctx.drawImage(im, -bw * k / 2, -bh * k / 2, bw * k, bh * k);
+    }
+    ctx.restore(); applyToCanvas(ctx.canvas, e.adj);
+  }
+  // ---------- painting ----------
+  /** The paint layer for the picture being edited: one per picture, and made again if the frame changes shape. */
+  painter: Painter | null = null; painterKey = ''; editSeq = 0; recentColors: string[] = [];
+  painterKeyNow() { const e = this.state.edit; return e ? `${this.editSeq}:${e.i}:${this.edAspect().toFixed(4)}` : ''; }
+  livePainter() { return this.painter && this.painterKey === this.painterKeyNow() ? this.painter : null; }
+  getPainter() {
+    const key = this.painterKeyNow();
+    if (!this.painter || this.painterKey !== key) { this.painter = new Painter(this.edAspect()); this.painterKey = key; }
+    const e = this.state.edit!, p = this.painter;
+    p.setBase((ctx, W, H) => this.drawPhoto(ctx, W, H), JSON.stringify([e.queue[e.i].length, e.tx, e.ty, e.rot, e.scale, e.skx, e.sky, e.adj, e.nw, !!this.editImg]));
+    return p;
+  }
   async applyEdit() {
     const e = this.state.edit, im = this.editImg; if (!e || !im || e.inkBusy) return;
     const { fh } = this.frame(), { bw, bh } = this.baseSize(), avatar = e.target === 'avatar';
     const detail = e.nh && bh ? Math.round(fh * e.nh / (bh * e.scale)) : PAGE_H;
     const outH = avatar ? 512 : !e.target && this.state.plus ? Math.max(PAGE_H, Math.min(PAGE_H_PLUS, detail)) : PAGE_H;
-    const outW = Math.round(outH * this.edAspect()), k = outH / fh, r = Math.PI / 180;
+    const outW = Math.round(outH * this.edAspect());
     const c = document.createElement('canvas'); c.width = outW; c.height = outH; const ctx = c.getContext('2d')!;
-    ctx.fillStyle = '#f3efe6'; ctx.fillRect(0, 0, outW, outH);
-    ctx.translate(outW / 2 + e.tx * k, outH / 2 + e.ty * k); ctx.rotate(e.rot * r); ctx.scale(e.scale, e.scale);
-    ctx.transform(1, Math.tan(e.sky * r), Math.tan(e.skx * r), 1, 0, 0);
-    ctx.drawImage(im, -bw * k / 2, -bh * k / 2, bw * k, bh * k);
-    applyToCanvas(c, e.adj);
+    this.drawPhoto(ctx, outW, outH);
     drawMarks(ctx, e.marks, outW, outH);
+    this.livePainter()?.drawOnto(ctx, outW, outH);
     await drawTexts(ctx, e.texts.filter(t => t.text.trim()), outW, outH);
     const images = [...this.state.images];
     if (e.spread && e.replaceIdx == null && !e.target) {
@@ -1999,6 +2025,7 @@ export default class App extends Component<object, State> {
   }
   inkUp(e: PointerEvent) {
     const p = this.inkPen; if (p?.id !== e.pointerId) return; this.inkPen = null;
+    if (this.state.edit?.mode === 'draw') return this.drawEnd();
     const ed = this.state.edit; if (!ed || !p.pad) return;
     // Writing near the pad's right edge slides it along.
     const fr = this.frame(), b = this.padBox(ed, fr), s = ed.ink[ed.ink.length - 1] || [];
@@ -2009,30 +2036,38 @@ export default class App extends Component<object, State> {
   // ---------- draw mode ----------
   drawDown(e: PointerEvent<HTMLDivElement>) {
     const ed = this.state.edit; if (!ed || this.inkPen) return;
-    const r = e.currentTarget.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
-    this.inkPen = { id: e.pointerId, r };
-    if (ed.pen.tool === 'eraser') this.eraseAt(x, y, r); else this.setEd({ marks: [...ed.marks, markFor(ed.pen, x, y)] });
+    const r = e.currentTarget.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height, p = this.getPainter();
+    // Picking a colour off the page: one tap, then back to the brush.
+    if (ed.eyedrop) return this.pickColor(p.colorAt(x, y));
+    this.inkPen = { id: e.pointerId, r }; p.begin(ed.pen, x, y, this.pressure(e));
   }
   drawMove(e: PointerEvent) {
-    const p = this.inkPen, ed = this.state.edit; if (!p || p.id !== e.pointerId || !ed) return;
-    const x = (e.clientX - p.r.left) / p.r.width, y = (e.clientY - p.r.top) / p.r.height;
-    if (ed.pen.tool === 'eraser') return this.eraseAt(x, y, p.r);
-    const m = ed.marks[ed.marks.length - 1]; if (!m || Math.hypot((x - m.pts[m.pts.length - 2]) * p.r.width, (y - m.pts[m.pts.length - 1]) * p.r.height) < 1) return;
-    this.setEd({ marks: [...ed.marks.slice(0, -1), { ...m, pts: [...m.pts, x, y] }] });
+    const pt = this.inkPen, p = this.livePainter(); if (!pt || pt.id !== e.pointerId || !p) return;
+    // Every point the pointer reported since the last event, so fast strokes stay smooth.
+    const evs = (e.nativeEvent as globalThis.PointerEvent).getCoalescedEvents?.() || [e.nativeEvent];
+    for (const q of evs.length ? evs : [e.nativeEvent]) p.move((q.clientX - pt.r.left) / pt.r.width, (q.clientY - pt.r.top) / pt.r.height, this.pressure(q));
   }
-  /** The eraser takes away whole strokes it touches. */
-  eraseAt(x: number, y: number, r: DOMRect) {
-    const ed = this.state.edit!, hit = touched(ed.marks, x, y, ed.pen.size * 0.0012 + 0.006, r.width / r.height);
-    if (hit.size) this.setEd({ marks: ed.marks.filter((_, i) => !hit.has(i)) });
+  /** Pen pressure from a stylus; fingers and mice paint at a steady, fairly firm touch. */
+  pressure(e: { pointerType: string; pressure: number }) { return e.pointerType === 'pen' ? Math.max(0.05, Math.min(1, e.pressure || 0.5)) : 0.75; }
+  drawEnd() { const p = this.livePainter(); if (p?.end()) this.setEd({ painted: (this.state.edit?.painted || 0) + 1 }); }
+  pickColor(color: string) {
+    const ed = this.state.edit!, tool = NO_COLOR.has(ed.pen.tool) ? 'pen' : ed.pen.tool;
+    this.recentColors = [color, ...this.recentColors.filter(c => c !== color)].slice(0, 6);
+    this.lastPen = { ...ed.pen, color, tool }; this.setEd({ pen: this.lastPen, eyedrop: false });
   }
-  drawVals(ed: EditState, fr: { fw: number; fh: number }): V {
+  drawVals(ed: EditState): V {
     const pen = ed.pen, setPen = (patch: Partial<Pen>) => { this.lastPen = { ...pen, ...patch }; this.setEd({ pen: this.lastPen }); };
+    const p = ed.mode === 'draw' || ed.painted ? this.livePainter() : null, bump = () => this.setEd({ painted: (ed.painted || 0) + 1 });
     return {
-      edDraw: ed.mode === 'draw', hasMarks: ed.marks.length > 0,
-      edMarks: ed.marks.map(m => ({ d: pathD(m.pts, fr.fw, fr.fh), color: m.color, w: Math.max(0.6, m.size * fr.fh), alpha: m.alpha })),
-      penTool: pen.tool, penColor: pen.color, penSize: pen.size, setTool: (tool: Tool) => setPen({ tool }), setColor: (color: string) => setPen({ color, tool: pen.tool === 'eraser' ? 'pen' : pen.tool }),
+      edDraw: ed.mode === 'draw', hasMarks: !!p?.canUndo, edPaint: p?.el || null,
+      edMarks: [],
+      penTool: pen.tool, penColor: pen.color, penSize: pen.size, penOpacity: Math.round((pen.opacity ?? 1) * 100), penNoColor: NO_COLOR.has(pen.tool),
+      setTool: (tool: Tool) => setPen({ tool }), setColor: (color: string) => this.pickColor(color),
+      recentColors: this.recentColors,
       onPenSize: (e: ChangeEvent<HTMLInputElement>) => setPen({ size: parseFloat(e.target.value) }),
-      undoMark: () => this.setEd({ marks: ed.marks.slice(0, -1) }), clearMarks: () => this.setEd({ marks: [] }),
+      onPenOpacity: (e: ChangeEvent<HTMLInputElement>) => setPen({ opacity: parseFloat(e.target.value) / 100 }),
+      edEyedrop: !!ed.eyedrop, toggleEyedrop: () => this.setEd({ eyedrop: !ed.eyedrop }),
+      undoMark: () => { p?.undo(); bump(); }, clearMarks: () => { p?.clear(); bump(); },
     };
   }
   writeVals(ed: EditState, fr: { fw: number; fh: number }): V {
@@ -2086,7 +2121,7 @@ export default class App extends Component<object, State> {
       edAuto: !!ed.auto, edAutoOn: !!ed.auto && (['scale', 'rot', 'skx', 'sky', 'tx', 'ty'] as const).every(k => ed[k] === ed.auto![k]),
       autoFit: () => ed.auto && this.setEd({ ...ed.auto }),
       edMode: ed.mode, setEdMode: (mode: EdMode) => this.setEd({ mode, sel: null }), edBlank: !!ed.paper,
-      ...this.drawVals(ed, fr),
+      ...this.drawVals(ed),
       ...this.writeVals(ed, fr),
       edAdjTool: this.state.edAdjTool || 'white', setEdAdjTool: (t: string) => this.setState({ edAdjTool: t }),
       edPeek: !!this.state.edPeek, peekOn: () => this.setState({ edPeek: true }), peekOff: () => this.state.edPeek && this.setState({ edPeek: false }),

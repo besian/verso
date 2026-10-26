@@ -9,7 +9,7 @@ import { focus, hover, wheelSideways } from '../pseudo';
 import { INK, MARK, MUTED, PAPER, SANS, SERIF, pagePad } from '../theme';
 import { TEXT_FONT, TEXT_INK } from '../handwriting';
 import { PAPERS, PAPER_PREVIEW } from '../paper';
-import { COLORS as DRAW_COLORS, TOOLS as DRAW_TOOLS } from '../draw';
+import { COLORS as DRAW_COLORS, TOOLS as DRAW_TOOLS, hexHsv, hsvHex } from '../paint';
 
 const field: CSSProperties = { height: 44, padding: '0 14px', borderRadius: 2, border: '1.5px solid rgba(var(--ink-rgb),.14)', background: 'rgba(var(--ink-rgb),.06)', color: INK, font: `500 14px ${SANS}`, outline: 'none', width: '100%', boxSizing: 'border-box' };
 const fieldLabel: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'rgba(var(--ink-rgb),.75)' };
@@ -716,6 +716,13 @@ const ED_ON: Record<string, string> = { scale: 'onScale', rot: 'onRot', skx: 'on
 const ADJ_SHORT: Record<string, string> = { bri: 'Light', con: 'Contrast', sat: 'Colour', warm: 'Warmth', white: 'Whites' };
 
 /** Everything on the page: paper and image (with the colour matrix), drawing, typed text, and handwriting still to convert. */
+/** The paint layer's canvases (kept by the Painter, so they live on between renders). */
+function PaintView({ el }: { el: HTMLElement }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => { ref.current?.append(el); return () => el.remove(); }, [el]);
+  return <div ref={ref} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />;
+}
+
 function Layers({ v, inPad }: { v: V; inPad?: boolean }) {
   return (
     <>
@@ -723,6 +730,7 @@ function Layers({ v, inPad }: { v: V; inPad?: boolean }) {
       <div style={{ position: 'absolute', inset: 0, background: '#f3efe6', filter: v.edAdjusted && !v.edPeek ? 'url(#ed-adjust)' : undefined, pointerEvents: 'none' }}>
         <div style={{ position: 'absolute', left: '50%', top: '50%', width: v.bw, height: v.bh, transform: `translate(-50%,-50%) ${v.edTransform}`, background: v.edBg }} />
       </div>
+      {v.edPaint && !inPad && <PaintView el={v.edPaint} />}
       {v.edMarks.length > 0 && (
         <svg width={v.fw} height={v.fh} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} aria-hidden="true">
           {v.edMarks.map((m: V, i: number) => <path key={i} d={m.d} fill="none" stroke={m.color} strokeWidth={m.w} strokeOpacity={m.alpha} strokeLinecap="round" strokeLinejoin="round" />)}
@@ -810,7 +818,7 @@ function PickMode({ v, mob }: { v: V; mob?: boolean }) {
   const card: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start', textAlign: 'left', padding: mob ? '14px 16px' : '18px 18px', border: '1.5px solid rgba(var(--ink-rgb),.25)', borderRadius: 2, background: 'none', color: INK, cursor: 'pointer' };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {([['draw', 'Draw', 'Pen, pencil, marker and colours'], ['write', 'Write', 'Handwriting, turned into typed text']] as const).map(([k, l, d]) => (
+      {([['draw', 'Draw', 'Pen, pencil, marker, watercolour and oil'], ['write', 'Write', 'Handwriting, turned into typed text']] as const).map(([k, l, d]) => (
         <button key={k} onClick={() => v.setEdMode(k)} className={hover(`border-color:${INK}`)} style={card}>
           <span style={{ font: `400 24px/1.1 ${SERIF}` }}>{l}</span>
           <span style={{ font: `400 13px ${SANS}`, color: 'rgba(var(--ink-rgb),.65)' }}>{d}</span>
@@ -822,22 +830,81 @@ function PickMode({ v, mob }: { v: V; mob?: boolean }) {
 
 /** Draw mode: tool, colour and size, undo and clear. */
 function DrawTools({ v, outline, mob }: { v: V; outline: CSSProperties; mob?: boolean }) {
-  const chip = (on: boolean): CSSProperties => ({ flex: 1, height: 34, padding: '0 8px', border: `1px solid ${on ? INK : 'rgba(var(--ink-rgb),.2)'}`, borderRadius: 17, background: on ? INK : 'transparent', color: on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' });
+  const [wheel, setWheel] = useState(false);
+  const chip = (on: boolean): CSSProperties => ({ flex: '1 0 auto', height: 34, padding: '0 12px', border: `1px solid ${on ? INK : 'rgba(var(--ink-rgb),.2)'}`, borderRadius: 17, background: on ? INK : 'transparent', color: on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' });
+  const dot = (c: string, on: boolean, size: number): CSSProperties => ({ width: size, height: size, flexShrink: 0, borderRadius: '50%', padding: 0, cursor: 'pointer', background: c, border: '1px solid rgba(34,35,32,.25)', boxShadow: on ? `0 0 0 2px ${PAPER}, 0 0 0 4px ${INK}` : 'none' });
+  const swatches = [...v.recentColors, ...DRAW_COLORS.map(([c]) => c).filter(c => !v.recentColors.includes(c))].slice(0, mob ? 7 : 8);
+  const names = Object.fromEntries(DRAW_COLORS);
+  const strength = v.penTool === 'blend' || v.penTool === 'eraser';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: mob ? 10 : 14 }}>
-      <div role="tablist" aria-label="Tool" style={{ display: 'flex', gap: 4 }}>
+      <div role="tablist" aria-label="Brush" style={{ display: 'flex', gap: 4, ...(mob ? { overflowX: 'auto', scrollbarWidth: 'none' } : { flexWrap: 'wrap' }) } as CSSProperties}>
         {DRAW_TOOLS.map(([k, l]) => <button key={k} role="tab" aria-selected={v.penTool === k} onClick={() => v.setTool(k)} style={chip(v.penTool === k)}>{l}</button>)}
       </div>
-      <div role="radiogroup" aria-label="Colour" style={{ display: 'flex', gap: 6, justifyContent: 'space-between', opacity: v.penTool === 'eraser' ? 0.45 : 1 }}>
-        {DRAW_COLORS.map(([c, l]) => (
-          <button key={c} role="radio" aria-checked={v.penColor === c && v.penTool !== 'eraser'} title={l} aria-label={l} onClick={() => v.setColor(c)} style={{ width: 30, height: 30, borderRadius: '50%', padding: 0, cursor: 'pointer', background: c, border: '1px solid rgba(34,35,32,.25)', boxShadow: v.penColor === c && v.penTool !== 'eraser' ? `0 0 0 2px ${PAPER}, 0 0 0 4px ${INK}` : 'none' }} />
-        ))}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, opacity: v.penNoColor ? 0.45 : 1 }}>
+        <div role="radiogroup" aria-label="Colour" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {swatches.map(c => <button key={c} role="radio" aria-checked={v.penColor === c} title={names[c] || c} aria-label={names[c] || c} onClick={() => v.setColor(c)} style={dot(c, v.penColor === c && !wheel, mob ? 28 : 26)} />)}
+          <span style={{ flex: 1 }} />
+          <button onClick={() => setWheel(w => !w)} title="Colour wheel" aria-label="Colour wheel" aria-expanded={wheel} style={{ ...dot('conic-gradient(red, yellow, lime, cyan, blue, magenta, red)', wheel, mob ? 30 : 28) }} />
+          <button onClick={v.toggleEyedrop} title="Pick a colour from the page" aria-label="Pick a colour from the page" aria-pressed={v.edEyedrop} style={{ width: 32, height: 32, flexShrink: 0, padding: 0, borderRadius: '50%', border: `1px solid ${v.edEyedrop ? INK : 'rgba(var(--ink-rgb),.25)'}`, background: v.edEyedrop ? INK : 'none', color: v.edEyedrop ? PAPER : INK, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14.5 4.5l5 5M17 2.5l4.5 4.5-3 3-4.5-4.5zM15 8.5l-9 9-1.5 4 4-1.5 9-9" /></svg>
+          </button>
+        </div>
+        {v.edEyedrop && <span style={{ fontSize: 12, color: MARK }}>Tap the page to pick up a colour.</span>}
+        {wheel && <ColourWheel color={v.penColor} onChange={v.setColor} size={mob ? 104 : 150} />}
       </div>
-      <Slider name={v.penTool === 'eraser' ? 'Eraser size' : 'Size'} lbl={String(v.penSize)} min={1} max={40} step={1} value={v.penSize} onChange={v.onPenSize} />
+      {/* Phones: one line per slider, and the colour wheel takes their place while it's open, so the page stays big. */}
+      {mob ? !wheel && <>
+        <InlineSlider name="Size" lbl={String(v.penSize)} min={1} max={40} value={v.penSize} onChange={v.onPenSize} />
+        <InlineSlider name={strength ? 'Strength' : 'Opacity'} lbl={`${v.penOpacity}%`} min={5} max={100} value={v.penOpacity} onChange={v.onPenOpacity} />
+      </> : <>
+        <Slider name={v.penTool === 'eraser' ? 'Eraser size' : 'Size'} lbl={String(v.penSize)} min={1} max={40} step={1} value={v.penSize} onChange={v.onPenSize} />
+        <Slider name={strength ? 'Strength' : 'Opacity'} lbl={`${v.penOpacity}%`} min={5} max={100} step={1} value={v.penOpacity} onChange={v.onPenOpacity} />
+      </>}
       <div style={{ display: 'flex', gap: 8 }}>
         <button onClick={v.undoMark} disabled={!v.hasMarks} style={{ ...outline, opacity: v.hasMarks ? 1 : 0.4 }}>Undo</button>
-        <button onClick={v.clearMarks} disabled={!v.hasMarks} style={{ ...outline, opacity: v.hasMarks ? 1 : 0.4 }}>Clear</button>
+        <button onClick={v.clearMarks} style={outline}>Clear</button>
       </div>
+    </div>
+  );
+}
+
+function InlineSlider({ name, lbl, min, max, value, onChange }: { name: string; lbl: string; min: number; max: number; value: number; onChange: ChangeEventHandler<HTMLInputElement> }) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13 }}>
+      <span style={{ width: 64, color: 'rgba(var(--ink-rgb),.7)' }}>{name}</span>
+      <input type="range" min={min} max={max} step={1} value={value} onChange={onChange} style={{ flex: 1, accentColor: INK, height: 26 }} />
+      <span style={{ width: 40, textAlign: 'right', color: 'rgba(var(--ink-rgb),.7)' }}>{lbl}</span>
+    </label>
+  );
+}
+
+/** Hue round the wheel and strength of colour out from the middle, with brightness on a slider below it. */
+function ColourWheel({ color, onChange, size }: { color: string; onChange: (c: string) => void; size: number }) {
+  const [h, s, val] = hexHsv(color), [hue, setHue] = useState(h), sat = s, bri = val;
+  // Greys have no hue of their own: keep the last one so brightening a grey doesn't jump to red.
+  useEffect(() => { if (s > 0.02 && val > 0.02) setHue(h); }, [h, s, val]);
+  const at = (e: React.PointerEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect(), dx = e.clientX - r.left - r.width / 2, dy = e.clientY - r.top - r.height / 2;
+    const nh = (Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360, ns = Math.min(1, Math.hypot(dx, dy) / (r.width / 2));
+    setHue(nh); onChange(hsvHex(nh, ns, Math.max(0.05, bri)));
+  };
+  const a = hue * Math.PI / 180, mx = size / 2 + Math.sin(a) * sat * size / 2, my = size / 2 - Math.cos(a) * sat * size / 2;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <div role="slider" aria-label="Colour" aria-valuetext={color}
+        onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); at(e); }} onPointerMove={e => { if (e.buttons) at(e); }}
+        style={{ position: 'relative', width: size, height: size, flexShrink: 0, borderRadius: '50%', cursor: 'crosshair', touchAction: 'none',
+          background: 'radial-gradient(circle closest-side, #fff, rgba(255,255,255,0)), conic-gradient(red, yellow, lime, cyan, blue, magenta, red)', boxShadow: 'inset 0 0 0 1px rgba(34,35,32,.15)' }}>
+        <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: '#000', opacity: 1 - bri, pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', left: mx - 8, top: my - 8, width: 16, height: 16, borderRadius: '50%', border: '2px solid #fff', boxShadow: '0 0 0 1px rgba(0,0,0,.4)', background: color, boxSizing: 'border-box', pointerEvents: 'none' }} />
+      </div>
+      <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13, minWidth: 0 }}>
+        <span style={{ display: 'flex', justifyContent: 'space-between' }}><span>Brightness</span><span style={{ width: 22, height: 22, borderRadius: '50%', background: color, border: '1px solid rgba(34,35,32,.25)' }} /></span>
+        <input type="range" min={5} max={100} step={1} value={Math.round(bri * 100)} onChange={e => onChange(hsvHex(hue, sat, parseFloat(e.target.value) / 100))}
+          style={{ width: '100%', accentColor: INK, background: `linear-gradient(90deg, #000, ${hsvHex(hue, sat, 1)})`, borderRadius: 6, height: 8, appearance: 'none', WebkitAppearance: 'none' } as CSSProperties} />
+        <span style={{ fontSize: 12, color: 'rgba(var(--ink-rgb),.6)', fontVariantNumeric: 'tabular-nums' }}>{color.toUpperCase()}</span>
+      </label>
     </div>
   );
 }
@@ -942,7 +1009,7 @@ export function Editor({ v }: { v: V }) {
   if (v.edMob) return <MobileEditor v={v} />;
   const outline: CSSProperties = { flex: 1, height: 36, borderRadius: 2, border: '1.5px solid rgba(var(--ink-rgb),.5)', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' };
   const adjust = v.edMode === 'adjust', write = v.edMode === 'write', draw = v.edMode === 'draw', pick = v.edMode === 'pick';
-  const sub = pick ? 'draw or write' : draw ? 'pen, pencil and marker' : write ? 'handwriting to text' : adjust ? 'light and colour' : 'drag to move, scroll or pinch to zoom';
+  const sub = pick ? 'draw or write' : draw ? 'pens, paint and colour' : write ? 'handwriting to text' : adjust ? 'light and colour' : 'drag to move, scroll or pinch to zoom';
   return (
     <div style={{ position: 'absolute', inset: 0, background: PAPER, zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 48, padding: 24, flexWrap: 'wrap', overflow: 'auto' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
