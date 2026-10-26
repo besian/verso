@@ -34,6 +34,7 @@ import { AuthPage, BillingPage, Explore, HomeScreen, Profile, Settings } from '.
 import { Admin, AuthAction, Legal, NotFound } from './views/Pages';
 import { Messages } from './views/Messages';
 import { CommentsPanel } from './views/Comments';
+import { ReplayPlayer } from './views/Replay';
 import { ArchiveModal, AskModal, CardModal, ConsentBar, CollectionModal, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
 
 export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound' | 'action' | 'messages' | 'billing';
@@ -87,6 +88,8 @@ interface State {
   showMature?: boolean;
   /** Explore's Content filter set to Mature only (with Mature work shown). */
   matureOnly?: boolean;
+  /** Watching a page's stroke replay: the page, its finished picture, and the strokes once loaded. */
+  replay?: { title: string; img: string; data: string | null; err?: string } | null;
   /** Comments on the open sketchbook (kept live), and the comments panel: open, showing every page, the draft, and which page it's for. */
   comments?: { bookId: string; list: api.Comment[] } | null; cmOpen?: boolean; cmAll?: boolean; cmDraft?: string; cmBusy?: boolean; cmErr?: string; cmFor?: number | null;
   /** Making a PDF of the open sketchbook: how far along ('3/40'). */
@@ -879,7 +882,7 @@ export default class App extends Component<object, State> {
     const pending = bookUrls(b).filter(isData);
     if (pending.length) {
       const { done: m, refused, mature, error } = await api.uploadImages(acct.uid, id, pending);
-      m.forEach(({ full }, du) => { const bu = this.blobs.get(du); if (bu) this.blobs.set(full, bu); });
+      m.forEach(({ full }, du) => { const bu = this.blobs.get(du); if (bu) this.blobs.set(full, bu); const rp = this.pendingReplays.get(du); if (rp) { this.pendingReplays.delete(du); this.pendingReplays.set(full, rp); } });
       // Pictures the upload check refused come out of the book.
       const swap = (u: string) => m.get(u)?.full || u, thumbs: Record<string, string> = {};
       // A refused half takes its spread with it.
@@ -906,6 +909,9 @@ export default class App extends Component<object, State> {
     // Link-only needs Plus: once it's known to have ended, the book is saved as private.
     b = { ...b, thumbs: pruneThumbs(b), linkOnly: !!b.linkOnly && this.state.plus !== false };
     await api.writeBook(this.state.acct || acct, b);
+    // Replays of pages drawn here go up once the page is saved (the rules check the book).
+    for (const u of b.images) { const rp = this.pendingReplays.get(u); if (!rp) continue; this.pendingReplays.delete(u);
+      api.saveReplay(acct.uid, id, api.pageKey(u), rp.data, rp.n).then(() => this.replayKnown.set(`${id}_${api.pageKey(u)}`, true)).catch(e => console.error('replay', e)); }
     const now = bookUrls(b), before = this.synced.get(id) || [];
     api.removeFiles(before.filter(u => !now.includes(u)));
     this.synced.set(id, now);
@@ -1315,6 +1321,30 @@ export default class App extends Component<object, State> {
     p.setBase((ctx, W, H) => this.drawPhoto(ctx, W, H), JSON.stringify([e.queue[e.i].length, e.tx, e.ty, e.rot, e.scale, e.skx, e.sky, e.adj, e.nw, !!this.editImg]));
     return p;
   }
+  // ---------- stroke replays ----------
+  /** Replays of pages just drawn, waiting for the page to be saved (keyed by the page's picture). */
+  pendingReplays = new Map<string, { data: string; n: number }>();
+  /** Which pages have a replay (book_page), looked up as pages come into view. */
+  replayKnown = new Map<string, boolean>();
+  /** The drawing on the page being added, as a replay: its strokes, the layers as they ended, and what it's drawn on. */
+  replayOf() {
+    const p = this.livePainter(), e = this.state.edit; if (!p || !e || !p.painted || !p.ops.some(o => o.t === 's')) return null;
+    const snap = p.snapshot(false);
+    const data = JSON.stringify({ v: 1, a: this.edAspect(), paper: e.paper || null, layers: snap.layers.map(l => ({ v: l.visible, o: l.opacity })), ops: snap.ops });
+    return data.length <= 900000 ? { data, n: snap.ops.filter(o => o.t === 's').length } : null;
+  }
+  /** The open book's pages on show that have a replay (looked up once each). */
+  replayHere(): number | null {
+    const s = this.state, mode = s.mode || 'home', o = s.other as OtherBook | null, mb = s.books[s.active];
+    const id = mode === 'other' && o && !o.arch ? o.id : mode === 'mine' && mb && !mb.id.startsWith('local') ? mb.id : null; if (!id) return null;
+    for (const i of this.shownPages()) {
+      const u = s.images[i]; if (!u || isData(u)) continue;
+      const k = `${id}_${api.pageKey(u)}`;
+      if (!this.replayKnown.has(k)) { this.replayKnown.set(k, false); api.hasReplay(id, api.pageKey(u)).then(y => { if (y) { this.replayKnown.set(k, true); this.forceUpdate(); } }); }
+      if (this.replayKnown.get(k)) return i;
+    }
+    return null;
+  }
   // ---------- drafts: an unsaved drawing survives the editor closing by accident ----------
   draftKey() { const e = this.state.edit; return e ? `${api.pageKey(e.queue[e.i] || '')}:${this.edAspect().toFixed(3)}` : ''; }
   draftT = 0 as unknown as ReturnType<typeof setTimeout>;
@@ -1342,17 +1372,19 @@ export default class App extends Component<object, State> {
     this.livePainter()?.drawOnto(ctx, outW, outH);
     if (this.livePainter()?.painted) deleteDraft(this.draftKey());
     await drawTexts(ctx, e.texts.filter(t => t.text.trim()), outW, outH);
-    const images = [...this.state.images];
+    const images = [...this.state.images], replay = !e.target ? this.replayOf() : null;
     if (e.spread && e.replaceIdx == null && !e.target) {
       // Two pages: one picture cut down the middle, the halves kept together on facing pages.
       // Two pages, and a blank one first when the next page would be a right-hand page.
       if (this.pageRoom() < 2 + (isLeftPage(images.length) ? 0 : 1)) { this.setState({ edit: null }); return this.pagesFull(); }
       const [l, r] = splitSpread(c), cur = this.state.books[this.state.active];
+      if (replay) this.pendingReplays.set(l, replay);
       this.setImages([...images, l, r], { spreads: { ...cur.spreads, [l]: r } }); this.nextEdit(); return;
     }
     const url = c.toDataURL('image/jpeg', 0.9);
     if (e.target === 'cover') { this.updateBook({ coverImg: url }); this.setState({ edit: null }); return; }
     if (avatar) { this.setState(st => ({ edit: null, draft: st.draft ? { ...st.draft, av: url } : st.draft })); return; }
+    if (replay) this.pendingReplays.set(url, replay);
     let patch: Partial<Book> = {};
     if (e.replaceIdx != null) {
       // A re-fitted page keeps its caption and date.
@@ -1439,6 +1471,17 @@ export default class App extends Component<object, State> {
     return {
       // Larger screens: the panel takes the right-hand side and the book moves over to stay in full view.
       cmSide: !!s.cmOpen && s.vw >= 640 && (mode === 'mine' || mode === 'other') && !s.edit && !s.managing,
+      ...(() => {
+        // Replay: the first page on show that was drawn in Fletora.
+        const at = this.replayHere(); if (at == null) return { rpAt: null };
+        const u = imgs[at];
+        return { rpAt: at, rpLbl: `Watch page ${at + 1} being drawn`, rpOpen: () => {
+          this.setState({ replay: { title: `${book.name} · page ${at + 1}`, img: this.blobUrl(u), data: null } });
+          api.replayData(book.id, api.pageKey(u)).then(d => this.setState(st => st.replay ? { replay: { ...st.replay, data: d, err: d ? '' : 'This replay isn’t available.' } } : null))
+            .catch(() => this.setState(st => st.replay ? { replay: { ...st.replay, err: 'Couldn’t load the replay.' } } : null));
+        } };
+      })(),
+      rpState: s.replay || null, rpClose: () => this.setState({ replay: null }),
       cmOn: true, cmOpen: !!s.cmOpen, cmCount: all.length, cmAll: !!s.cmAll, cmHere: all.filter(c => shownKeys.has(c.page)).length,
       cmToggle: () => this.setState(st => ({ cmOpen: !st.cmOpen, more: null })), cmClose: () => this.setState({ cmOpen: false }),
       cmShowAll: (on: boolean) => this.setState({ cmAll: on }),
@@ -2821,6 +2864,7 @@ export default class App extends Component<object, State> {
         {v.isAction && <AuthAction v={v} />}
         {v.isAdminPage && <Admin v={v} />}
         {v.isMessages && <Messages v={v} />}
+        {v.rpState && <ReplayPlayer v={v} />}
         {v.cmOn && v.cmOpen && (v.isMine || v.isOther) && !v.editing && !v.managing && <CommentsPanel v={v} />}
         {v.reportOpen && <ReportModal v={v} />}
         {v.emOpen && <EmbedModal v={v} />}

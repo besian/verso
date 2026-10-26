@@ -180,6 +180,11 @@ sketchbooks private. Paid Plus is left to the Stripe webhook.
 - Deleting an account removes the person's comments everywhere (and all comments on their sketchbooks). Finding their comments needs the `comments.uid` collection-group index in `firestore.indexes.json`: run `firebase deploy --only firestore:indexes`, or in the console add a single-field exemption for `comments` → `uid` with *Collection group* ascending.
 - Explore's Following tab lists the followed artists' recently updated sketchbooks (no extra data or indexes).
 
+## Stroke replays
+
+- When a page drawn in the editor is added, its strokes are recorded (`Painter.ops`: brush, colour, size, opacity, points with pressure and timing, and a seed so brush texture replays the same) and saved once the page has uploaded: `replays/{bookId}_{pageKey}` (small; says one exists) and `replayData/{same id}` (`data`, JSON, up to 900k characters; bigger drawings simply have no replay).
+- Rules: readable by anyone who can open the book; written by its owner or people drawing in it; deleted by its owner. Publish the rules after pulling this. Account deletion removes the person's replays.
+
 ## Messages
 
 Direct messages live in `chats/{a}_{b}` (and `chats/…/messages`), with a daily limit on new conversations in

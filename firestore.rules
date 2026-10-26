@@ -259,6 +259,35 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Stroke replays of pages drawn in Fletora: replays/{bookId}_{page} says one exists (and who drew it), and
+    // replayData holds the strokes. Readable by anyone who can open the book; written by its owner or the people
+    // drawing in it; deleted by its owner.
+    function bookCanOpen(bid) {
+      let b = get(/databases/$(database)/documents/books/$(bid)).data;
+      return b.get('isPublic', true) == true || (b.get('linkOnly', false) == true && b.get('hidden', false) == false)
+        || (signedIn() && (b.ownerId == request.auth.uid || request.auth.uid in b.get('collabs', []))) || isAdmin();
+    }
+    function bookCanDraw(bid) {
+      let b = get(/databases/$(database)/documents/books/$(bid)).data;
+      return signedIn() && !suspended() && (b.ownerId == request.auth.uid || request.auth.uid in b.get('collabs', []));
+    }
+    match /replays/{id} {
+      allow get: if bookCanOpen(resource.data.bookId);
+      allow create, update: if request.resource.data.keys().hasOnly(['bookId', 'page', 'by', 'n', 'at'])
+        && id == request.resource.data.bookId + '_' + request.resource.data.page && request.resource.data.by == request.auth.uid
+        && str(request.resource.data.page, 40) && bookCanDraw(request.resource.data.bookId);
+      allow delete: if signedIn() && (resource.data.by == request.auth.uid
+        || get(/databases/$(database)/documents/books/$(resource.data.bookId)).data.ownerId == request.auth.uid);
+    }
+    match /replayData/{id} {
+      allow get: if bookCanOpen(resource.data.bookId);
+      allow create, update: if request.resource.data.keys().hasOnly(['bookId', 'by', 'data'])
+        && id.matches('^' + request.resource.data.bookId + '_.+') && request.resource.data.by == request.auth.uid
+        && str(request.resource.data.data, 900000) && bookCanDraw(request.resource.data.bookId);
+      allow delete: if signedIn() && (resource.data.by == request.auth.uid
+        || get(/databases/$(database)/documents/books/$(resource.data.bookId)).data.ownerId == request.auth.uid);
+    }
+
     // One document per handle so handles stay unique.
     match /handles/{handle} {
       allow read: if true;

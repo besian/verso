@@ -213,7 +213,9 @@ export async function POST(req: Request) {
       // comments.uid index in firestore.indexes.json; without it the rest still goes.)
       const mine = await db.collectionGroup('comments').where('uid', '==', uid).get().then(q => q.docs.map(d => d.ref)).catch(e => { console.error('comments by uid', e); return []; });
       const onBooks = (await Promise.all(books.docs.map(b => b.ref.collection('comments').get()))).flatMap(q => q.docs.map(d => d.ref));
-      refs.push(...mine, ...onBooks);
+      // Stroke replays they saved.
+      const replays = (await Promise.all(['replays', 'replayData'].map(c => db.collection(c).where('by', '==', uid).get()))).flatMap(q => q.docs.map(d => d.ref));
+      refs.push(...mine, ...onBooks, ...replays);
       for (let i = 0; i < refs.length; i += 400) { const batch = db.batch(); refs.slice(i, i + 400).forEach(r => batch.delete(r)); await batch.commit(); }
       return json(200, { ok: true });
     }

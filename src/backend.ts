@@ -659,6 +659,25 @@ export async function setLike(me: Account, book: { id: string; ownerId: string; 
   if (on && book.ownerId !== me.uid) notifyOnce(book.ownerId, `like_${book.id}_${me.uid}`, note(me, 'like', book));
 }
 
+// ---------- stroke replays ----------
+/** Saves the strokes of a page drawn in Fletora, so others can watch it being drawn (up to ~900k characters). */
+export async function saveReplay(by: string, bookId: string, page: string, data: string, n: number) {
+  if (data.length > 900000) return;
+  const { db: d } = need(), id = `${bookId}_${page}`, batch = writeBatch(d);
+  batch.set(doc(d, 'replayData', id), { bookId, by, data });
+  batch.set(doc(d, 'replays', id), { bookId, page, by, n, at: Date.now() });
+  await batch.commit();
+}
+/** Whether a page has a replay (missing or unreadable: no). */
+export async function hasReplay(bookId: string, page: string) {
+  if (!db) return false;
+  try { return (await getDoc(doc(db, 'replays', `${bookId}_${page}`))).exists(); } catch { return false; }
+}
+export async function replayData(bookId: string, page: string): Promise<string | null> {
+  const s = await getDoc(doc(need().db, 'replayData', `${bookId}_${page}`));
+  return s.exists() ? (s.data().data as string) : null;
+}
+
 // ---------- comments on pages ----------
 export interface Comment { id: string; uid: string; name: string; handle: string; page: string; text: string; at: number; likes?: string[] }
 export const COMMENT_MAX = 500;
