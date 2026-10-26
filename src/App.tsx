@@ -1208,10 +1208,10 @@ export default class App extends Component<object, State> {
   frame() {
     const { vw, vh } = this.state, a = this.edAspect();
     // Phones: the frame fills the width, capped so the controls below still fit.
-    if (vw < 640) { let fw = vw - 32, fh = fw / a; const e = this.state.edit, maxH = vh * (e?.mode === 'write' && e.pad ? 0.34 : e?.mode === 'draw' ? 0.42 : 0.5); if (fh > maxH) { fh = maxH; fw = fh * a; } return { fw: Math.round(fw), fh: Math.round(fh) }; }
-    const ed = this.state.edit, fh = Math.round(Math.max(200, Math.min(vh * (ed?.mode === 'write' && ed.pad ? 0.5 : 0.58), 520)));
-    // A two-page frame is capped to the room beside the controls.
-    const maxW = Math.max(320, vw - 380); return fh * a > maxW ? { fw: Math.round(maxW), fh: Math.round(maxW / a) } : { fh, fw: Math.round(fh * a) };
+    if (vw < 640) { let fw = vw - 32, fh = fw / a; const e = this.state.edit, maxH = vh * (e?.mode === 'write' && e.pad ? 0.34 : e?.mode === 'draw' ? 0.4 : 0.5); if (fh > maxH) { fh = maxH; fw = fh * a; } return { fw: Math.round(fw), fh: Math.round(fh) }; }
+    // Larger screens: the page as big as the screen allows beside the controls (a profile photo stays modest).
+    const ed = this.state.edit, fh = Math.round(Math.max(200, ed?.target === 'avatar' ? Math.min(vh * 0.58, 520) : ed?.mode === 'write' && ed.pad ? vh * 0.5 : vh - 96));
+    const maxW = Math.max(240, vw - 152 - Math.min(440, Math.max(340, vw * 0.28))); return fh * a > maxW ? { fw: Math.round(maxW), fh: Math.round(maxW / a) } : { fh, fw: Math.round(fh * a) };
   }
   baseSize() { const e = this.state.edit!, { fw, fh } = this.frame(); if (!e.nw) return { bw: fw, bh: fh }; const s = (e.target === 'avatar' ? Math.max : Math.min)(fw / e.nw, fh / e.nh); return { bw: e.nw * s, bh: e.nh * s }; }
   /** Re-baselines the drag / pinch gesture whenever a finger is added or lifted. */

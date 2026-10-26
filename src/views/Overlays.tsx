@@ -833,25 +833,25 @@ function DrawTools({ v, outline, mob }: { v: V; outline: CSSProperties; mob?: bo
   const [wheel, setWheel] = useState(false);
   const chip = (on: boolean): CSSProperties => ({ flex: '1 0 auto', height: 34, padding: '0 12px', border: `1px solid ${on ? INK : 'rgba(var(--ink-rgb),.2)'}`, borderRadius: 17, background: on ? INK : 'transparent', color: on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' });
   const dot = (c: string, on: boolean, size: number): CSSProperties => ({ width: size, height: size, flexShrink: 0, borderRadius: '50%', padding: 0, cursor: 'pointer', background: c, border: '1px solid rgba(34,35,32,.25)', boxShadow: on ? `0 0 0 2px ${PAPER}, 0 0 0 4px ${INK}` : 'none' });
-  const swatches = [...v.recentColors, ...DRAW_COLORS.map(([c]) => c).filter(c => !v.recentColors.includes(c))].slice(0, mob ? 7 : 8);
+  const swatches = [...v.recentColors, ...DRAW_COLORS.map(([c]) => c).filter(c => !v.recentColors.includes(c))].slice(0, mob ? 7 : 9);
   const names = Object.fromEntries(DRAW_COLORS);
   const strength = v.penTool === 'blend' || v.penTool === 'eraser';
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: mob ? 10 : 14 }}>
-      <div role="tablist" aria-label="Brush" style={{ display: 'flex', gap: 4, ...(mob ? { overflowX: 'auto', scrollbarWidth: 'none' } : { flexWrap: 'wrap' }) } as CSSProperties}>
-        {DRAW_TOOLS.map(([k, l]) => <button key={k} role="tab" aria-selected={v.penTool === k} onClick={() => v.setTool(k)} style={chip(v.penTool === k)}>{l}</button>)}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: mob ? 12 : 16 }}>
+      {/* Every brush in view: four to a row on phones, wrapping beside the page on larger screens. */}
+      <div role="tablist" aria-label="Brush" style={mob ? { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 } : { display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {DRAW_TOOLS.map(([k, l]) => <button key={k} role="tab" aria-selected={v.penTool === k} onClick={() => v.setTool(k)} style={mob ? { ...chip(v.penTool === k), height: 32, padding: 0, fontSize: 12.5, minWidth: 0 } : chip(v.penTool === k)}>{l}</button>)}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, opacity: v.penNoColor ? 0.45 : 1 }}>
-        <div role="radiogroup" aria-label="Colour" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          {swatches.map(c => <button key={c} role="radio" aria-checked={v.penColor === c} title={names[c] || c} aria-label={names[c] || c} onClick={() => v.setColor(c)} style={dot(c, v.penColor === c && !wheel, mob ? 28 : 26)} />)}
-          <span style={{ flex: 1 }} />
+        <div role="radiogroup" aria-label="Colour" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          {swatches.map(c => <button key={c} role="radio" aria-checked={v.penColor === c} title={names[c] || c} aria-label={names[c] || c} onClick={() => v.setColor(c)} style={dot(c, v.penColor === c && !wheel, mob ? 28 : 28)} />)}
           <button onClick={() => setWheel(w => !w)} title="Colour wheel" aria-label="Colour wheel" aria-expanded={wheel} style={{ ...dot('conic-gradient(red, yellow, lime, cyan, blue, magenta, red)', wheel, mob ? 30 : 28) }} />
           <button onClick={v.toggleEyedrop} title="Pick a colour from the page" aria-label="Pick a colour from the page" aria-pressed={v.edEyedrop} style={{ width: 32, height: 32, flexShrink: 0, padding: 0, borderRadius: '50%', border: `1px solid ${v.edEyedrop ? INK : 'rgba(var(--ink-rgb),.25)'}`, background: v.edEyedrop ? INK : 'none', color: v.edEyedrop ? PAPER : INK, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14.5 4.5l5 5M17 2.5l4.5 4.5-3 3-4.5-4.5zM15 8.5l-9 9-1.5 4 4-1.5 9-9" /></svg>
           </button>
         </div>
         {v.edEyedrop && <span style={{ fontSize: 12, color: MARK }}>Tap the page to pick up a colour.</span>}
-        {wheel && <ColourWheel color={v.penColor} onChange={v.setColor} size={mob ? 104 : 150} />}
+        {wheel && <ColourWheel color={v.penColor} onChange={v.setColor} size={mob ? 92 : 160} />}
       </div>
       {/* Phones: one line per slider, and the colour wheel takes their place while it's open, so the page stays big. */}
       {mob ? !wheel && <>
@@ -1011,12 +1011,12 @@ export function Editor({ v }: { v: V }) {
   const adjust = v.edMode === 'adjust', write = v.edMode === 'write', draw = v.edMode === 'draw', pick = v.edMode === 'pick';
   const sub = pick ? 'draw or write' : draw ? 'pens, paint and colour' : write ? 'handwriting to text' : adjust ? 'light and colour' : 'drag to move, scroll or pinch to zoom';
   return (
-    <div style={{ position: 'absolute', inset: 0, background: PAPER, zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 48, padding: 24, flexWrap: 'wrap', overflow: 'auto' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+    <div style={{ position: 'absolute', inset: 0, background: PAPER, zIndex: 20, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) clamp(340px, 28vw, 440px)', alignItems: 'center', gap: 56, padding: '24px 48px', boxSizing: 'border-box', overflow: 'auto' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, minWidth: 0 }}>
         <EditFrame v={v} radius="2px 10px 10px 2px" shadow="0 30px 70px rgba(10,10,30,.5)" wheel />
         {v.edPad && <WritePad v={v} />}
       </div>
-      <div style={{ width: 260, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div style={heading}>{v.edAvatar && v.edMode === 'fit' ? 'Your photo' : TITLES[v.edMode]}</div>
           <div style={{ fontSize: 13, color: 'rgba(var(--ink-rgb),.7)' }}>{v.edTitle} · {sub}</div>
