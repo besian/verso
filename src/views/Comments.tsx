@@ -20,8 +20,8 @@ export function CommentsPanel({ v }: { v: V }) {
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [v.cmList.length]);
   const panel: CSSProperties = mob
     ? { position: 'absolute', left: 0, right: 0, bottom: 0, height: '62%', borderRadius: '14px 14px 0 0', borderTop: '1px solid rgba(var(--ink-rgb),.15)', boxShadow: '0 -16px 40px rgba(20,20,30,.18)' }
-    // Below the top bar, so the bell and your profile stay in reach.
-    : { position: 'absolute', top: 68, right: 0, bottom: 0, width: 380, borderLeft: '1px solid rgba(var(--ink-rgb),.15)', borderTop: '1px solid rgba(var(--ink-rgb),.15)', boxShadow: '-16px 0 40px rgba(20,20,30,.1)' };
+    // Below the top bar, so the bell and your profile stay in reach; zoomed in (the bar is hidden), full height.
+    : { position: 'absolute', top: v.inFocus ? 0 : 68, right: 0, bottom: 0, width: 380, borderLeft: '1px solid rgba(var(--ink-rgb),.15)', borderTop: v.inFocus ? 'none' : '1px solid rgba(var(--ink-rgb),.15)', boxShadow: '-16px 0 40px rgba(20,20,30,.1)', transition: 'top .3s cubic-bezier(.2,.8,.2,1)' };
   return (
     <aside aria-label="Comments" onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()} style={{ ...panel, zIndex: 14, background: PAPER, display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
       <div style={{ padding: mob ? '14px 16px 10px' : '22px 22px 12px', display: 'flex', flexDirection: 'column', gap: 10, borderBottom: '1px solid rgba(var(--ink-rgb),.12)' }}>
