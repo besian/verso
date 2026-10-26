@@ -7,6 +7,7 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { createHash } from 'node:crypto';
+import { emailPage, row, MUTED, SANS } from './_lib/emailLayout.js';
 
 const ORIGIN = process.env.APP_ORIGIN || 'https://fletora.studio';
 const FROM = process.env.EMAIL_FROM || 'Fletora <noreply@fletora.studio>';
@@ -32,25 +33,19 @@ const ourLink = (link: string) => {
 };
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const COPY: Record<Kind, { subject: string; lead: (email: string) => string; button: string; foot: string }> = {
-  verify: { subject: 'Confirm your email for Fletora', lead: () => 'Welcome to Fletora, a home for sketchbooks, unfinished pages and all. Confirm your email address to finish setting up your account.', button: 'Confirm my email', foot: 'If you didn’t make a Fletora account, you can ignore this email.' },
-  reset: { subject: 'Reset your Fletora password', lead: e => `Someone asked to reset the password for your Fletora account (${esc(e)}). If it was you, choose a new one below.`, button: 'Choose a new password', foot: 'If you didn’t ask for this, you can ignore this email and your password won’t change.' },
-  change: { subject: 'Confirm your new Fletora email', lead: e => `Confirm that you’d like to sign in to Fletora with ${esc(e)} from now on.`, button: 'Confirm new email', foot: 'If you didn’t ask for this, you can ignore this email and nothing will change.' },
+const COPY: Record<Kind, { subject: string; heading: string; lead: (email: string) => string; button: string; foot: string }> = {
+  verify: { subject: 'Confirm your email for Fletora', heading: 'Welcome to <em>fletora</em>', lead: () => 'A home for sketchbooks, unfinished pages and all. Confirm your email address to finish setting up your account.', button: 'Confirm my email', foot: 'If you didn’t make a Fletora account, you can ignore this email.' },
+  reset: { subject: 'Reset your Fletora password', heading: 'Choose a new <em>password</em>', lead: e => `Someone asked to reset the password for your Fletora account (${esc(e)}). If it was you, choose a new one below.`, button: 'Choose a new password', foot: 'If you didn’t ask for this, you can ignore this email and your password won’t change.' },
+  change: { subject: 'Confirm your new Fletora email', heading: 'Confirm your <em>new email</em>', lead: e => `Confirm that you’d like to sign in to Fletora with ${esc(e)} from now on.`, button: 'Confirm new email', foot: 'If you didn’t ask for this, you can ignore this email and nothing will change.' },
 };
 
+/** In fletora's email design (api/_lib/emailLayout.ts), like the gift and weekly emails. */
 function render(kind: Kind, email: string, link: string) {
-  const c = COPY[kind], serif = 'Georgia,\'Times New Roman\',serif', sans = 'Helvetica,Arial,sans-serif';
-  const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f4f1ea">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f1ea;padding:40px 16px"><tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#fbfaf6;border:1px solid #e2ded3;padding:36px 32px;color:#222320">
-<tr><td style="font:400 30px/1 ${serif};padding-bottom:28px">fletora<span style="color:#ad493a">.</span></td></tr>
-<tr><td style="font:400 16px/1.6 ${sans};padding-bottom:28px">${c.lead(email)}</td></tr>
-<tr><td style="padding-bottom:28px"><a href="${esc(link)}" style="display:inline-block;background:#222320;color:#f4f1ea;padding:14px 26px;font:500 15px ${sans};text-decoration:none">${c.button}</a></td></tr>
-<tr><td style="font:400 13px/1.6 ${sans};color:#77756e;padding-bottom:8px">${c.foot}</td></tr>
-<tr><td style="font:400 12px/1.6 ${sans};color:#9a978e;word-break:break-all">Button not working? Paste this into your browser:<br>${esc(link)}</td></tr>
-</table>
-<p style="font:400 12px ${sans};color:#9a978e;margin:18px 0 0">Fletora · <a href="${ORIGIN}" style="color:#9a978e">fletora.studio</a></p>
-</td></tr></table></body></html>`;
+  const c = COPY[kind];
+  const html = emailPage({ title: c.subject, origin: ORIGIN, heading: c.heading, rows: [
+    row.text(c.lead(email)), row.button(esc(link), c.button), row.small(c.foot, 14),
+    `<tr><td style="font:400 12px/1.6 ${SANS};color:${MUTED};word-break:break-all">Button not working? Paste this into your browser:<br>${esc(link)}</td></tr>`,
+  ] });
   const text = `${c.lead(email).replace(/&[a-z]+;/g, '')}\n\n${c.button}: ${link}\n\n${c.foot}`;
   return { subject: c.subject, html, text };
 }

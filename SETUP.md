@@ -179,6 +179,9 @@ sketchbooks private. Paid Plus is left to the Stripe webhook.
 - A comment sends the owner a `comment_<id>` notification in the same write. Reports of comments use `kind: 'comment'` and `targetId: '<bookId>:<commentId>'`; moderators can delete the comment from the reports page.
 - Deleting an account removes the person's comments everywhere (and all comments on their sketchbooks). Finding their comments needs the `comments.uid` collection-group index in `firestore.indexes.json`: run `firebase deploy --only firestore:indexes`, or in the console add a single-field exemption for `comments` → `uid` with *Collection group* ascending.
 - Explore's Following tab lists the followed artists' recently updated sketchbooks (no extra data or indexes).
+- Replies carry `replyTo` (the comment answered, one level deep) and send its author a `reply_<id>` notification; `@handle` in a comment sends that person a `mention_<id>` notification. The rules check both against the comment itself.
+- The weekly email is opt-in (Settings → Weekly email, stored in `emailPrefs/{uid}`). The daily cron sends it on Mondays to people with something new, with a signed one-click unsubscribe link (`/api/cron?unsub=…`, signed with `CRON_SECRET`). To send one now for testing: `curl -H "Authorization: Bearer $CRON_SECRET" "https://fletora.studio/api/cron?weekly=now"`.
+- The moderator dashboard (top of /admin) counts on the server. "Comments in the last 7 days" needs the `comments.at` collection-group index: in the console add a single-field exemption for `comments` → `at` with *Collection group* ascending (and keep the Collection ones on). Until then that tile shows —.
 
 ## Stroke replays
 
