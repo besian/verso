@@ -77,7 +77,7 @@ service cloud.firestore {
         allow create: if signedIn() && !suspended()
           && request.resource.data.from == request.auth.uid
           && request.resource.data.read == false
-          && request.resource.data.keys().hasOnly(['type', 'from', 'fromName', 'fromHandle', 'bookId', 'bookName', 'goal', 'at', 'read', 'commentId', 'text', 'page'])
+          && request.resource.data.keys().hasOnly(['type', 'from', 'fromName', 'fromHandle', 'bookId', 'bookName', 'goal', 'at', 'read', 'commentId', 'text', 'page', 'replyTo'])
           && ((request.resource.data.type in ['like', 'invite'] && nid == request.resource.data.type + '_' + request.resource.data.bookId + '_' + request.auth.uid)
             // A comment: one notification per comment, sent with it, by its author, to the book's owner.
             || (request.resource.data.type == 'comment' && nid == 'comment_' + request.resource.data.commentId && str(request.resource.data.text, 140)
@@ -87,6 +87,15 @@ service cloud.firestore {
             || (request.resource.data.type == 'commentLike' && nid == 'clike_' + request.resource.data.commentId + '_' + request.auth.uid && str(request.resource.data.text, 140)
               && getAfter(/databases/$(database)/documents/books/$(request.resource.data.bookId)/comments/$(request.resource.data.commentId)).data.uid == uid
               && request.auth.uid in getAfter(/databases/$(database)/documents/books/$(request.resource.data.bookId)/comments/$(request.resource.data.commentId)).data.get('likes', []))
+            // A reply: to the author of the comment it answers, sent with the reply by its author.
+            || (request.resource.data.type == 'reply' && nid == 'reply_' + request.resource.data.commentId && str(request.resource.data.text, 140)
+              && getAfter(/databases/$(database)/documents/books/$(request.resource.data.bookId)/comments/$(request.resource.data.commentId)).data.uid == request.auth.uid
+              && getAfter(/databases/$(database)/documents/books/$(request.resource.data.bookId)/comments/$(request.resource.data.commentId)).data.get('replyTo', '') == request.resource.data.replyTo
+              && get(/databases/$(database)/documents/books/$(request.resource.data.bookId)/comments/$(request.resource.data.replyTo)).data.uid == uid)
+            // A mention: to someone whose @handle is in the comment, sent with it by its author.
+            || (request.resource.data.type == 'mention' && nid == 'mention_' + request.resource.data.commentId && str(request.resource.data.text, 140)
+              && getAfter(/databases/$(database)/documents/books/$(request.resource.data.bookId)/comments/$(request.resource.data.commentId)).data.uid == request.auth.uid
+              && getAfter(/databases/$(database)/documents/books/$(request.resource.data.bookId)/comments/$(request.resource.data.commentId)).data.text.lower().matches('(?s).*@' + get(/databases/$(database)/documents/users/$(uid)).data.handle + '.*'))
             || (request.resource.data.type == 'follow' && nid == 'follow_' + request.auth.uid)
             || (request.resource.data.type == 'goal' && uid == request.auth.uid && nid == 'goal_' + request.resource.data.goal));
       }
@@ -426,7 +435,8 @@ service cloud.firestore {
       match /comments/{cid} {
         allow read: if bookOpen(bookDoc());
         allow create: if signedIn() && !suspended() && bookOpen(bookDoc())
-          && request.resource.data.keys().hasOnly(['uid', 'name', 'handle', 'page', 'text', 'at'])
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'handle', 'page', 'text', 'at', 'replyTo'])
+          && (!('replyTo' in request.resource.data) || str(request.resource.data.replyTo, 40))
           && request.resource.data.uid == request.auth.uid
           && str(request.resource.data.name, 80) && str(request.resource.data.handle, 40)
           && str(request.resource.data.page, 40) && request.resource.data.page.size() > 0

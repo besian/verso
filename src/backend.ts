@@ -639,7 +639,7 @@ export function watchSize(path: string[], cb: (n: number) => void): () => void {
 
 // ---------- likes, counts, notifications ----------
 
-export interface Notif { id: string; type: 'like' | 'follow' | 'goal' | 'invite' | 'comment' | 'commentLike'; from: string; fromName: string; fromHandle: string; bookId?: string; bookName?: string; goal?: string; at: number; read: boolean; commentId?: string; text?: string; page?: string }
+export interface Notif { id: string; type: 'like' | 'follow' | 'goal' | 'invite' | 'comment' | 'commentLike' | 'reply' | 'mention'; from: string; fromName: string; fromHandle: string; bookId?: string; bookName?: string; goal?: string; at: number; read: boolean; commentId?: string; text?: string; page?: string }
 const note = (me: Account, type: 'like' | 'follow', book?: { id: string; name: string }) => ({
   type, from: me.uid, fromName: me.name, fromHandle: me.handle, ...(book ? { bookId: book.id, bookName: book.name } : {}), at: Date.now(), read: false,
 });
@@ -679,7 +679,7 @@ export async function replayData(bookId: string, page: string): Promise<string |
 }
 
 // ---------- comments on pages ----------
-export interface Comment { id: string; uid: string; name: string; handle: string; page: string; text: string; at: number; likes?: string[] }
+export interface Comment { id: string; uid: string; name: string; handle: string; page: string; text: string; at: number; likes?: string[]; replyTo?: string }
 export const COMMENT_MAX = 500;
 /** A short, stable code for a page's picture, so a comment stays with its page when pages are moved around. */
 export function pageKey(u: string) {
@@ -693,14 +693,28 @@ export function watchComments(bookId: string, cb: (c: Comment[]) => void): () =>
   return onSnapshot(query(collection(db, 'books', bookId, 'comments'), orderBy('at'), limitToLast(500)),
     s => cb(s.docs.map(x => ({ ...(x.data() as Omit<Comment, 'id'>), id: x.id }))), () => cb([]));
 }
-/** Posts a comment on a page, and tells the sketchbook's owner (in the same write, as the rules require). */
-export async function addComment(me: Account, book: { id: string; ownerId: string; name: string }, page: string, pageNo: number, text: string) {
+/** @handles in a comment (lower case, at most five). */
+export const mentionsIn = (text: string) => [...new Set([...text.toLowerCase().matchAll(/(^|[^a-z0-9._])@([a-z0-9._]{1,24})/g)].map(m => m[2].replace(/\.+$/, '')))].slice(0, 5);
+/** Who has a handle (null: nobody). */
+export async function uidOfHandle(h: string): Promise<string | null> {
+  try { const s = await getDoc(doc(need().db, 'handles', h)); return s.exists() ? (s.data().uid as string) : null; } catch { return null; }
+}
+/** Posts a comment on a page (or a reply to one), telling, in the same write as the rules require: the sketchbook's
+ *  owner, the author of the comment replied to, and anyone @mentioned (once each). */
+export async function addComment(me: Account, book: { id: string; ownerId: string; name: string }, page: string, pageNo: number, text: string, reply?: Comment | null) {
   const { db: d } = need(), batch = writeBatch(d), ref = doc(collection(d, 'books', book.id, 'comments')), at = Date.now();
-  batch.set(ref, { uid: me.uid, name: me.name.slice(0, 80), handle: me.handle, page, text: text.slice(0, COMMENT_MAX), at });
-  if (book.ownerId && book.ownerId !== me.uid) batch.set(doc(d, 'users', book.ownerId, 'notifications', 'comment_' + ref.id), {
-    type: 'comment', from: me.uid, fromName: me.name, fromHandle: me.handle, bookId: book.id, bookName: book.name, commentId: ref.id,
-    text: text.length > 140 ? text.slice(0, 139) + '…' : text, page: String(pageNo), at, read: false,
-  });
+  batch.set(ref, { uid: me.uid, name: me.name.slice(0, 80), handle: me.handle, page, text: text.slice(0, COMMENT_MAX), at, ...(reply ? { replyTo: reply.id } : {}) });
+  const told = new Set([me.uid]), short = text.length > 140 ? text.slice(0, 139) + '…' : text;
+  const note = (to: string, type: 'comment' | 'reply' | 'mention') => {
+    if (!to || told.has(to)) return; told.add(to);
+    batch.set(doc(d, 'users', to, 'notifications', `${type}_${ref.id}`), {
+      type, from: me.uid, fromName: me.name, fromHandle: me.handle, bookId: book.id, bookName: book.name, commentId: ref.id,
+      text: short, page: String(pageNo), at, read: false, ...(type === 'reply' && reply ? { replyTo: reply.id } : {}),
+    });
+  };
+  if (reply) note(reply.uid, 'reply');
+  note(book.ownerId, 'comment');
+  for (const h of mentionsIn(text)) { const u = await uidOfHandle(h); if (u) note(u, 'mention'); }
   await batch.commit();
 }
 /** Likes or unlikes a comment; the first like from someone tells the comment's author (once). */

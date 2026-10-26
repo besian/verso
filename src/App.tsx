@@ -92,7 +92,7 @@ interface State {
   /** Watching a page's stroke replay: the page, its finished picture, and the strokes once loaded. */
   replay?: { title: string; img: string; data: string | null; err?: string } | null;
   /** Comments on the open sketchbook (kept live), and the comments panel: open, showing every page, the draft, and which page it's for. */
-  comments?: { bookId: string; list: api.Comment[] } | null; cmOpen?: boolean; cmAll?: boolean; cmDraft?: string; cmBusy?: boolean; cmErr?: string; cmFor?: number | null;
+  comments?: { bookId: string; list: api.Comment[] } | null; cmReply?: string | null; cmOpen?: boolean; cmAll?: boolean; cmDraft?: string; cmBusy?: boolean; cmErr?: string; cmFor?: number | null;
   /** Making a PDF of the open sketchbook: how far along ('3/40'). */
   pdfBusy?: string;
   /** A question asked in Fletora's own dialog before something that can't easily be undone. */
@@ -1452,6 +1452,31 @@ export default class App extends Component<object, State> {
     const side = this.state.focus ? this.state.fside : null;
     return (side === 'L' ? [l] : side === 'R' ? [r] : [l, r]).filter(i => i >= 0);
   }
+  /** One comment in the panel (and, for a top-level one, its replies). */
+  commentItem(c: api.Comment, book: { id: string; ownerId: string; name: string }, keyAt: Map<string, number>, twoPages: boolean, when: (t: number) => string, replies: api.Comment[] = []): V {
+    const s = this.state, me = s.acct?.uid, i = keyAt.get(c.page), top = c.replyTo ? s.comments?.list.find(x => x.id === c.replyTo) : null;
+    return {
+      key: c.id, name: c.name || '@' + c.handle, handle: '@' + c.handle, initials: (c.name || c.handle || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase(),
+      av: (() => { const a = this.avatarOf(c.uid); return a ? avatarBg(a) : ''; })(),
+      likes: (c.likes || []).length, liked: !!me && (c.likes || []).includes(me),
+      like: () => { const a = s.acct; if (!a) return this.openJoin(); api.likeComment(a, book, c, (i ?? 0) + 1, !(c.likes || []).includes(a.uid)).catch(e => { console.error(e); this.toast('Couldn’t save that. Try again.'); }); },
+      when: when(c.at), mine: c.uid === me, page: i == null ? 'an earlier page' : `Page ${i + 1}`, showPage: !c.replyTo && (!!s.cmAll || twoPages),
+      // The text, with @mentions as links to the person's profile.
+      parts: c.text.split(/((?:^|(?<=[^a-z0-9._]))@[a-z0-9._]{1,24})/i).filter(Boolean).map((t, k) => /^@[a-z0-9._]+$/i.test(t)
+        ? { key: k, text: t, open: async () => { const h = t.slice(1).toLowerCase().replace(/\.+$/, ''), uid = await api.uidOfHandle(h); if (uid) this.openProfile({ uid, name: '@' + h, handle: h }); else this.toast(`No one is called @${h}.`); } }
+        : { key: k, text: t }),
+      goPage: () => i != null && this.goToPage(i),
+      openAuthor: () => this.openProfile({ uid: c.uid, name: c.name, handle: c.handle }),
+      // Replying to a reply answers the same thread, starting with their @handle.
+      reply: () => { if (!s.acct) return this.openJoin(); const parent = top || c; this.setState({ cmReply: parent.id, cmDraft: c !== parent || c.replyTo ? `@${c.handle} ` : (s.cmDraft || '') }); },
+      canDelete: !!me && (c.uid === me || book.ownerId === me || !!s.admin),
+      del: () => this.ask({ title: 'Delete this comment?', text: c.uid === me ? 'It’s taken off the page for everyone.' : `${c.name}’s comment is taken off the page for everyone.`, yes: 'Delete', danger: true,
+        run: () => api.deleteComment(book.id, c.id).catch(e => { console.error(e); this.toast('Couldn’t delete that. Try again.'); }) }),
+      canReport: !!me && c.uid !== me,
+      report: () => this.openReport({ kind: 'comment', targetId: `${book.id}:${c.id}`, ownerId: c.uid, label: `${c.name}’s comment`, quote: c.text }),
+      replies: replies.map(r => this.commentItem(r, book, keyAt, twoPages, when)),
+    };
+  }
   commentVals(): V {
     const s = this.state, mode = s.mode || 'home', o = s.other as OtherBook | null, mb = s.books[s.active];
     const book = mode === 'other' && o && !o.arch ? { id: o.id, ownerId: o.ownerId || '', name: o.name } : mode === 'mine' && mb && !mb.id.startsWith('local') ? { id: mb.id, ownerId: mb.owner?.uid || s.acct?.uid || '', name: mb.name } : null;
@@ -1459,13 +1484,16 @@ export default class App extends Component<object, State> {
     const all = (s.comments?.bookId === book.id ? s.comments.list : []).filter(c => !(s.blocked || []).includes(c.uid));
     const imgs = s.images, keyAt = new Map(imgs.map((u, i) => [api.pageKey(u), i]));
     const shown = this.shownPages(), shownKeys = new Set(shown.map(i => api.pageKey(imgs[i])));
-    const list = s.cmAll ? all : all.filter(c => shownKeys.has(c.page));
-    const me = s.acct?.uid, target = s.cmFor != null && shown.includes(s.cmFor) ? s.cmFor : shown[shown.length - 1] ?? -1;
+    // Threads one level deep: comments with their replies under them (a reply to a deleted comment stands alone).
+    const byId = new Map(all.map(c => [c.id, c])), isTop = (c: api.Comment) => !c.replyTo || !byId.has(c.replyTo);
+    const list = (s.cmAll ? all : all.filter(c => shownKeys.has(c.page))).filter(isTop);
+    const replyTo = s.cmReply ? byId.get(s.cmReply) || null : null;
+    const me = s.acct?.uid, target = replyTo ? keyAt.get(replyTo.page) ?? -1 : s.cmFor != null && shown.includes(s.cmFor) ? s.cmFor : shown[shown.length - 1] ?? -1;
     const when = (t: number) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : m < 10080 ? Math.round(m / 1440) + 'd' : new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); };
     const post = async () => {
       const a = s.acct, text = (s.cmDraft || '').trim(); if (!a) return this.openJoin(); if (!text || target < 0 || s.cmBusy) return;
       this.setState({ cmBusy: true, cmErr: '' });
-      try { await api.addComment(a, book, api.pageKey(imgs[target]), target + 1, text); this.setState({ cmDraft: '' }); }
+      try { await api.addComment(a, book, replyTo ? replyTo.page : api.pageKey(imgs[target]), target + 1, text, replyTo); this.setState({ cmDraft: '', cmReply: null }); }
       catch (e) { console.error(e); this.setState({ cmErr: api.errMsg(e) }); }
       finally { this.setState({ cmBusy: false }); }
     };
@@ -1501,23 +1529,17 @@ export default class App extends Component<object, State> {
       cmWhere: !shown.length ? 'the cover' : shown.length === 2 ? `pages ${shown[0] + 1}–${shown[1] + 1}` : `page ${shown[0] + 1}`,
       cmTargets: shown.length === 2 ? shown.map(i => ({ key: i, label: `Page ${i + 1}`, on: i === target, pick: () => this.setState({ cmFor: i }) })) : [],
       cmTargetLbl: target >= 0 ? `page ${target + 1}` : '',
-      cmList: list.map(c => {
-        const i = keyAt.get(c.page);
-        return {
-          key: c.id, name: c.name || '@' + c.handle, handle: '@' + c.handle, initials: (c.name || c.handle || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase(),
-          av: (() => { const a = this.avatarOf(c.uid); return a ? avatarBg(a) : ''; })(),
-          likes: (c.likes || []).length, liked: !!me && (c.likes || []).includes(me),
-          like: () => { const a = s.acct; if (!a) return this.openJoin(); api.likeComment(a, book, c, (i ?? 0) + 1, !(c.likes || []).includes(a.uid)).catch(e => { console.error(e); this.toast('Couldn’t save that. Try again.'); }); },
-          when: when(c.at), text: c.text, mine: c.uid === me, page: i == null ? 'an earlier page' : `Page ${i + 1}`, showPage: !!s.cmAll || shown.length === 2,
-          goPage: () => i != null && this.goToPage(i),
-          openAuthor: () => this.openProfile({ uid: c.uid, name: c.name, handle: c.handle }),
-          canDelete: !!me && (c.uid === me || book.ownerId === me || !!s.admin),
-          del: () => this.ask({ title: 'Delete this comment?', text: c.uid === me ? 'It’s taken off the page for everyone.' : `${c.name}’s comment is taken off the page for everyone.`, yes: 'Delete', danger: true,
-            run: () => api.deleteComment(book.id, c.id).catch(e => { console.error(e); this.toast('Couldn’t delete that. Try again.'); }) }),
-          canReport: !!me && c.uid !== me,
-          report: () => this.openReport({ kind: 'comment', targetId: `${book.id}:${c.id}`, ownerId: c.uid, label: `${c.name}’s comment`, quote: c.text }),
-        };
-      }),
+      cmList: list.map(c => this.commentItem(c, book, keyAt, shown.length === 2, when, all.filter(r => r.replyTo === c.id).sort((x, y) => x.at - y.at))),
+      cmReplying: replyTo ? { name: replyTo.name, cancel: () => this.setState({ cmReply: null }) } : null,
+      // @mentions: people in this sketchbook's conversation, its owner and people you follow, matching what's typed after @.
+      cmSuggest: (() => {
+        const m = /(^|\s)@([a-z0-9._]*)$/i.exec(s.cmDraft || ''); if (!m) return [];
+        const q = m[2].toLowerCase(), seen = new Set<string>(), people: { handle: string; name: string }[] = [];
+        const add = (handle?: string, name?: string) => { if (!handle || seen.has(handle) || handle === s.acct?.handle) return; seen.add(handle); people.push({ handle, name: name || handle }); };
+        add(o?.handle || mb?.owner?.handle, o?.artist || mb?.owner?.name); all.forEach(c => add(c.handle, c.name)); (s.followPeople || []).forEach(p => add(p.handle, p.name));
+        return people.filter(p => p.handle.startsWith(q) || p.name.toLowerCase().startsWith(q)).slice(0, 5).map(p => ({ key: p.handle, label: p.name, handle: '@' + p.handle,
+          pick: () => this.setState(st => ({ cmDraft: (st.cmDraft || '').replace(/@([a-z0-9._]*)$/i, `@${p.handle} `) })) }));
+      })(),
       cmSignedIn: !!s.acct, cmSignin: () => this.openAuth('signin'), cmCanPost: target >= 0,
       cmDraft: s.cmDraft || '', onCmDraft: (e: ChangeEvent<HTMLTextAreaElement>) => this.setState({ cmDraft: e.target.value.slice(0, api.COMMENT_MAX), cmErr: '' }),
       cmKey: (e: { key: string; metaKey: boolean; ctrlKey: boolean; preventDefault(): void }) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); post(); } },
@@ -1922,11 +1944,11 @@ export default class App extends Component<object, State> {
       ntItems: list.map(n => ({
         key: n.id, unread: !n.read, when: ago(n.at), goal: n.type === 'goal',
         who: n.type === 'goal' ? '' : n.fromName || '@' + n.fromHandle,
-        text: n.type === 'comment' ? <>commented on page {n.page} of <i>{n.bookName}</i>: “{n.text}”</> : n.type === 'commentLike' ? <>liked your comment on <i>{n.bookName}</i>: “{n.text}”</> : n.type === 'like' ? <>liked <i>{n.bookName}</i></> : n.type === 'invite' ? <>invited you to draw in <i>{n.bookName}</i></> : n.type === 'follow' ? 'started following you' : n.goal === 'likes100' ? `You reached ${GOAL} likes. Thank you for sharing your pages.` : `You reached ${GOAL} followers. People are following along.`,
+        text: n.type === 'comment' ? <>commented on page {n.page} of <i>{n.bookName}</i>: “{n.text}”</> : n.type === 'reply' ? <>replied to your comment on <i>{n.bookName}</i>: “{n.text}”</> : n.type === 'mention' ? <>mentioned you on <i>{n.bookName}</i>: “{n.text}”</> : n.type === 'commentLike' ? <>liked your comment on <i>{n.bookName}</i>: “{n.text}”</> : n.type === 'like' ? <>liked <i>{n.bookName}</i></> : n.type === 'invite' ? <>invited you to draw in <i>{n.bookName}</i></> : n.type === 'follow' ? 'started following you' : n.goal === 'likes100' ? `You reached ${GOAL} likes. Thank you for sharing your pages.` : `You reached ${GOAL} followers. People are following along.`,
         open: () => {
           this.setState({ notifOpen: false });
           if (n.type === 'invite' && n.bookId) { const j = s.books.findIndex(b => b.id === n.bookId); if (j >= 0) { this.goMode('mine'); this.setState({ active: j, images: s.books[j].images }); } else this.setState({ notifOpen: true }); }
-          else if (n.type === 'commentLike' && n.bookId) {
+          else if ((n.type === 'commentLike' || n.type === 'reply' || n.type === 'mention') && n.bookId) {
             // Your comment may be on your own sketchbook or someone else's.
             const j = s.books.findIndex(b => b.id === n.bookId), at = () => this.setState({ cmOpen: true, cmAll: false }, () => setTimeout(() => this.goToPage(Number(n.page || 1) - 1), 80));
             if (j >= 0) { this.goMode('mine'); this.setState({ active: j, images: s.books[j].images }, at); } else { this.openBookById(n.bookId); setTimeout(at, 600); }
