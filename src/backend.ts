@@ -779,12 +779,12 @@ export const changePlan = (action: 'cancel' | 'resume' | 'switch') => billing<{ 
 export const cardSetup = async () => (await billing<{ clientSecret: string }>('card')).clientSecret;
 export const cardDone = (setup: string) => billing<{ ok: boolean }>('card-done', { setup });
 /** Moderators: give someone Plus for some months (0 = for good), or take a gift back. */
-export const giftPlus = (target: string, months: number) => billing<{ ok: boolean }>('gift', { target, months });
+export const giftPlus = (target: string, months: number) => billing<{ ok: boolean; emailed?: boolean }>('gift', { target, months });
 /** Starts a new account's free 14-day trial of Plus (the server checks it's new and hasn't had one). */
 export const startTrial = () => billing<{ ok: boolean; until?: number }>('trial');
 /** Whether the signed-in account was made in the last three days (only those can start a trial). */
 export const isNewAccount = () => { const t = Date.parse(auth?.currentUser?.metadata.creationTime || ''); return !!t && Date.now() - t < 3 * 86_400_000; };
-export const ungiftPlus = (target: string) => billing<{ ok: boolean }>('gift', { target, remove: true });
+export const ungiftPlus = (target: string) => billing<{ ok: boolean; emailed?: boolean }>('gift', { target, remove: true });
 
 /** Where a view came from, for the owner's stats. */
 export type ViewSource = 'explore' | 'profile' | 'home' | 'link' | 'embed';

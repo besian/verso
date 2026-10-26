@@ -8,11 +8,15 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldPath, getFirestore } from 'firebase-admin/firestore';
+import type { Firestore } from 'firebase-admin/firestore';
 import { createHash } from 'node:crypto';
 import { stripe } from './_lib/stripe.js';
 import { syncCheckout, syncSubscription } from './_lib/plus.js';
+import { giftEmail } from './_lib/giftEmail.js';
 
 const ORIGIN = process.env.APP_ORIGIN || 'https://fletora.studio';
+const FROM = process.env.EMAIL_FROM || 'Fletora <noreply@fletora.studio>';
+const REPLY_TO = process.env.EMAIL_REPLY_TO || 'hello@fletora.studio';
 /** Back to the same address the person paid from (www. or not), so they're still signed in there. */
 const originOf = (req: Request) => {
   const o = req.headers.get('origin') || '';
@@ -39,6 +43,18 @@ async function priceFor(plan: 'month' | 'year'): Promise<string | null> {
 }
 
 export function GET() { return json(405, { error: 'use POST' }); }
+
+/** Emails someone that a moderator has given them Plus (needs RESEND_API_KEY). Returns whether it was sent. */
+async function sendGiftEmail(db: Firestore, uid: string, until: number, forever: boolean) {
+  if (!process.env.RESEND_API_KEY) return false;
+  const u = await getAuth().getUser(uid); if (!u.email) return false;
+  const name = ((await db.collection('users').doc(uid).get()).get('name') as string) || u.displayName || '';
+  const m = giftEmail(name, until, forever, ORIGIN);
+  const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ from: FROM, to: [u.email], reply_to: REPLY_TO, subject: m.subject, html: m.html, text: m.text }) });
+  if (!r.ok) console.error('resend', r.status, await r.text());
+  return r.ok;
+}
 
 export async function POST(req: Request) {
   if (!process.env.STRIPE_SECRET_KEY || !process.env.FIREBASE_SERVICE_ACCOUNT) return json(503, { error: 'not-configured' });
@@ -173,7 +189,9 @@ export async function POST(req: Request) {
       const months = Math.max(0, Math.min(120, Math.floor(Number(body.months) || 0)));
       const until = months ? new Date(new Date().setMonth(new Date().getMonth() + months)).getTime() : new Date('2100-01-01').getTime();
       await plus.ref.set({ on: true, until, gift: true, forever: !months, by: uid, at: Date.now() });
-      return json(200, { ok: true, until });
+      // Tell them (the gift stands even if the email can't be sent).
+      const emailed = await sendGiftEmail(db, target, until, !months).catch(e => { console.error('gift email', e); return false; });
+      return json(200, { ok: true, until, emailed });
     }
     if (body.action === 'sync') {
       if (!/^cs_[A-Za-z0-9_]+$/.test(body.session || '')) return json(400, { error: 'bad-request' });

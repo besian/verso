@@ -1580,10 +1580,10 @@ export default class App extends Component<object, State> {
         const g = s.giftFor; if (!g || s.giftBusy) return;
         this.setState({ giftBusy: true });
         try {
-          months < 0 ? await api.ungiftPlus(g.uid) : await api.giftPlus(g.uid, months);
+          const r = months < 0 ? await api.ungiftPlus(g.uid) : await api.giftPlus(g.uid, months);
           const p = await api.getPlus(g.uid);
           this.setState(st => ({ giftFor: null, pf: st.pf?.uid === g.uid ? { ...st.pf, plus: p.on, gift: p } : st.pf }));
-          this.toast(months < 0 ? `Plus removed from ${g.name}` : `${g.name} has Plus${months ? ` for ${months} ${months === 1 ? 'month' : 'months'}` : ' for good'}`);
+          this.toast(months < 0 ? `Plus removed from ${g.name}` : `${g.name} has Plus${months ? ` for ${months} ${months === 1 ? 'month' : 'months'}` : ' for good'}${r.emailed ? '. We’ve emailed them.' : ''}`);
         } catch (e) { this.toast(api.errMsg(e)); }
         finally { this.setState({ giftBusy: false }); }
       },

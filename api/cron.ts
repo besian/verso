@@ -5,28 +5,24 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { emailPage, esc, row } from './_lib/emailLayout.js';
 
 const ORIGIN = process.env.APP_ORIGIN || 'https://fletora.studio';
 const FROM = process.env.EMAIL_FROM || 'Fletora <noreply@fletora.studio>';
 const DAY = 86_400_000;
 const json = (status: number, body: object) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const until = (v: unknown) => typeof v === 'number' ? v : typeof v === 'string' ? Number(v) || 0 : (v as { toMillis?: () => number })?.toMillis?.() ?? 0;
 
 function reminder(name: string, ends: number) {
-  const sans = 'Helvetica,Arial,sans-serif', serif = 'Georgia,\'Times New Roman\',serif', day = new Date(ends).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  const day = new Date(ends).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   const lead = `Hi ${esc(name || 'there')}, your free trial of Fletora Plus ends on ${day}. After that your account goes back to the free plan: nothing you've made is deleted, but link-only sketchbooks become private, stats and your pinned sketchbook are hidden, and the free limits apply to anything new.`;
-  const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f4f1ea">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f1ea;padding:40px 16px"><tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#fbfaf6;border:1px solid #e2ded3;padding:36px 32px;color:#222320">
-<tr><td style="font:400 30px/1 ${serif};padding-bottom:28px">fletora<span style="color:#ad493a">.</span></td></tr>
-<tr><td style="font:400 16px/1.6 ${sans};padding-bottom:28px">${lead}</td></tr>
-<tr><td style="font:400 16px/1.6 ${sans};padding-bottom:28px">To keep Plus, choose a plan: £7 a month, or £60 a year.</td></tr>
-<tr><td style="padding-bottom:28px"><a href="${ORIGIN}/plus" style="display:inline-block;background:#222320;color:#f4f1ea;padding:14px 26px;font:500 15px ${sans};text-decoration:none">Keep Plus</a></td></tr>
-<tr><td style="font:400 13px/1.6 ${sans};color:#77756e">If you don't want Plus, you don't need to do anything. There's no card on file, so you won't be charged.</td></tr>
-</table></td></tr></table></body></html>`;
+  const subject = `Your Fletora Plus trial ends ${day}`;
+  const html = emailPage({ title: subject, origin: ORIGIN, heading: 'Your Plus trial <em>ends soon</em>', rows: [
+    row.text(lead), row.text('To keep Plus, choose a plan: £7 a month, or £60 a year.'), row.button(`${ORIGIN}/plus`, 'Keep Plus'),
+    row.small("If you don't want Plus, you don't need to do anything. There's no card on file, so you won't be charged.", 0),
+  ] });
   const text = `${lead.replace(/&[a-z]+;/g, '')}\n\nTo keep Plus, choose a plan (£7 a month, or £60 a year): ${ORIGIN}/plus\n\nIf you don't want Plus, you don't need to do anything. There's no card on file, so you won't be charged.`;
-  return { subject: `Your Fletora Plus trial ends ${day}`, html, text };
+  return { subject, html, text };
 }
 
 export async function GET(req: Request) {
