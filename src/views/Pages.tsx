@@ -17,12 +17,12 @@ export const CONTACT_KINDS = [['help', 'A question or help'], ['complaint', 'A c
   ['report', 'Reporting content or a person'], ['privacy', 'A privacy or data request'], ['billing', 'Plus and billing'], ['other', 'Something else']] as const;
 const UPDATED = '26 October 2026';
 
-function Page({ v, kicker, title, children }: { v: V; kicker: string; title: ReactNode; children: ReactNode }) {
+function Page({ v, kicker, title, wide, children }: { v: V; kicker: string; title: ReactNode; wide?: boolean; children: ReactNode }) {
   const mob = !v.notMob;
   return (
     <div style={screen}>
       {/* Same spacing as every page; long text keeps a comfortable reading width from the same left edge. */}
-      <div style={{ ...pagePad(mob, 64), display: 'flex', flexDirection: 'column', gap: 28, maxWidth: 860, minHeight: '100%', paddingBottom: 20 }}>
+      <div style={{ ...pagePad(mob, 64), display: 'flex', flexDirection: 'column', gap: 28, maxWidth: wide ? 'none' : 860, minHeight: '100%', paddingBottom: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <span style={label(MARK)}>{kicker}</span>
           <h1 style={{ margin: 0, ...serif(mob ? 44 : 64, 1, '-.02em') }}>{title}</h1>
@@ -412,52 +412,25 @@ export function Admin({ v }: { v: V }) {
       </Page>
     );
   }
-  return (
-    <Page v={v} kicker="Moderation" title={<>The <em>dashboard</em></>}>
-      {v.adStats && (
-        <section aria-label="Site numbers" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 1, background: 'rgba(var(--ink-rgb),.12)', border: '1px solid rgba(var(--ink-rgb),.12)' }}>
-          {v.adStats.tiles.map((t: V) => (
-            <div key={t.key} style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '16px 16px 14px', background: PAPER }}>
-              <span style={label(t.alert ? MARK : MUTED, 10)}>{t.label}</span>
-              <span style={{ ...serif(40, 1), color: t.alert ? MARK : INK }}>{t.value}</span>
-              <span style={{ fontSize: 12.5, lineHeight: 1.4, color: MUTED }}>{t.note}</span>
-            </div>
-          ))}
-        </section>
-      )}
-      {v.adStats?.newest.length > 0 && (
-        <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <span style={label()}>Newest members</span>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 18px' }}>
-            {v.adStats.newest.map((p: V) => (
-              <button key={p.key} onClick={p.open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', font: `500 14px ${SANS}`, textAlign: 'left' }}>
-                {p.name} <span style={{ color: MUTED, fontWeight: 400 }}>{p.handle} · {p.when}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-      <section style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 20px', flexWrap: 'wrap', padding: '14px 16px', background: 'rgba(173,73,58,.06)', borderLeft: `2px solid ${MARK}` }}>
-        {v.adPick
-          ? <span style={{ fontSize: 14 }}><span style={label(MARK, 10)}>Staff pick</span> <button onClick={v.adPick.open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', ...serif(20, 1.1), fontStyle: 'italic' }}>{v.adPick.name}</button> <span style={{ color: MUTED }}>by {v.adPick.artist}</span></span>
-          : <span style={{ fontSize: 14, color: MUTED }}><span style={label(MARK, 10)}>Staff pick</span> · none. Open any public sketchbook and choose <b style={{ color: INK, fontWeight: 600 }}>Make staff pick</b> from its ⋯ menu.</span>}
-        {v.adPick && <button onClick={v.adPick.remove} style={smallBtn(true)}>Remove</button>}
-      </section>
-      <h2 style={{ margin: '12px 0 0', ...serif(32, 1.1), fontWeight: 400 }}>Open <em>reports</em></h2>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, ...label() }}>
-        <span>{v.adCount}</span>
+  const mob = !v.notMob, wide = (window.innerWidth || 0) >= 1400;
+  const card: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 12, padding: '18px 18px 16px', border: '1px solid rgba(var(--ink-rgb),.14)' };
+  const reports = (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap', paddingBottom: 12, borderBottom: `1px solid ${INK}` }}>
+        <h2 style={{ margin: 0, ...serif(32, 1.1), fontWeight: 400, flex: 1 }}>Open <em>reports</em></h2>
+        <span style={label()}>{v.adCount}</span>
         <button onClick={v.adReload} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(INK) }}>Refresh</button>
       </div>
       <Notice err={v.adErr} />
       {v.adLoading && <div style={{ fontSize: 14, color: MUTED }}>Loading reports…</div>}
-      {!v.adLoading && !v.adItems.length && <div style={{ fontSize: 15, color: MUTED }}>Nothing to review. Reports people send, and pictures the upload check holds back, show up here.</div>}
+      {!v.adLoading && !v.adItems.length && <div style={{ padding: '28px 0', fontSize: 15, color: MUTED }}>Nothing to review. Reports people send, and pictures the upload check holds back, show up here.</div>}
       {v.adItems.map((r: V) => (
-        <article key={r.key} style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 16, borderTop: `1px solid ${INK}` }}>
+        <article key={r.key} style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 18, borderBottom: '1px solid rgba(var(--ink-rgb),.12)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', ...label() }}>
             <span><span style={{ color: MARK }}>{r.reason}</span> · {r.kind}</span><span>{r.when}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-            <button onClick={r.open} disabled={r.gone} className={r.gone ? undefined : hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, cursor: r.gone ? 'default' : 'pointer', textAlign: 'left', ...serif(28, 1.1) }}>{r.name}</button>
+            <button onClick={r.open} disabled={r.gone} className={r.gone ? undefined : hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, cursor: r.gone ? 'default' : 'pointer', textAlign: 'left', ...serif(26, 1.1) }}>{r.name}</button>
             {r.isBook && r.owner && <button onClick={r.openOwner} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: MUTED, font: `500 14px ${SANS}`, cursor: 'pointer' }}>by {r.owner}</button>}
             {r.hidden && <span style={label(MARK, 10)}>Hidden</span>}
             {r.banned && <span style={label(MARK, 10)}>Suspended</span>}
@@ -475,6 +448,55 @@ export function Admin({ v }: { v: V }) {
           </div>
         </article>
       ))}
+    </section>
+  );
+  const side = (
+    <aside style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+      <section style={{ ...card, borderLeft: `2px solid ${MARK}`, background: 'rgba(173,73,58,.05)' }}>
+        <span style={label(MARK, 10)}>Staff pick</span>
+        {v.adPick ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <button onClick={v.adPick.open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', textAlign: 'left', ...serif(22, 1.1), fontStyle: 'italic' }}>{v.adPick.name}</button>
+              <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>by {v.adPick.artist}</div>
+            </div>
+            <button onClick={v.adPick.remove} style={smallBtn(true)}>Remove</button>
+          </div>
+        ) : <span style={{ fontSize: 14, lineHeight: 1.5, color: MUTED }}>None yet. Open any public sketchbook and choose <b style={{ color: INK, fontWeight: 600 }}>Make staff pick</b> from its ⋯ menu.</span>}
+      </section>
+      {v.adStats?.newest.length > 0 && (
+        <section style={card}>
+          <span style={label(MUTED, 10)}>Newest members</span>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {v.adStats.newest.map((p: V, k: number) => (
+              <button key={p.key} onClick={p.open} className={hover('background:rgba(var(--ink-rgb),.05)')} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '9px 6px', margin: '0 -6px', border: 'none', borderTop: k ? '1px solid rgba(var(--ink-rgb),.08)' : 'none', background: 'none', color: INK, cursor: 'pointer', font: `500 14px ${SANS}`, textAlign: 'left' }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                <span style={{ color: MUTED, fontWeight: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{p.handle}</span>
+                <span style={{ color: MUTED, fontWeight: 400, fontSize: 12.5, flexShrink: 0 }}>{p.when}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+    </aside>
+  );
+  return (
+    <Page v={v} wide kicker="Moderation" title={<>The <em>dashboard</em></>}>
+      {v.adStats && (
+        // One row of numbers on wide screens, two rows of four on laptops, pairs on phones.
+        <section aria-label="Site numbers" style={{ display: 'grid', gridTemplateColumns: `repeat(${mob ? 2 : wide ? 8 : 4}, minmax(0, 1fr))`, gap: 1, background: 'rgba(var(--ink-rgb),.12)', border: '1px solid rgba(var(--ink-rgb),.12)' }}>
+          {v.adStats.tiles.map((t: V) => (
+            <div key={t.key} style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: mob ? '14px 14px 12px' : '18px 18px 16px', background: PAPER, minWidth: 0 }}>
+              <span style={label(t.alert ? MARK : MUTED, 10)}>{t.label}</span>
+              <span style={{ ...serif(mob ? 34 : 44, 1), color: t.alert ? MARK : INK }}>{t.value}</span>
+              <span style={{ fontSize: 12.5, lineHeight: 1.4, color: MUTED }}>{t.note}</span>
+            </div>
+          ))}
+        </section>
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: mob ? '1fr' : 'minmax(0, 1fr) 360px', gap: mob ? 28 : 48, alignItems: 'start' }}>
+        {reports}{side}
+      </div>
     </Page>
   );
 }

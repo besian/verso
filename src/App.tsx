@@ -2257,7 +2257,7 @@ export default class App extends Component<object, State> {
             { key: 'pages', label: 'Pages', value: f(st.pages), note: 'across every sketchbook' },
             { key: 'plus', label: 'Plus', value: f(plusAll), note: st.plus ? `${f(st.plus.paid)} paid · ${f(st.plus.trial)} trial · ${f(st.plus.gift)} gift` : '' },
             { key: 'comments', label: 'Comments', value: f(st.comments7), note: 'in the last 7 days' },
-            { key: 'reports', label: 'Open reports', value: f(st.reports), note: 'waiting below', alert: (st.reports || 0) > 0 },
+            { key: 'reports', label: 'Open reports', value: f(st.reports), note: 'to review', alert: (st.reports || 0) > 0 },
             { key: 'banned', label: 'Suspended', value: f(st.banned), note: 'artists' },
             { key: 'weekly', label: 'Weekly email', value: f(st.weekly), note: 'people subscribed' },
           ],
