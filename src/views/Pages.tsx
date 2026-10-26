@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { V } from '../App';
 import { hover } from '../pseudo';
-import { INK, MARK, MUTED, PAPER, SANS, label, pagePad, serif } from '../theme';
+import { INK, MARK, MUTED, PAPER, SANS, SERIF, label, pagePad, serif } from '../theme';
 import { ADDRESS, SiteFooter } from './Footer';
 import { Notice, TextArea, TextField } from './Overlays';
-import { BOOKS_FREE, INK_FREE, PAGES_FREE, PRICE } from '../plus';
+import { BOOKS_FREE, INK_FREE, INK_PLUS, PAGES_FREE, PAGES_PLUS, PRICE, YEAR_SAVING } from '../plus';
 
 const screen: CSSProperties = { position: 'absolute', inset: '0 0 var(--tabbar, 0px) 0', zIndex: 4, background: PAPER, overflowX: 'hidden', overflowY: 'auto' };
 const hoverText = hover(`color:${MARK}`);
@@ -168,6 +168,7 @@ function Terms() {
 
 export function Legal({ v }: { v: V }) {
   if (v.legalDoc === 'contact') return <ContactPage v={v} />;
+  if (v.legalDoc === 'plus') return <PlusPage v={v} />;
   const mob = !v.notMob, terms = v.legalDoc === 'terms', tab = (on: boolean, name: string, open: () => void) => (
     <button onClick={open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(on ? INK : undefined), borderBottom: on ? `1px solid ${INK}` : 'none' }}>{name}</button>
   );
@@ -213,6 +214,80 @@ function LegalBody({ children }: { children: ReactNode }) {
         ))}
       </nav>
       <div ref={ref} className="legal-cards">{children}</div>
+    </div>
+  );
+}
+
+/** Free against Plus, row by row. */
+const PLUS_ROWS: [string, string, string][] = [
+  ['Sketchbooks', String(BOOKS_FREE), 'Unlimited'],
+  ['Pages per sketchbook', String(PAGES_FREE), String(PAGES_PLUS)],
+  ['Handwriting to text', `${INK_FREE} a month`, `${INK_PLUS} a month`],
+  ['Page quality', 'Standard', 'Full resolution, twice the detail'],
+  ['Download as PDF', '—', 'Any sketchbook, laid out to print'],
+  ['People per sketchbook', '1 other person', 'Up to 5'],
+  ['Link-only sketchbooks', '—', 'Open to anyone with the link'],
+  ['Stats', '—', 'Views, likes, saves and where visitors came from'],
+  ['Pin a sketchbook to your profile', '—', '✓'],
+  ['The Plus mark', '—', '✓'],
+];
+const PLUS_FAQ: [string, string][] = [
+  ['How does the free trial work?', 'New accounts get Plus free for 14 days, with no card needed. We email you two days before it ends. If you don’t choose a plan, your account simply goes back to the free plan.'],
+  ['What happens when Plus ends?', `Nothing you’ve made is deleted. Link-only sketchbooks become private, stats and your pinned sketchbook are hidden, and the free limits apply to anything new (${BOOKS_FREE} sketchbooks, ${PAGES_FREE} pages each).`],
+  ['Can I cancel?', 'Anytime, in Account settings → Plan. You keep Plus until the end of the month or year you’ve paid for, and you’re not charged again.'],
+  ['Who takes the payment?', 'Stripe, as merchant of record: it takes the payment, charges any VAT that applies and sends your receipts. We never see your card number.'],
+  ['What stays free?', 'Everything else: public and private sketchbooks, pictures across two pages, drawing and writing on pages, following, likes, saves and messages.'],
+];
+
+/** Fletora Plus: what it costs, what it adds, and the free trial. Open to everyone, signed in or not. */
+function PlusPage({ v }: { v: V }) {
+  const mob = !v.notMob;
+  const price = (on: boolean, name: string, amount: string, per: string, note: string): ReactNode => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '16px 18px', border: `1.5px solid ${on ? INK : 'rgba(var(--ink-rgb),.2)'}`, background: on ? 'rgba(var(--ink-rgb),.04)' : 'none', borderRadius: 2 }}>
+      <span style={label(on ? MARK : undefined)}>{name}</span>
+      <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}><span style={serif(40, 1)}>{amount}</span><span style={{ fontSize: 14, color: MUTED }}>{per}</span></span>
+      <span style={{ fontSize: 13, color: MUTED }}>{note}</span>
+    </div>
+  );
+  const cta: CSSProperties = { height: 52, padding: '0 28px', border: 'none', borderRadius: 2, background: MARK, color: PAPER, font: `500 16px ${SANS}`, cursor: 'pointer', alignSelf: 'flex-start' };
+  return (
+    <div data-scroll style={screen}>
+      <div style={{ ...pagePad(mob, 64), display: 'flex', flexDirection: 'column', gap: mob ? 36 : 56, minHeight: '100%', paddingBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: mob ? 'minmax(0,1fr)' : 'minmax(0,1fr) minmax(0,1.1fr)', gap: mob ? 36 : 'clamp(40px, 6vw, 100px)', alignItems: 'start' }}>
+          <section style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+            <span style={label(MARK)}>Fletora Plus</span>
+            <h1 style={{ margin: 0, font: `400 ${mob ? '52px' : 'clamp(60px, 6vw, 96px)'}/.95 ${SERIF}`, letterSpacing: '-.025em' }}>More room for your <em style={{ color: MARK }}>sketchbooks.</em></h1>
+            <p style={{ margin: 0, maxWidth: 520, fontSize: 17, lineHeight: 1.55, color: MUTED }}>Everything in fletora., with far more room to keep your work, and a few things just for Plus: PDFs, stats, link-only sketchbooks and drawing together with up to five people.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, maxWidth: 520 }}>
+              {price(false, 'Monthly', PRICE.month, 'a month', 'Cancel anytime')}
+              {price(true, 'Yearly', PRICE.year, 'a year', `${YEAR_SAVING} less than monthly`)}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button onClick={v.ppGo} className={hover(`background:${INK}`)} style={cta}>{v.ppCta}</button>
+              <span style={{ fontSize: 13, lineHeight: 1.5, color: MUTED, maxWidth: 520 }}>{v.ppNote}</span>
+            </div>
+          </section>
+          <section style={{ display: 'flex', flexDirection: 'column', gap: 0, borderTop: `1px solid ${INK}` }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1.2fr)', gap: 12, padding: '14px 0', ...label() }}>
+              <span /><span>Free</span><span style={{ color: MARK }}>Plus</span>
+            </div>
+            {PLUS_ROWS.map(([k, f, p]) => (
+              <div key={k} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1.2fr)', gap: 12, padding: '13px 0', borderTop: '1px solid rgba(var(--ink-rgb),.12)', fontSize: 14, lineHeight: 1.45, alignItems: 'baseline' }}>
+                <span style={{ fontWeight: 500 }}>{k}</span><span style={{ color: MUTED }}>{f}</span><span>{p}</span>
+              </div>
+            ))}
+          </section>
+        </div>
+        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: '28px 48px', paddingTop: 24, borderTop: '1px solid rgba(var(--ink-rgb),.2)' }}>
+          {PLUS_FAQ.map(([q, a]) => (
+            <div key={q} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <h2 style={{ margin: 0, ...serif(24, 1.15) }}>{q}</h2>
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: INK }}>{a}</p>
+            </div>
+          ))}
+        </section>
+        <SiteFooter v={v} />
+      </div>
     </div>
   );
 }

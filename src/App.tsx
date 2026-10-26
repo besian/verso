@@ -113,7 +113,9 @@ interface State {
   exView?: string; exSort?: 'trending' | 'new'; exQ?: string; stS?: number;
   /** Explore paging, and the medium/tag filter ('m:ink', 't:lisbon') with its results. */
   exMore?: boolean; exBusy?: boolean; exLabel?: string; exLabelBooks?: OtherBook[] | null;
-  legal?: 'privacy' | 'terms' | 'contact'; nf?: string;
+  legal?: 'privacy' | 'terms' | 'contact' | 'plus'; nf?: string;
+  /** Explore's Plus card, closed by the visitor (for a while). */
+  exPromoHidden?: boolean;
   /** The Contact page's form. */
   ct?: { kind: string; email: string; text: string; link: string; hp: string; busy?: boolean; err?: string; sentTo?: string };
   banned?: string[]; admin?: boolean; adReports?: AdminItem[] | null; adBusy?: string; adErr?: string;
@@ -183,7 +185,7 @@ export default class App extends Component<object, State> {
   state: State = {
     acct: null, follows: [],
     books: [localBook()], active: 0, managing: false, images: [], p: 0, zoom: 1,
-    vw: window.innerWidth || 1200, vh: window.innerHeight || 800, soundOn: sound.soundOn(), dark: themeMode.isDark(), analytics: store.loadAnalytics(), showMature: false,
+    vw: window.innerWidth || 1200, vh: window.innerHeight || 800, soundOn: sound.soundOn(), dark: themeMode.isDark(), analytics: store.loadAnalytics(), showMature: false, exPromoHidden: (() => { try { return Date.now() - Number(localStorage.getItem('sb-promo-hidden') || 0) < 30 * 86_400_000; } catch { return false; } })(),
   };
 
   // Animation and gesture bookkeeping (not rendered directly).
@@ -390,7 +392,7 @@ export default class App extends Component<object, State> {
     } catch (e) { set({ step: 'error', err: api.errMsg(e) }); }
   }
   notFound(nf: string) { cancelAnimationFrame(this.raf); this.target = 0; this.setState(s => ({ mode: 'notfound', nf, other: null, images: s.books[s.active].images, p: 0, focus: false, fz: 0, managing: false })); }
-  openLegal(legal: 'privacy' | 'terms' | 'contact') { cancelAnimationFrame(this.raf); this.setState({ mode: 'legal', legal, other: null, focus: false, fz: 0, managing: false, draft: null }); }
+  openLegal(legal: 'privacy' | 'terms' | 'contact' | 'plus') { cancelAnimationFrame(this.raf); this.setState({ mode: 'legal', legal, other: null, focus: false, fz: 0, managing: false, draft: null }); }
   openAdmin() { cancelAnimationFrame(this.raf); this.setState({ mode: 'admin', other: null, focus: false, fz: 0, managing: false, draft: null }); if (this.state.admin) this.loadReports(); }
   collections(): string[] { return [...new Set([...(this.state.saved || []).map(x => x.col || '').filter(Boolean), ...(this.state.newCols || [])])].sort((a, b) => a.localeCompare(b)); }
   moveSaved(id: string, col: string) {
@@ -608,7 +610,7 @@ export default class App extends Component<object, State> {
     const s = this.state, mode = s.mode || 'home', o = s.other as OtherBook | null;
     const t = mode === 'other' && o ? `${o.name} by ${o.artist}` : mode === 'mine' ? s.books[s.active]?.name : mode === 'explore' ? 'Explore'
       : mode === 'profile' ? (s.profileOf ? (s.pf?.profile?.name || s.profileOf.name) : s.acct?.name) : mode === 'settings' ? 'Account settings' : mode === 'billing' ? 'Billing' : mode === 'messages' ? 'Messages' : mode === 'auth' ? (s.suMode === 'join' ? 'Join' : 'Sign in')
-      : mode === 'legal' ? (s.legal === 'terms' ? 'Terms' : s.legal === 'contact' ? 'Contact' : 'Privacy') : mode === 'admin' ? 'Moderation' : mode === 'notfound' ? 'Not found' : '';
+      : mode === 'legal' ? (s.legal === 'terms' ? 'Terms' : s.legal === 'contact' ? 'Contact' : s.legal === 'plus' ? 'Fletora Plus' : 'Privacy') : mode === 'admin' ? 'Moderation' : mode === 'notfound' ? 'Not found' : '';
     return t ? `${t} · fletora.` : 'fletora. — A place for the unfinished';
   }
   /** Shows the screen for the current address (first load, back/forward, pasted links). */
@@ -645,7 +647,7 @@ export default class App extends Component<object, State> {
         return this.openSettings();
       }
       if (a === 'billing') return s.acct ? this.openBilling() : this.openAuth('signin');
-      if (a === 'plus') { if (!s.acct) return this.openAuth('join'); this.openSettings(); return this.openPlus(); }
+      if (a === 'plus') return this.openLegal('plus');
       if (a === 'messages') return s.acct ? this.openMessages(b || null) : this.openAuth('signin');
       if (a === 'sketchbooks') {
         if (!s.acct) return this.openAuth('signin');
@@ -1510,7 +1512,23 @@ export default class App extends Component<object, State> {
       inInstalled: installer.installed(), inCanPrompt: installer.canPrompt(), inIOS: installer.isIOS(),
       inInstall: () => installer.install().then(ok => ok && this.toast('fletora is on your home screen')),
       isDark: !!s.dark, setTheme: (t: 'light' | 'dark') => { themeMode.setTheme(t); this.setState({ dark: t === 'dark' }); },
-      openPrivacy: () => this.openLegal('privacy'), openTerms: () => this.openLegal('terms'), openContact: () => this.openLegal('contact'),
+      openPrivacy: () => this.openLegal('privacy'), openTerms: () => this.openLegal('terms'), openContact: () => this.openLegal('contact'), openPlusPage: () => this.openLegal('plus'),
+      // Plus and its free trial, shown around the site to people who don't have Plus.
+      promoPlus: !s.plus, promoTrial: !s.acct, promoLine: !s.acct ? 'Join free and get 14 days of Fletora Plus, no card needed.' : 'More room, PDFs and stats with Fletora Plus.',
+      exPromo: !s.plus && !s.exPromoHidden,
+      hidePromo: () => { try { localStorage.setItem('sb-promo-hidden', String(Date.now())); } catch { /* storage unavailable */ } this.setState({ exPromoHidden: true }); },
+      navPlusLine: s.mode === 'legal' && s.legal === 'plus' ? INK : 'transparent', navPlusFg: s.mode === 'legal' && s.legal === 'plus' ? INK : STONE,
+      // The Plus page's button: start the trial, choose a plan, keep it after a trial, or manage it.
+      ...(() => {
+        const trial = !!s.plus && !!s.myGift?.trial, until = s.myGift?.until || 0;
+        return {
+          ppCta: !s.acct ? 'Start your free trial' : trial ? 'Keep Plus' : s.plus ? 'Manage your plan' : 'Choose a plan',
+          ppNote: !s.acct ? '14 days of Plus free when you join, with no card needed. Then £7 a month or £60 a year, only if you choose it.'
+            : trial ? `You’re on the free trial until ${fmtLong(until)}. Choose a plan to keep Plus after that.`
+            : s.plus ? 'You have Plus. Thank you for supporting fletora.' : 'Renews automatically. Cancel anytime in Account settings and keep Plus until the end of the period you’ve paid for.',
+          ppGo: () => !s.acct ? this.openAuth('join') : trial ? this.openPlus('trial') : s.plus ? this.openSettings() : this.openPlus(),
+        };
+      })(),
       ...(() => {
         const t = s.act; if (s.mode !== 'action' || !t) return { isAction: false };
         return {

@@ -45,6 +45,7 @@ export function HomeScreen({ v }: { v: V }) {
             ? <button onClick={v.goExplore} className={hoverLine} style={underlineBtn(15)}>Explore sketchbooks ↗</button>
             : <button onClick={v.startOwn} className={hoverLine} style={underlineBtn(15)}>Start your own →</button>}
         </div>
+        {v.promoPlus && <button onClick={v.openPlusPage} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', font: `500 13px ${SANS}`, color: MUTED }}><span style={{ ...label(MARK, 10), marginRight: 8 }}>Plus</span>{v.promoLine} <span style={{ color: INK, borderBottom: `1px solid ${INK}` }}>See what’s included</span></button>}
         {signedOut && <div style={{ fontSize: 13, color: STONE }}>Already a member? <button onClick={v.openSignin} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${STONE}`, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Sign in</button></div>}
         {v.hmPick && (
           <button onClick={v.hmPick.open} className={hover(`border-color:${MARK}`)} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, maxWidth: '100%', padding: '7px 14px', border: '1px solid rgba(var(--ink-rgb),.2)', borderRadius: 20, background: 'none', color: INK, cursor: 'pointer', font: `500 13px ${SANS}` }}>
@@ -174,6 +175,17 @@ export function Explore({ v }: { v: V }) {
             {v.exLoading ? 'Opening sketchbooks…'
               : v.exEmpty ? <><span style={serif(34)}>Nothing here <em style={{ color: MARK }}>yet.</em></span><span>No one has shared a sketchbook yet. Yours could be the first.</span></>
               : v.exNoneLbl}
+          </div>
+        )}
+        {/* Fletora Plus, for people without it; it can be closed (it stays away for a month). */}
+        {v.exPromo && (
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px 24px', flexWrap: 'wrap', padding: '16px 48px 16px 20px', background: 'rgba(173,73,58,.07)', borderLeft: `2px solid ${MARK}` }}>
+            <span style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', fontSize: 14, lineHeight: 1.5 }}>
+              <span style={label(MARK, 10)}>Fletora Plus</span>
+              <span>Unlimited sketchbooks, 300 pages each, PDFs, stats and drawing together with up to five people. <span style={{ color: MUTED }}>{v.promoTrial ? 'Free for 14 days when you join, no card needed.' : `From ${'£5'} a month, paid yearly.`}</span></span>
+            </span>
+            <button onClick={v.openPlusPage} className={hover(`background:${MARK}`)} style={{ height: 38, padding: '0 18px', border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' }}>{v.promoTrial ? 'Start free' : 'See Plus'}</button>
+            <button onClick={v.hidePromo} aria-label="Close" title="Close" className={hover(`color:${MARK}`)} style={{ position: 'absolute', right: 8, top: 8, width: 28, height: 28, padding: 0, border: 'none', background: 'none', color: MUTED, font: `400 18px/1 ${SANS}`, cursor: 'pointer' }}>×</button>
           </div>
         )}
         {v.exGrid && (
@@ -456,7 +468,7 @@ const quietLink = (color = INK): CSSProperties => ({ padding: 0, border: 'none',
 
 /** What the sign-in panel lists, by mode. */
 const AUTH_POINTS: Record<string, string[]> = {
-  join: ['A home for every sketchbook: public, private or shared with a friend.', 'Leaf through other artists’ pages, unfinished ones and all.', 'Free to start. Plus when you need more room.'],
+  join: ['A home for every sketchbook: public, private or shared with a friend.', 'Leaf through other artists’ pages, unfinished ones and all.', 'Fletora Plus free for 14 days when you join. No card needed.'],
   signin: ['Your sketchbooks, just as you left them.', 'New pages from the artists you follow.', 'Messages and invitations waiting for you.'],
   reset: [],
 };

@@ -38,6 +38,7 @@ function TopBar({ v }: { v: V }) {
         {!v.tabBar && <div style={{ display: 'flex', gap: v.mGap }}>
           <button onClick={v.goExplore} className={hover(`color:${MARK}`)} style={{ ...navLink, borderBottom: `1px solid ${v.navExLine}`, color: v.navExFg }}>Explore</button>
           {v.hasAcct && <button onClick={v.goMine} className={hover(`color:${MARK}`)} style={{ ...navLink, borderBottom: `1px solid ${v.navMineLine}`, color: v.navMineFg, whiteSpace: 'nowrap' }}>{v.navMineLbl}</button>}
+          {v.promoPlus && <button onClick={v.openPlusPage} className={hover(`color:${MARK}`)} style={{ ...navLink, borderBottom: `1px solid ${v.navPlusLine}`, color: v.navPlusFg }}>Plus</button>}
         </div>}
       </div>
       {!v.tabBar && <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
