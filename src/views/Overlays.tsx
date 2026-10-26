@@ -1085,7 +1085,6 @@ function DrawPanel({ v }: { v: V }) {
       </div>
       <Slider name={v.penTool === 'eraser' ? 'Eraser size' : 'Size'} lbl={String(v.penSize)} min={1} max={40} step={1} value={v.penSize} onChange={v.onPenSize} />
       <Slider name={strength ? 'Strength' : 'Opacity'} lbl={`${v.penOpacity}%`} min={5} max={100} step={1} value={v.penOpacity} onChange={v.onPenOpacity} />
-      {v.layersOpen && <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}><span style={{ fontSize: 13 }}>Layers</span><LayersList v={v} /></div>}
     </div>
   );
 }
@@ -1196,7 +1195,18 @@ export function Editor({ v }: { v: V }) {
     <div style={{ position: 'absolute', inset: 0, background: PAPER, zIndex: 20, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) clamp(340px, 28vw, 440px)', alignItems: 'center', gap: 56, padding: '24px 48px', boxSizing: 'border-box', overflow: 'auto' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
-          {draw && <DeskToolbar v={v} />}
+          {draw && (
+            <div style={{ position: 'relative', zIndex: 3 }}>
+              <DeskToolbar v={v} />
+              {/* Layers open as a card beside the toolbar, over the page, so the side panel never grows past the screen. */}
+              {v.layersOpen && (
+                <div role="dialog" aria-label="Layers" style={{ position: 'absolute', left: 'calc(100% + 12px)', bottom: 0, width: 320, padding: 14, background: PAPER, border: '1px solid rgba(var(--ink-rgb),.14)', borderRadius: 14, boxShadow: '0 16px 40px rgba(20,20,30,.2)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>Layers</span>
+                  <LayersList v={v} onDone={v.toggleLayers} />
+                </div>
+              )}
+            </div>
+          )}
           <EditFrame v={v} radius="2px 10px 10px 2px" shadow="0 30px 70px rgba(10,10,30,.5)" wheel />
         </div>
         {v.edPad && <WritePad v={v} />}

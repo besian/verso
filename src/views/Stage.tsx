@@ -17,7 +17,6 @@ const iconAct: CSSProperties = { display: 'inline-flex', alignItems: 'center', g
 const HEART = 'M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z';
 const BOOKMARK = 'M6.5 4h11v16.5L12 16.8l-5.5 3.7z';
 const SHARE = 'M12 3.5v11.5M7.8 7.7 12 3.5l4.2 4.2M5.5 12.5v7h13v-7';
-const PLAY = 'M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM10 8.5v7l5.5-3.5z';
 /** A small line icon (filled when on), sized to sit with the uppercase action labels. */
 function Icon({ d, fill }: { d: string; fill?: boolean }) {
   return <svg width="18" height="18" viewBox="0 0 24 24" fill={fill ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
@@ -214,7 +213,13 @@ const Title = memo(function Title({ v }: { v: V }) {
               : <span title="Likes" style={iconAct}><Icon d={HEART} />{v.bkLikes}</span>}
             {v.isOther && <button onClick={v.bkSave} aria-pressed={v.bkSaved} title={v.bkSaved ? 'Saved' : 'Save'} aria-label={v.bkSaved ? 'Saved' : 'Save'} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct, color: v.bkSaved ? MARK : INK }}><Icon d={BOOKMARK} fill={v.bkSaved} /></button>}
             {v.cmOn && <button onClick={v.cmToggle} title="Comments" aria-label={`Comments, ${v.cmCount}`} aria-pressed={v.cmOpen} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct, color: v.cmOpen ? MARK : INK }}><Icon d={COMMENT_ICON} fill={v.cmOpen} />{v.cmCount}</button>}
-            {v.rpAt != null && <button onClick={v.rpOpen} title={v.rpLbl} aria-label={v.rpLbl} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct }}><Icon d={PLAY} /></button>}
+            {v.rpAt != null && (
+              // A labelled pill, so it reads as "this page can be watched being drawn", not just another icon.
+              <button onClick={v.rpOpen} title={v.rpLbl} aria-label={v.rpLbl} className={'tap ' + hover(`background:${MARK};color:${PAPER}`)}
+                style={{ ...actLink, ...iconAct, gap: 5, height: 26, padding: '0 11px 0 8px', border: `1px solid ${MARK}`, borderRadius: 13, color: MARK, transition: 'background .15s, color .15s' }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 3.5v17l15-8.5z" /></svg>Replay
+              </button>
+            )}
             {(v.isOther || v.bkCanShare) && <button onClick={v.bkShare} title="Share" aria-label="Share" className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct }}><Icon d={SHARE} /></button>}
             <MoreMenu open={v.bkMoreOpen} onToggle={v.bkMore} items={[
               ...(v.bkArch?.url ? [{ label: `View at the source ↗`, onClick: () => window.open(v.bkArch.url, '_blank', 'noopener') }] : []),
