@@ -1522,7 +1522,8 @@ export default class App extends Component<object, State> {
         const link = `${location.origin}${o?.arch ? `/archive/${book.id}` : `/@${handle}/${book.id}`}`;
         this.toast('Making your picture…');
         try {
-          const blob = await shareImage({ pages: shown.map(i => this.blobUrl(imgs[i])), aspect: this.aspect(), title: book.name, artist, link });
+          const pages = await Promise.all(shown.map(async i => URL.createObjectURL(await api.pageBlob(this.blobUrl(imgs[i])))));
+          const blob = await shareImage({ pages, aspect: this.aspect(), title: book.name, artist, link }).finally(() => pages.forEach(p => URL.revokeObjectURL(p)));
           const r = await sharePicture(blob, `${book.name.replace(/[^\w\- ]+/g, '').trim() || 'fletora'} - page ${shown[0] + 1}.jpg`, `${book.name} by ${artist}`, link);
           if (r === 'saved') this.toast('Picture saved: post it anywhere.');
         } catch (e) { console.error(e); this.toast('Couldn’t make the picture. Try again.'); }
@@ -2696,7 +2697,7 @@ export default class App extends Component<object, State> {
       // The page's picture as a file, at the size it's stored (JPEG for photos, PNG for drawn pages).
       save: async () => {
         try {
-          const blob = await (await fetch(this.blobUrl(u))).blob(), ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
+          const blob = await api.pageBlob(this.blobUrl(u)), ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
           const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${(book.name || 'sketchbook').replace(/[^\w\- ]+/g, '').trim() || 'fletora'} - page ${i + 1}.${ext}`;
           document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 30000);
         } catch (e) { console.warn('page download', e); this.toast('Couldn’t download that page. Try again.'); }

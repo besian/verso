@@ -567,6 +567,17 @@ export async function deleteBook(id: string, files: string[]) {
 
 // ---------- storage ----------
 
+/** A page picture as a file. Straight from storage, fresh (a copy the browser kept from showing the page has no
+ *  CORS headers and can't be read); failing that, through fletora.studio (api/page-image), as PDFs do. */
+export async function pageBlob(url: string): Promise<Blob> {
+  const get = async (u: string, init: RequestInit) => { try { const r = await fetch(u, init); return r.ok && (r.headers.get('content-type') || '').startsWith('image/') ? await r.blob() : null; } catch { return null; } };
+  if (!/^https?:/.test(url)) { const b = await get(url, {}); if (b) return b; throw new Error('page-image'); }
+  const b = await get(url, { mode: 'cors', cache: 'reload' })
+    || (auth?.currentUser ? await get(`/api/page-image?u=${encodeURIComponent(url)}`, { headers: { authorization: 'Bearer ' + await auth.currentUser.getIdToken() } }) : null);
+  if (!b) throw new Error('page-image');
+  return b;
+}
+
 async function imageApi<T>(body: object): Promise<T> {
   const token = await idToken();
   const r = await fetch('/api/image', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token }, body: JSON.stringify(body) });
