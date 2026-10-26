@@ -1222,14 +1222,16 @@ export default class App extends Component<object, State> {
     }
     // Larger screens: the page as big as the screen allows beside the controls (a profile photo stays modest).
     const ed = this.state.edit, fh = Math.round(Math.max(200, ed?.target === 'avatar' ? Math.min(vh * 0.58, 520) : ed?.mode === 'write' && ed.pad ? vh * 0.5 : vh - 96));
-    const maxW = Math.max(240, vw - 152 - Math.min(440, Math.max(340, vw * 0.28))); return fh * a > maxW ? { fw: Math.round(maxW), fh: Math.round(maxW / a) } : { fh, fw: Math.round(fh * a) };
+    const maxW = Math.max(240, this.deskRoomW()); return fh * a > maxW ? { fw: Math.round(maxW), fh: Math.round(maxW / a) } : { fh, fw: Math.round(fh * a) };
   }
+  /** Larger screens: the width left for the page beside the controls panel (and, in Draw, the toolbar). */
+  deskRoomW() { const vw = this.state.vw; return vw - 152 - Math.min(440, Math.max(340, vw * 0.28)) - (this.state.edit?.mode === 'draw' ? 84 : 0); }
   /** Draw mode: how the page is turned on screen, and the scale that fits it turned into the same room. */
   viewTurn() {
     const e = this.state.edit, q = e?.mode === 'draw' ? (e.view || 0) % 4 : 0, { fw, fh } = this.frame();
     if (q % 2 === 0) return { q, k: 1, bw: fw, bh: fh };
     const { vw, vh } = this.state, box = this.state.edArea;
-    const rw = vw < 640 ? box?.w || vw - 32 : vw - 152 - Math.min(440, Math.max(340, vw * 0.28)), rh = vw < 640 ? (box?.h || vh * 0.45) - 4 : vh - 96;
+    const rw = vw < 640 ? box?.w || vw - 32 : this.deskRoomW(), rh = vw < 640 ? (box?.h || vh * 0.45) - 4 : vh - 96;
     const k = Math.min(1.6, rw / fh, rh / fw);
     return { q, k, bw: Math.round(fh * k), bh: Math.round(fw * k) };
   }

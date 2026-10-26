@@ -854,7 +854,7 @@ function DrawTools({ v, outline, mob }: { v: V; outline: CSSProperties; mob?: bo
           {swatches.map(c => <button key={c} role="radio" aria-checked={v.penColor === c} title={names[c] || c} aria-label={names[c] || c} onClick={() => v.setColor(c)} style={dot(c, v.penColor === c && !wheel, mob ? 28 : 28)} />)}
           <button onClick={() => setWheel(w => !w)} title="Colour wheel" aria-label="Colour wheel" aria-expanded={wheel} style={{ ...dot('conic-gradient(red, yellow, lime, cyan, blue, magenta, red)', wheel, mob ? 30 : 28) }} />
           <button onClick={v.toggleEyedrop} title="Pick a colour from the page" aria-label="Pick a colour from the page" aria-pressed={v.edEyedrop} style={{ width: 32, height: 32, flexShrink: 0, padding: 0, borderRadius: '50%', border: `1px solid ${v.edEyedrop ? INK : 'rgba(var(--ink-rgb),.25)'}`, background: v.edEyedrop ? INK : 'none', color: v.edEyedrop ? PAPER : INK, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14.5 4.5l5 5M17 2.5l4.5 4.5-3 3-4.5-4.5zM15 8.5l-9 9-1.5 4 4-1.5 9-9" /></svg>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19.6 4.4a2.2 2.2 0 0 0-3.1 0l-2.3 2.3-1.1-1.1-1.5 1.5 5.3 5.3 1.5-1.5-1.1-1.1 2.3-2.3a2.2 2.2 0 0 0 0-3.1zM12.4 8.4l-7.2 7.2-.7 3.9 3.9-.7 7.2-7.2" /></svg>
           </button>
         </div>
         {v.edEyedrop && <span style={{ fontSize: 12, color: MARK }}>Tap the page to pick up a colour.</span>}
@@ -894,7 +894,8 @@ function ColourWheel({ color, onChange, size }: { color: string; onChange: (c: s
   const at = (e: React.PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect(), dx = e.clientX - r.left - r.width / 2, dy = e.clientY - r.top - r.height / 2;
     const nh = (Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360, ns = Math.min(1, Math.hypot(dx, dy) / (r.width / 2));
-    setHue(nh); onChange(hsvHex(nh, ns, Math.max(0.05, bri)));
+    // Picking a hue from a near-black colour (the default ink) means wanting to see it: start it bright.
+    setHue(nh); onChange(hsvHex(nh, ns, bri < 0.3 ? 1 : bri));
   };
   const a = hue * Math.PI / 180, mx = size / 2 + Math.sin(a) * sat * size / 2, my = size / 2 - Math.cos(a) * sat * size / 2;
   return (
@@ -1017,6 +1018,48 @@ function MobileEditor({ v }: { v: V }) {
   );
 }
 
+/** Larger screens, Draw: the brushes and page tools in a column beside the page, each named on hover. */
+function DeskToolbar({ v }: { v: V }) {
+  const icon = (d: string) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
+  const btn = (on: boolean, off?: boolean): CSSProperties => ({ width: 44, height: 44, padding: 0, border: 'none', borderRadius: 12, background: on ? INK : 'transparent', color: on ? PAPER : INK, opacity: off ? 0.35 : 1, cursor: off ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .15s, color .15s' });
+  const hov = hover('background:rgba(var(--ink-rgb),.08)');
+  const item = (key: string, label: string, d: string, on: boolean, onClick: () => void, off?: boolean) => (
+    <button key={key} onClick={onClick} disabled={off} aria-label={label} aria-pressed={on} data-tip={label} className={'tip ' + (on || off ? '' : hov)} style={btn(on, off)}>{icon(d)}</button>
+  );
+  const line = <span style={{ height: 1, margin: '4px 8px', background: 'rgba(var(--ink-rgb),.14)' }} />;
+  return (
+    <div role="toolbar" aria-label="Brushes" aria-orientation="vertical" style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 6, background: PAPER, border: '1px solid rgba(var(--ink-rgb),.14)', borderRadius: 18, boxShadow: '0 12px 32px rgba(20,20,30,.12)' }}>
+      {DRAW_TOOLS.map(([k, l]) => item(k, l, BRUSH_ICONS[k], v.penTool === k, () => v.setTool(k)))}
+      {line}
+      {item('pick', 'Pick a colour from the page', 'M19.6 4.4a2.2 2.2 0 0 0-3.1 0l-2.3 2.3-1.1-1.1-1.5 1.5 5.3 5.3 1.5-1.5-1.1-1.1 2.3-2.3a2.2 2.2 0 0 0 0-3.1zM12.4 8.4l-7.2 7.2-.7 3.9 3.9-.7 7.2-7.2', v.edEyedrop, v.toggleEyedrop)}
+      {item('undo', 'Undo', 'M9 5L4 10l5 5M4 10h10a5 5 0 0 1 0 10h-3', false, v.undoMark, !v.hasMarks)}
+      {item('clear', 'Clear the drawing', 'M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13', false, v.clearMarks)}
+      {line}
+      {item('turn', 'Turn the page to draw sideways', 'M20 11a8 8 0 1 0-2.3 5.7M20 4.5V11h-6.5', v.edTurned, v.turnView)}
+      {v.edCanSpread && item('spread', 'Draw across two pages', 'M3.5 5.5h8v13h-8zM12.5 5.5h8v13h-8z', v.edSpread, v.toggleDrawSpread)}
+    </div>
+  );
+}
+
+/** Larger screens, Draw: the chosen brush, the colour wheel, size and opacity. */
+function DrawPanel({ v }: { v: V }) {
+  const tool = DRAW_TOOLS.find(([k]) => k === v.penTool)?.[1] || '', strength = v.penTool === 'blend' || v.penTool === 'eraser';
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid rgba(var(--ink-rgb),.14)', borderRadius: 10 }}>
+        <span style={{ width: 22, height: 22, borderRadius: '50%', background: v.penNoColor ? 'transparent' : v.penColor, border: '1px solid rgba(34,35,32,.25)', flexShrink: 0 }} />
+        <span style={{ font: `500 14px ${SANS}` }}>{tool}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: 'rgba(var(--ink-rgb),.6)' }}>{v.edEyedrop ? 'Tap the page to pick a colour' : v.penNoColor ? 'No colour' : v.penColor.toUpperCase()}</span>
+      </div>
+      <div style={{ opacity: v.penNoColor ? 0.4 : 1, pointerEvents: v.penNoColor ? 'none' : undefined }}>
+        <ColourWheel color={v.penColor} onChange={v.setColor} size={176} />
+      </div>
+      <Slider name={v.penTool === 'eraser' ? 'Eraser size' : 'Size'} lbl={String(v.penSize)} min={1} max={40} step={1} value={v.penSize} onChange={v.onPenSize} />
+      <Slider name={strength ? 'Strength' : 'Opacity'} lbl={`${v.penOpacity}%`} min={5} max={100} step={1} value={v.penOpacity} onChange={v.onPenOpacity} />
+    </div>
+  );
+}
+
 /** Draw: turn the page on screen to draw sideways, and draw across two pages. */
 function PageButtons({ v, labels }: { v: V; labels?: boolean }) {
   const b = (on: boolean): CSSProperties => ({ height: labels ? 36 : 40, minWidth: labels ? 0 : 40, flex: labels ? 1 : 'none', padding: labels ? '0 12px' : 0, border: `1px solid ${on ? INK : 'rgba(var(--ink-rgb),.2)'}`, borderRadius: labels ? 2 : 0, background: on ? INK : 'none', color: on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxSizing: 'border-box' });
@@ -1067,7 +1110,7 @@ function DrawBar({ v, wheel, setWheel }: { v: V; wheel: boolean; setWheel: (f: (
       <div role="radiogroup" aria-label="Colour" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 3px', opacity: v.penNoColor ? 0.4 : 1 }}>
         {swatches.map(c => <button key={c} role="radio" aria-checked={v.penColor === c} title={names[c] || c} aria-label={names[c] || c} onClick={() => v.setColor(c)} style={dot(c, v.penColor === c && !wheel)} />)}
         <button onClick={() => setWheel(w => !w)} title="Colour wheel" aria-label="Colour wheel" aria-expanded={wheel} style={dot('conic-gradient(red, yellow, lime, cyan, blue, magenta, red)', wheel)} />
-        <button onClick={v.toggleEyedrop} title="Pick a colour from the page" aria-label="Pick a colour from the page" aria-pressed={v.edEyedrop} style={{ ...btn(v.edEyedrop), width: 32, height: 32, borderRadius: '50%', border: `1px solid ${v.edEyedrop ? INK : 'rgba(var(--ink-rgb),.25)'}` }}>{icon('M14.5 4.5l5 5M17 2.5l4.5 4.5-3 3-4.5-4.5zM15 8.5l-9 9-1.5 4 4-1.5 9-9')}</button>
+        <button onClick={v.toggleEyedrop} title="Pick a colour from the page" aria-label="Pick a colour from the page" aria-pressed={v.edEyedrop} style={{ ...btn(v.edEyedrop), width: 32, height: 32, borderRadius: '50%', border: `1px solid ${v.edEyedrop ? INK : 'rgba(var(--ink-rgb),.25)'}` }}>{icon('M19.6 4.4a2.2 2.2 0 0 0-3.1 0l-2.3 2.3-1.1-1.1-1.5 1.5 5.3 5.3 1.5-1.5-1.1-1.1 2.3-2.3a2.2 2.2 0 0 0 0-3.1zM12.4 8.4l-7.2 7.2-.7 3.9 3.9-.7 7.2-7.2')}</button>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         {slider('Size', String(v.penSize), 1, 40, v.penSize, v.onPenSize)}
@@ -1094,7 +1137,10 @@ export function Editor({ v }: { v: V }) {
   return (
     <div style={{ position: 'absolute', inset: 0, background: PAPER, zIndex: 20, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) clamp(340px, 28vw, 440px)', alignItems: 'center', gap: 56, padding: '24px 48px', boxSizing: 'border-box', overflow: 'auto' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, minWidth: 0 }}>
-        <EditFrame v={v} radius="2px 10px 10px 2px" shadow="0 30px 70px rgba(10,10,30,.5)" wheel />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
+          {draw && <DeskToolbar v={v} />}
+          <EditFrame v={v} radius="2px 10px 10px 2px" shadow="0 30px 70px rgba(10,10,30,.5)" wheel />
+        </div>
         {v.edPad && <WritePad v={v} />}
       </div>
       <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -1103,7 +1149,7 @@ export function Editor({ v }: { v: V }) {
           <div style={{ fontSize: 13, color: 'rgba(var(--ink-rgb),.7)' }}>{v.edTitle} · {sub}</div>
         </div>
         <ModeSwitch v={v} />
-        {pick ? <PickMode v={v} /> : draw ? <DrawTools v={v} outline={outline} /> : write ? <WriteTools v={v} outline={outline} /> : adjust ? (
+        {pick ? <PickMode v={v} /> : draw ? <DrawPanel v={v} /> : write ? <WriteTools v={v} outline={outline} /> : adjust ? (
           <>
             {v.edAdj.map((a: V) => <Slider key={a.key} name={a.label} lbl={a.lbl} min={a.min} max={a.max} step={1} value={a.value} onChange={a.onChange} />)}
             <span style={{ fontSize: 12, lineHeight: 1.45, color: 'rgba(var(--ink-rgb),.6)', marginTop: -8 }}>Whites cleans up the grey of a photographed page. Settings carry over to the next image.</span>
