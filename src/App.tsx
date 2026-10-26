@@ -2411,10 +2411,12 @@ export default class App extends Component<object, State> {
         const tp = Math.max(0, Math.min(N, Math.abs(dx) > 30 ? (dx < 0 ? Math.ceil(pp - 0.1) : Math.floor(pp + 0.1)) : Math.round(pp)));
         const p0 = Math.round(this.drag.p0), moved = this.moved;
         this.drag = null; setTimeout(() => this.moved = false, 0);
-        // In focus view a swipe to another spread picks its page the same way the arrow keys do.
+        // In focus view a swipe steps one page, like the arrow keys: from a left page to its right page first,
+        // and only then on to the next spread (a picture across both pages counts as one).
         if (this.state.focus && moved) {
-          const fp = Math.max(1, Math.min(N - 1, tp)); this.turnTo(fp, p0);
-          return this.focusOn(fp, fp === p0 ? this.state.fside || 'R' : this.autoSide(fp, dx < 0 ? 'L' : 'R'));
+          this.target = p0;
+          if (Math.abs(dx) > 30) return this.focusGo(dx < 0 ? 1 : -1);
+          return this.focusOn(p0, this.state.fside || 'R');
         }
         this.turnTo(tp, p0); this.animate();
       },
