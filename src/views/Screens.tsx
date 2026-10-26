@@ -154,7 +154,7 @@ export function Explore({ v }: { v: V }) {
         {v.exGrid && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', paddingBottom: 18, borderBottom: `1px solid ${INK}` }}>
             <h1 style={{ margin: 0, ...serif(v.exH1, .95, '-.02em') }}><em>Explore</em></h1>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 24, flexWrap: 'wrap' }}><ExploreTabs v={v} /><span style={label()}>{v.exCountLbl}</span></div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 24, flexWrap: 'wrap' }}><ExploreTabs v={v} /></div>
           </div>
         )}
         {!v.exGrid && <ExploreTabs v={v} />}

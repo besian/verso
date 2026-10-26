@@ -2127,7 +2127,7 @@ export default class App extends Component<object, State> {
     const setSort = (v: 'trending' | 'new') => { cancelAnimationFrame(this.exRaf); this.stT = 0; if (v !== sort) this.setState({ exSort: v, stS: 0 }, () => this.loadCommunity()); };
     const [vGridBg, vGridFg] = on(view === 'grid'), [vStackBg, vStackFg] = on(view === 'stack'), [sTrBg, sTrFg] = on(sort === 'trending'), [sNewBg, sNewFg] = on(sort === 'new');
     return {
-      exH1: mob ? 36 : 72, exCountLbl: n + (s.exMore && !s.exLabel ? '+' : '') + (n === 1 ? ' sketchbook' : ' sketchbooks') + ' · ' + new Date().toLocaleDateString('en', { month: 'short', year: 'numeric' }),
+      exH1: mob ? 36 : 72,
       // Content: Mature work hidden (the default), shown alongside the rest, or on its own. Showing it asks for 18+ first.
       exContent: ([['hide', 'Hide Mature'], ['all', 'Show all'], ['only', 'Mature only']] as const).map(([k, l]) => ({
         key: k, label: l, on: k === 'hide' ? !s.showMature : !!s.showMature && !!s.matureOnly === (k === 'only'),
