@@ -752,7 +752,13 @@ function Layers({ v, inPad }: { v: V; inPad?: boolean }) {
 
 /** The page-shaped frame: the image (dragged, pinched, twisted) under a thirds grid in Fit; a canvas in Draw and Write. */
 function EditFrame({ v, radius, shadow, wheel }: { v: V; radius: string; shadow: string; wheel?: boolean }) {
-  const pen = v.edDraw || (v.edWrite && !v.edPad);
+  const pen = v.edDraw || (v.edWrite && !v.edPad), t = v.edTurn;
+  // Turned on screen (Draw): a box the turned page fits, with the page rotated and scaled inside it.
+  if (t.q) return (
+    <div style={{ width: t.bw, height: t.bh, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'width .25s, height .25s' }}>
+      <div style={{ flexShrink: 0, transform: `rotate(${t.q * 90}deg) scale(${t.k})`, transition: 'transform .25s' }}><EditFrame v={{ ...v, edTurn: { q: 0 } }} radius={radius} shadow={shadow} wheel={wheel} /></div>
+    </div>
+  );
   return (
     <div onPointerDown={v.edDown} onPointerMove={v.edMove} onPointerUp={v.edUp} onPointerCancel={v.edUp} onWheel={wheel && v.edMode === 'fit' ? v.edWheel : undefined} style={{ position: 'relative', width: v.fw, height: v.fh, flexShrink: 0, overflow: 'hidden', borderRadius: radius, boxShadow: shadow, cursor: pen ? 'crosshair' : v.edWrite ? 'pointer' : v.edMode === 'pick' ? 'default' : 'move', touchAction: 'none' }}>
       <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
@@ -838,6 +844,7 @@ function DrawTools({ v, outline, mob }: { v: V; outline: CSSProperties; mob?: bo
   const strength = v.penTool === 'blend' || v.penTool === 'eraser';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: mob ? 12 : 16 }}>
+      {!mob && <div style={{ display: 'flex', gap: 8 }}><PageButtons v={v} labels /></div>}
       {/* Every brush in view: four to a row on phones, wrapping beside the page on larger screens. */}
       <div role="tablist" aria-label="Brush" style={mob ? { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 } : { display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {DRAW_TOOLS.map(([k, l]) => <button key={k} role="tab" aria-selected={v.penTool === k} onClick={() => v.setTool(k)} style={mob ? { ...chip(v.penTool === k), height: 32, padding: 0, fontSize: 12.5, minWidth: 0 } : chip(v.penTool === k)}>{l}</button>)}
@@ -980,7 +987,12 @@ function MobileEditor({ v }: { v: V }) {
         )}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: draw ? 10 : 12, paddingTop: 10 }}>
-        <ModeSwitch v={v} height={draw ? 32 : 34} />
+        {draw ? (
+          <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ flex: 1, minWidth: 0 }}><ModeSwitch v={v} height={32} /></div>
+            <PageButtons v={v} />
+          </div>
+        ) : <ModeSwitch v={v} height={34} />}
         {pick ? <PickMode v={v} mob /> : draw ? <DrawBar v={v} wheel={wheel} setWheel={setWheel} /> : write ? <WriteTools v={v} outline={outline} mob /> : <>
         {!adjust && <SpreadSwitch v={v} height={32} />}
         <div role="tablist" aria-label={adjust ? 'Adjustment' : 'Tool'} style={{ display: 'flex', gap: 4, overflowX: 'auto', scrollbarWidth: 'none' } as CSSProperties}>
@@ -1002,6 +1014,22 @@ function MobileEditor({ v }: { v: V }) {
         {!pick && <button onClick={v.applyEdit} style={{ height: draw ? 46 : 52, borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 16px ${SANS}`, cursor: 'pointer' }}>{v.applyLbl}</button>}
       </div>
     </div>
+  );
+}
+
+/** Draw: turn the page on screen to draw sideways, and draw across two pages. */
+function PageButtons({ v, labels }: { v: V; labels?: boolean }) {
+  const b = (on: boolean): CSSProperties => ({ height: labels ? 36 : 40, minWidth: labels ? 0 : 40, flex: labels ? 1 : 'none', padding: labels ? '0 12px' : 0, border: `1px solid ${on ? INK : 'rgba(var(--ink-rgb),.2)'}`, borderRadius: labels ? 2 : 0, background: on ? INK : 'none', color: on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxSizing: 'border-box' });
+  const svg = (d: string) => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
+  return (
+    <>
+      <button onClick={v.turnView} title="Turn the page to draw sideways" aria-label="Turn the page to draw sideways" aria-pressed={v.edTurned} style={b(v.edTurned)}>
+        {svg('M20 11a8 8 0 1 0-2.3 5.7M20 4.5V11h-6.5')}{labels && 'Turn page'}
+      </button>
+      {v.edCanSpread && <button onClick={v.toggleDrawSpread} title="Draw across two pages" aria-label="Draw across two pages" aria-pressed={v.edSpread} style={b(v.edSpread)}>
+        {svg('M3.5 5.5h8v13h-8zM12.5 5.5h8v13h-8z')}{labels && 'Two pages'}
+      </button>}
+    </>
   );
 }
 

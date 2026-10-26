@@ -61,6 +61,8 @@ interface EditState {
   autoP?: Pt[] | null; auto?: Fit | null;
   /** Draw mode: bumped after each stroke, undo or clear (the paint itself is in the Painter); picking a colour off the page. */
   painted?: number; eyedrop?: boolean;
+  /** Draw mode: the page turned on screen by this many quarter turns, to draw sideways (it's saved upright). */
+  view?: number;
 }
 type EdMode = 'fit' | 'adjust' | 'write' | 'draw' | 'pick';
 
@@ -1222,6 +1224,21 @@ export default class App extends Component<object, State> {
     const ed = this.state.edit, fh = Math.round(Math.max(200, ed?.target === 'avatar' ? Math.min(vh * 0.58, 520) : ed?.mode === 'write' && ed.pad ? vh * 0.5 : vh - 96));
     const maxW = Math.max(240, vw - 152 - Math.min(440, Math.max(340, vw * 0.28))); return fh * a > maxW ? { fw: Math.round(maxW), fh: Math.round(maxW / a) } : { fh, fw: Math.round(fh * a) };
   }
+  /** Draw mode: how the page is turned on screen, and the scale that fits it turned into the same room. */
+  viewTurn() {
+    const e = this.state.edit, q = e?.mode === 'draw' ? (e.view || 0) % 4 : 0, { fw, fh } = this.frame();
+    if (q % 2 === 0) return { q, k: 1, bw: fw, bh: fh };
+    const { vw, vh } = this.state, box = this.state.edArea;
+    const rw = vw < 640 ? box?.w || vw - 32 : vw - 152 - Math.min(440, Math.max(340, vw * 0.28)), rh = vw < 640 ? (box?.h || vh * 0.45) - 4 : vh - 96;
+    const k = Math.min(1.6, rw / fh, rh / fw);
+    return { q, k, bw: Math.round(fh * k), bh: Math.round(fw * k) };
+  }
+  /** Where a point on screen falls on the page (0–1 across and down), allowing for the page being turned on screen. */
+  pagePoint(r: DOMRect, cx: number, cy: number): [number, number] {
+    const { q } = this.viewTurn(), { fw, fh } = this.frame(), k = q % 2 ? r.width / fh : r.width / fw;
+    const dx = (cx - r.left - r.width / 2) / k, dy = (cy - r.top - r.height / 2) / k, c = [1, 0, -1, 0][q], sn = [0, 1, 0, -1][q];
+    return [(c * dx + sn * dy) / fw + 0.5, (-sn * dx + c * dy) / fh + 0.5];
+  }
   baseSize() { const e = this.state.edit!, { fw, fh } = this.frame(); if (!e.nw) return { bw: fw, bh: fh }; const s = (e.target === 'avatar' ? Math.max : Math.min)(fw / e.nw, fh / e.nh); return { bw: e.nw * s, bh: e.nh * s }; }
   /** Re-baselines the drag / pinch gesture whenever a finger is added or lifted. */
   edGestureStart() {
@@ -2052,7 +2069,7 @@ export default class App extends Component<object, State> {
   // ---------- draw mode ----------
   drawDown(e: PointerEvent<HTMLDivElement>) {
     const ed = this.state.edit; if (!ed || this.inkPen) return;
-    const r = e.currentTarget.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height, p = this.getPainter();
+    const r = e.currentTarget.getBoundingClientRect(), [x, y] = this.pagePoint(r, e.clientX, e.clientY), p = this.getPainter();
     // Picking a colour off the page: one tap, then back to the brush.
     if (ed.eyedrop) return this.pickColor(p.colorAt(x, y));
     this.inkPen = { id: e.pointerId, r }; p.begin(ed.pen, x, y, this.pressure(e));
@@ -2061,7 +2078,7 @@ export default class App extends Component<object, State> {
     const pt = this.inkPen, p = this.livePainter(); if (!pt || pt.id !== e.pointerId || !p) return;
     // Every point the pointer reported since the last event, so fast strokes stay smooth.
     const evs = (e.nativeEvent as globalThis.PointerEvent).getCoalescedEvents?.() || [e.nativeEvent];
-    for (const q of evs.length ? evs : [e.nativeEvent]) p.move((q.clientX - pt.r.left) / pt.r.width, (q.clientY - pt.r.top) / pt.r.height, this.pressure(q));
+    for (const q of evs.length ? evs : [e.nativeEvent]) { const [x, y] = this.pagePoint(pt.r, q.clientX, q.clientY); p.move(x, y, this.pressure(q)); }
   }
   /** Pen pressure from a stylus; fingers and mice paint at a steady, fairly firm touch. */
   pressure(e: { pointerType: string; pressure: number }) { return e.pointerType === 'pen' ? Math.max(0.05, Math.min(1, e.pressure || 0.5)) : 0.75; }
@@ -2083,6 +2100,8 @@ export default class App extends Component<object, State> {
       onPenSize: (e: ChangeEvent<HTMLInputElement>) => setPen({ size: parseFloat(e.target.value) }),
       onPenOpacity: (e: ChangeEvent<HTMLInputElement>) => setPen({ opacity: parseFloat(e.target.value) / 100 }),
       edEyedrop: !!ed.eyedrop, toggleEyedrop: () => this.setEd({ eyedrop: !ed.eyedrop }),
+      turnView: () => this.setEd({ view: ((ed.view || 0) + 1) % 4 }), edTurned: !!((ed.view || 0) % 4),
+      toggleDrawSpread: () => this.setSpread(!ed.spread),
       undoMark: () => { p?.undo(); bump(); }, clearMarks: () => { p?.clear(); bump(); },
     };
   }
@@ -2116,17 +2135,26 @@ export default class App extends Component<object, State> {
     };
   }
 
+  /** One page or two. A blank page is made again at the new shape; drawing so far is cleared (after asking). */
+  setSpread(on: boolean) {
+    const go = () => this.setState(s => {
+      const e = s.edit!, queue = e.paper ? e.queue.map((u, k) => k === e.i ? paperUrl(e.paper!, this.aspect() * (on ? 2 : 1)) : u) : e.queue;
+      return { edit: { ...e, queue, spread: on, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, painted: 0 } };
+    }, () => { const e = this.state.edit; if (e?.paper) this.loadEditImg(e.queue[e.i]); else this.applyAuto(); });
+    if (this.livePainter()?.painted) this.ask({ title: on ? 'Draw across two pages?' : 'Back to one page?', text: 'What you’ve drawn on this page so far will be cleared.', yes: on ? 'Use two pages' : 'Use one page', run: go });
+    else go();
+  }
   editorVals(): V {
     const ed = this.state.edit; if (!ed) return { editing: false };
     const fr = this.frame(), bs = this.baseSize(), num = (f: 'scale' | 'rot' | 'skx' | 'sky') => (e: ChangeEvent<HTMLInputElement>) => this.setEd({ [f]: parseFloat(e.target.value) });
     return {
-      editing: true, edAreaRef: this.edAreaRef, fw: fr.fw, fh: fr.fh, bw: bs.bw, bh: bs.bh, edBg: `url("${this.blobUrl(ed.queue[ed.i])}") center/100% 100% no-repeat`,
+      editing: true, edAreaRef: this.edAreaRef, edTurn: this.viewTurn(), fw: fr.fw, fh: fr.fh, bw: bs.bw, bh: bs.bh, edBg: `url("${this.blobUrl(ed.queue[ed.i])}") center/100% 100% no-repeat`,
       edTransform: `translate(${ed.tx}px, ${ed.ty}px) rotate(${ed.rot}deg) scale(${ed.scale}) skew(${ed.skx}deg, ${ed.sky}deg)`,
       edAvatar: ed.target === 'avatar', edOne: !!ed.paper || ed.target === 'avatar' || ed.target === 'cover',
       // Across two pages: only for a new picture (not a cover, profile photo, blank page or one being re-fitted).
-      edCanSpread: !ed.target && ed.replaceIdx == null && !ed.paper, edSpread: !!ed.spread,
+      edCanSpread: !ed.target && ed.replaceIdx == null, edSpread: !!ed.spread,
       edSpreadNote: isLeftPage(this.state.images.length) ? 'It’s cut at the dashed line onto two facing pages.' : 'It’s cut at the dashed line onto two facing pages. A blank page goes first, so they face each other.',
-      setSpread: (on: boolean) => this.setState(s => ({ edit: { ...s.edit!, spread: on, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0 } }), () => this.applyAuto()),
+      setSpread: (on: boolean) => this.setSpread(on),
       edTitle: ed.target === 'avatar' ? 'Profile photo' : ed.paper ? `${ed.paper[0].toUpperCase()}${ed.paper.slice(1)} page` : ed.target === 'cover' ? 'Cover image' : ed.replaceIdx != null ? `Edit page ${ed.replaceIdx + 1}` : `Image ${ed.i + 1} of ${ed.queue.length}`,
       scale: ed.scale, rot: ed.rot, skx: ed.skx, sky: ed.sky,
       scaleLbl: `${Math.round(ed.scale * 100)}%`, rotLbl: `${ed.rot}°`, skxLbl: `${ed.skx}°`, skyLbl: `${ed.sky}°`,
