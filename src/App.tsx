@@ -20,7 +20,8 @@ import type { PageText, Stroke } from './handwriting';
 import { RULED, paperUrl } from './paper';
 import { MAX_SOCIALS, PLATFORM, PLATFORMS, cleanHandle, socialLinks } from './socials';
 import { drawMarks, pathD } from './draw';
-import { DEFAULT_PEN, NO_COLOR, Painter } from './paint';
+import { DEFAULT_PEN, MAX_LAYERS, NO_COLOR, Painter } from './paint';
+import { deleteDraft, loadDraft, saveDraft } from './drafts';
 import type { Mark } from './draw';
 import type { Pen, Tool } from './paint';
 import type { Paper } from './paper';
@@ -64,6 +65,8 @@ interface EditState {
   painted?: number; eyedrop?: boolean;
   /** Draw mode: the page turned on screen by this many quarter turns, to draw sideways (it's saved upright). */
   view?: number;
+  /** Draw mode: zoomed in on the page (k times, moved by x, y in frame pixels); layers panel open. */
+  zm?: { k: number; x: number; y: number } | null; layersOpen?: boolean;
 }
 type EdMode = 'fit' | 'adjust' | 'write' | 'draw' | 'pick';
 
@@ -89,7 +92,7 @@ interface State {
   /** Making a PDF of the open sketchbook: how far along ('3/40'). */
   pdfBusy?: string;
   /** A question asked in Fletora's own dialog before something that can't easily be undone. */
-  ask?: { title: string; text: string; yes: string; danger?: boolean; notice?: boolean; run: () => void } | null;
+  ask?: { title: string; text: string; yes: string; no?: string; danger?: boolean; notice?: boolean; run: () => void; onNo?: () => void } | null;
   /** Moderators giving someone Plus: who, and while it's being saved. */
   giftFor?: { uid: string; name: string; gift: api.PlusInfo | null } | null; giftBusy?: boolean; plusFor?: string | null; plusPlan?: 'month' | 'year'; plusBusy?: boolean; plusErr?: string;
   /** Checkout on our page: its session's client secret, whether it's our own form with Stripe's card fields
@@ -1245,9 +1248,26 @@ export default class App extends Component<object, State> {
   }
   /** Where a point on screen falls on the page (0–1 across and down), allowing for the page being turned on screen. */
   pagePoint(r: DOMRect, cx: number, cy: number): [number, number] {
+    const [x, y] = this.framePoint(r, cx, cy), e = this.state.edit, z = e?.mode === 'draw' ? e.zm : null;
+    if (!z) return [x, y];
+    const { fw, fh } = this.frame(); return [(x * fw - z.x) / z.k / fw, (y * fh - z.y) / z.k / fh];
+  }
+  /** The same, on the frame itself (before any zoom). */
+  framePoint(r: DOMRect, cx: number, cy: number): [number, number] {
     const { q } = this.viewTurn(), { fw, fh } = this.frame(), k = q % 2 ? r.width / fh : r.width / fw;
     const dx = (cx - r.left - r.width / 2) / k, dy = (cy - r.top - r.height / 2) / k, c = [1, 0, -1, 0][q], sn = [0, 1, 0, -1][q];
     return [(c * dx + sn * dy) / fw + 0.5, (-sn * dx + c * dy) / fh + 0.5];
+  }
+  /** Zooms the page by f around a point on the frame (fractions), keeping it covering the frame. */
+  zoomAt(f: number, fx = 0.5, fy = 0.5) {
+    const e = this.state.edit; if (!e) return;
+    const { fw, fh } = this.frame(), z = e.zm || { k: 1, x: 0, y: 0 }, k = Math.max(1, Math.min(8, z.k * f));
+    const mx = fx * fw, my = fy * fh, cx = (mx - z.x) / z.k, cy = (my - z.y) / z.k;
+    this.setZoom({ k, x: mx - cx * k, y: my - cy * k });
+  }
+  setZoom(z: { k: number; x: number; y: number }) {
+    const { fw, fh } = this.frame(), k = Math.max(1, Math.min(8, z.k));
+    this.setEd({ zm: k < 1.01 ? null : { k, x: Math.max(fw - fw * k, Math.min(0, z.x)), y: Math.max(fh - fh * k, Math.min(0, z.y)) } });
   }
   baseSize() { const e = this.state.edit!, { fw, fh } = this.frame(); if (!e.nw) return { bw: fw, bh: fh }; const s = (e.target === 'avatar' ? Math.max : Math.min)(fw / e.nw, fh / e.nh); return { bw: e.nw * s, bh: e.nh * s }; }
   /** Re-baselines the drag / pinch gesture whenever a finger is added or lifted. */
@@ -1286,10 +1306,29 @@ export default class App extends Component<object, State> {
   livePainter() { return this.painter && this.painterKey === this.painterKeyNow() ? this.painter : null; }
   getPainter() {
     const key = this.painterKeyNow();
-    if (!this.painter || this.painterKey !== key) { this.painter = new Painter(this.edAspect()); this.painterKey = key; }
+    if (!this.painter || this.painterKey !== key) {
+      const p = this.painter = new Painter(this.edAspect()); this.painterKey = key;
+      // Undo, redo and the layers list follow the painter; the draft is saved a moment after each change.
+      p.onChange = () => { this.setEd({ painted: (this.state.edit?.painted || 0) + 1 }); this.queueDraft(); };
+    }
     const e = this.state.edit!, p = this.painter;
     p.setBase((ctx, W, H) => this.drawPhoto(ctx, W, H), JSON.stringify([e.queue[e.i].length, e.tx, e.ty, e.rot, e.scale, e.skx, e.sky, e.adj, e.nw, !!this.editImg]));
     return p;
+  }
+  // ---------- drafts: an unsaved drawing survives the editor closing by accident ----------
+  draftKey() { const e = this.state.edit; return e ? `${api.pageKey(e.queue[e.i] || '')}:${this.edAspect().toFixed(3)}` : ''; }
+  draftT = 0 as unknown as ReturnType<typeof setTimeout>;
+  queueDraft() {
+    clearTimeout(this.draftT); const key = this.draftKey(), p = this.livePainter();
+    this.draftT = setTimeout(() => { if (p && p === this.livePainter()) p.ops.length ? saveDraft(key, p.snapshot()) : deleteDraft(key); }, 1200);
+  }
+  /** Opening Draw on a page with a drawing that wasn't added: offer it back. */
+  async checkDraft() {
+    const key = this.draftKey(), d = await loadDraft(key); if (!d || key !== this.draftKey()) return;
+    const p = this.getPainter(); if (p.painted) return;
+    const when = new Date(d.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    this.ask({ title: 'Carry on with your drawing?', text: `There’s a drawing on this page from ${when} that wasn’t added to your sketchbook.`, yes: 'Carry on', no: 'Start again',
+      run: () => { if (!p.restore(d.snap)) this.toast('That drawing was for a different page shape.'); }, onNo: () => deleteDraft(key) });
   }
   async applyEdit() {
     const e = this.state.edit, im = this.editImg; if (!e || !im || e.inkBusy) return;
@@ -1301,6 +1340,7 @@ export default class App extends Component<object, State> {
     this.drawPhoto(ctx, outW, outH);
     drawMarks(ctx, e.marks, outW, outH);
     this.livePainter()?.drawOnto(ctx, outW, outH);
+    if (this.livePainter()?.painted) deleteDraft(this.draftKey());
     await drawTexts(ctx, e.texts.filter(t => t.text.trim()), outW, outH);
     const images = [...this.state.images];
     if (e.spread && e.replaceIdx == null && !e.target) {
@@ -1805,7 +1845,7 @@ export default class App extends Component<object, State> {
         : this.ask({ title: 'Show Mature work?', text: 'Mature sketchbooks have drawings with nudity. Turn this on only if you’re 18 or over.', yes: 'I’m 18 or over', run: () => this.setMature(true) }),
       anToggle: () => { const yes = s.analytics !== 'yes'; store.saveAnalytics(yes ? 'yes' : 'no'); api.analyticsConsent(yes); this.setState({ analytics: yes ? 'yes' : 'no' }); },
       // Fletora's own confirm dialog.
-      askQ: s.ask || null, askNo: () => this.setState({ ask: null }), askYes: () => { const q = s.ask; this.setState({ ask: null }); q?.run(); },
+      askQ: s.ask || null, askNo: () => { const q = s.ask; this.setState({ ask: null }); q?.onNo?.(); }, askYes: () => { const q = s.ask; this.setState({ ask: null }); q?.run(); },
     };
   }
 
@@ -2195,19 +2235,55 @@ export default class App extends Component<object, State> {
   }
 
   // ---------- draw mode ----------
+  /** Fingers on the page in Draw: one draws, two pinch to zoom and move around (and drop the stroke just started). */
+  drawPts = new Map<number, { x: number; y: number }>(); drawRect: DOMRect | null = null;
+  pinch: { d0: number; mx: number; my: number; z: { k: number; x: number; y: number } } | null = null;
+  pinchStart() {
+    const [a, b] = [...this.drawPts.values()], r = this.drawRect!, { fw, fh } = this.frame(), e = this.state.edit!;
+    const [fx, fy] = this.framePoint(r, (a.x + b.x) / 2, (a.y + b.y) / 2);
+    this.pinch = { d0: Math.hypot(b.x - a.x, b.y - a.y) || 1, mx: fx * fw, my: fy * fh, z: e.zm || { k: 1, x: 0, y: 0 } };
+  }
+  pinchMove() {
+    const pc = this.pinch, r = this.drawRect; if (!pc || !r || this.drawPts.size < 2) return;
+    const [a, b] = [...this.drawPts.values()], { fw, fh } = this.frame(), [fx, fy] = this.framePoint(r, (a.x + b.x) / 2, (a.y + b.y) / 2);
+    const k = Math.max(1, Math.min(8, pc.z.k * Math.hypot(b.x - a.x, b.y - a.y) / pc.d0)), cx = (pc.mx - pc.z.x) / pc.z.k, cy = (pc.my - pc.z.y) / pc.z.k;
+    this.setZoom({ k, x: fx * fw - cx * k, y: fy * fh - cy * k });
+  }
   drawDown(e: PointerEvent<HTMLDivElement>) {
-    const ed = this.state.edit; if (!ed || this.inkPen) return;
-    const r = e.currentTarget.getBoundingClientRect(), [x, y] = this.pagePoint(r, e.clientX, e.clientY), p = this.getPainter();
+    const ed = this.state.edit; if (!ed) return;
+    const r = e.currentTarget.getBoundingClientRect(); this.drawRect = r;
+    this.drawPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (this.drawPts.size === 2 && e.pointerType === 'touch') { this.livePainter()?.cancel(); this.inkPen = null; return this.pinchStart(); }
+    if (this.drawPts.size > 1 || this.inkPen) return;
+    const [x, y] = this.pagePoint(r, e.clientX, e.clientY), p = this.getPainter();
     // Picking a colour off the page: one tap, then back to the brush.
     if (ed.eyedrop) return this.pickColor(p.colorAt(x, y));
     this.inkPen = { id: e.pointerId, r }; p.begin(ed.pen, x, y, this.pressure(e));
   }
   drawMove(e: PointerEvent) {
+    if (this.drawPts.has(e.pointerId)) this.drawPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (this.pinch) return this.pinchMove();
     const pt = this.inkPen, p = this.livePainter(); if (!pt || pt.id !== e.pointerId || !p) return;
     // Every point the pointer reported since the last event, so fast strokes stay smooth.
     const evs = (e.nativeEvent as globalThis.PointerEvent).getCoalescedEvents?.() || [e.nativeEvent];
     for (const q of evs.length ? evs : [e.nativeEvent]) { const [x, y] = this.pagePoint(pt.r, q.clientX, q.clientY); p.move(x, y, this.pressure(q)); }
   }
+  drawUp(e: PointerEvent) {
+    this.drawPts.delete(e.pointerId);
+    if (this.pinch) { if (this.drawPts.size < 2) this.pinch = null; return; }
+    this.inkUp(e);
+  }
+  /** Larger screens: pinch on a trackpad (or Ctrl/⌘ and scroll) zooms around the pointer; scrolling moves a zoomed page. */
+  drawWheel = (e: WheelEvent) => {
+    const ed = this.state.edit; if (!ed || ed.mode !== 'draw') return;
+    e.preventDefault();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    if (e.ctrlKey || e.metaKey) { const [fx, fy] = this.framePoint(r, e.clientX, e.clientY); return this.zoomAt(Math.exp(-e.deltaY * 0.01), fx, fy); }
+    const z = ed.zm; if (!z) return;
+    const { q } = this.viewTurn(), { fw, fh } = this.frame(), sc = q % 2 ? r.width / fh : r.width / fw, c = [1, 0, -1, 0][q], sn = [0, 1, 0, -1][q];
+    const dx = e.deltaX / sc, dy = e.deltaY / sc;
+    this.setZoom({ k: z.k, x: z.x - (c * dx + sn * dy), y: z.y - (-sn * dx + c * dy) });
+  };
   /** Pen pressure from a stylus; fingers and mice paint at a steady, fairly firm touch. */
   pressure(e: { pointerType: string; pressure: number }) { return e.pointerType === 'pen' ? Math.max(0.05, Math.min(1, e.pressure || 0.5)) : 0.75; }
   drawEnd() { const p = this.livePainter(); if (p?.end()) this.setEd({ painted: (this.state.edit?.painted || 0) + 1 }); }
@@ -2231,6 +2307,19 @@ export default class App extends Component<object, State> {
       turnView: () => this.setEd({ view: ((ed.view || 0) + 1) % 4 }), edTurned: !!((ed.view || 0) % 4),
       toggleDrawSpread: () => this.setSpread(!ed.spread),
       undoMark: () => { p?.undo(); bump(); }, clearMarks: () => { p?.clear(); bump(); },
+      hasRedo: !!p?.canRedo, redoMark: () => { p?.redo(); bump(); },
+      // Zoom while drawing (on the frame; see pagePoint).
+      edZoomT: ed.mode === 'draw' && ed.zm ? `translate(${ed.zm.x}px, ${ed.zm.y}px) scale(${ed.zm.k})` : '', edZoomPct: `${Math.round((ed.mode === 'draw' && ed.zm ? ed.zm.k : 1) * 100)}%`,
+      edZoomed: ed.mode === 'draw' && !!ed.zm, zoomInDraw: () => this.zoomAt(1.5), zoomOutDraw: () => this.zoomAt(1 / 1.5), zoomResetDraw: () => this.setEd({ zm: null }),
+      drawWheel: this.drawWheel,
+      // Layers: the top one first, as they're stacked.
+      layersOpen: !!ed.layersOpen, toggleLayers: () => this.setEd({ layersOpen: !ed.layersOpen }),
+      layers: (() => { const q = p || (ed.mode === 'draw' ? null : null); const list = q?.layerList || [{ id: 1, name: 'Layer 1', visible: true, opacity: 1, active: true }];
+        return list.map((l, i) => ({ key: l.id, name: l.name, visible: l.visible, opacity: Math.round(l.opacity * 100), active: l.active, canRemove: list.length > 1,
+          pick: () => { this.getPainter().setActive(i); }, toggle: () => this.getPainter().setVisible(i, !l.visible),
+          onOpacity: (e: ChangeEvent<HTMLInputElement>) => this.getPainter().setOpacity(i, parseFloat(e.target.value) / 100),
+          remove: () => this.ask({ title: `Delete ${l.name}?`, text: 'What’s drawn on it goes too.', yes: 'Delete layer', danger: true, run: () => this.getPainter().removeLayer(i) }) })).reverse(); })(),
+      canAddLayer: (p?.layerList.length || 1) < MAX_LAYERS, addLayer: () => this.getPainter().addLayer(),
     };
   }
   writeVals(ed: EditState, fr: { fw: number; fh: number }): V {
@@ -2292,7 +2381,7 @@ export default class App extends Component<object, State> {
       // Straightened and cropped automatically: say so, with the way back (and back again).
       edAuto: !!ed.auto, edAutoOn: !!ed.auto && (['scale', 'rot', 'skx', 'sky', 'tx', 'ty'] as const).every(k => ed[k] === ed.auto![k]),
       autoFit: () => ed.auto && this.setEd({ ...ed.auto }),
-      edMode: ed.mode, setEdMode: (mode: EdMode) => this.setEd({ mode, sel: null }), edBlank: !!ed.paper,
+      edMode: ed.mode, setEdMode: (mode: EdMode) => { this.setEd({ mode, sel: null }); if (mode === 'draw') this.checkDraft(); }, edBlank: !!ed.paper,
       ...this.drawVals(ed),
       ...this.writeVals(ed, fr),
       edAdjTool: this.state.edAdjTool || 'white', setEdAdjTool: (t: string) => this.setState({ edAdjTool: t }),
@@ -2300,7 +2389,11 @@ export default class App extends Component<object, State> {
       edFx: feValues(ed.adj), edAdjusted: isAdjusted(ed.adj),
       edAdj: ADJUSTERS.map(([k, label, min, max]) => ({ key: k, label, min, max, value: ed.adj[k], lbl: (ed.adj[k] > 0 && min < 0 ? '+' : '') + ed.adj[k],
         onChange: (e: ChangeEvent<HTMLInputElement>) => { const v = Math.round(parseFloat(e.target.value)); this.setState(s => s.edit ? { edit: { ...s.edit, adj: { ...s.edit.adj, [k]: Math.abs(v) < 3 ? 0 : v } } } : null); } })),
-      applyEdit: () => this.applyEdit(), skipEdit: () => this.nextEdit(), cancelEdit: () => this.setState({ edit: null }),
+      applyEdit: () => this.applyEdit(), skipEdit: () => this.nextEdit(), cancelEdit: () => {
+        // Leaving on purpose: a drawing is thrown away only after asking (closing by accident keeps the draft).
+        if (!this.livePainter()?.painted) return this.setState({ edit: null });
+        this.ask({ title: 'Throw away your drawing?', text: 'What you’ve drawn on this page won’t be kept.', yes: 'Throw it away', danger: true, run: () => { deleteDraft(this.draftKey()); this.setState({ edit: null }); } });
+      },
       applyLbl: ed.target === 'avatar' ? 'Use photo' : ed.target === 'cover' ? 'Save cover' : ed.replaceIdx != null ? 'Save page' : 'Add to sketchbook',
       // One pointer drags the image; two pinch to zoom and twist to rotate.
       edDown: (e: PointerEvent<HTMLDivElement>) => {
@@ -2324,7 +2417,7 @@ export default class App extends Component<object, State> {
           const d = this.edDrag; this.setEd({ tx: d.tx + e.clientX - d.x, ty: d.ty + e.clientY - d.y });
         }
       },
-      edUp: (e: PointerEvent) => { if (ed.mode === 'write' || ed.mode === 'draw') return this.inkUp(e); this.edPts.delete(e.pointerId); this.edGestureStart(); },
+      edUp: (e: PointerEvent) => { if (ed.mode === 'draw') return this.drawUp(e); if (ed.mode === 'write') return this.inkUp(e); this.edPts.delete(e.pointerId); this.edGestureStart(); },
       edMob: this.state.vw < 640, edTool: this.state.edTool || 'scale', setEdTool: (t: string) => this.setState({ edTool: t }),
       edWheel: (e: WheelEvent) => { e.stopPropagation(); this.setEd({ scale: Math.max(0.3, Math.min(4, ed.scale * (e.deltaY > 0 ? 0.95 : 1.05))) }); },
     };

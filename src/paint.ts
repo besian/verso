@@ -36,31 +36,86 @@ function pigment(a: RGB, b: RGB, t: number): RGB {
   return [Math.max(0, Math.min(255, m[0])), Math.max(0, Math.min(255, m[1])), Math.max(0, Math.min(255, m[2]))];
 }
 
-interface Undo { x: number; y: number; w: number; h: number; px: Uint8ClampedArray }
+interface Undo { layer: Layer; x: number; y: number; w: number; h: number; px: Uint8ClampedArray; op: Op }
+
+/** One drawing layer: its pixels and the canvas showing them. */
+interface Layer { id: number; name: string; visible: boolean; opacity: number; img: ImageData; L: Uint8ClampedArray; view: HTMLCanvasElement; vctx: CanvasRenderingContext2D }
+export interface LayerInfo { id: number; name: string; visible: boolean; opacity: number; active: boolean }
+export const MAX_LAYERS = 4;
+
+/** What was done, for the stroke replay and the saved draft: strokes (points as x, y, pressure, ms since the
+ *  last point), clearing a layer, and adding or removing one. */
+export type Op = { t: 's'; l: number; pen: Pen; seed: number; pts: number[] } | { t: 'c'; l: number } | { t: 'a' } | { t: 'r'; l: number };
+/** Everything needed to carry on with a drawing later (the draft), or to replay it. */
+export interface Snapshot { w: number; h: number; layers: { name: string; visible: boolean; opacity: number; px?: Uint8ClampedArray }[]; active: number; ops: Op[] }
+
+/** Small seeded random numbers, so a replayed stroke has the same bristles and grain as the original. */
+function rng(seed: number) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
 export class Painter {
   readonly W: number; readonly H: number;
-  /** What's shown: the paint layer, and the pen / pencil / marker stroke being drawn (laid down when it ends). */
+  /** What's shown: the layers, and the pen / pencil / marker stroke being drawn (laid down when it ends). */
   readonly el: HTMLDivElement;
-  private view: HTMLCanvasElement; private vctx: CanvasRenderingContext2D;
+  private layers: Layer[] = []; private active = 0; private nextId = 1;
   private buf: HTMLCanvasElement; private bctx: CanvasRenderingContext2D;
-  private img: ImageData; private L: Uint8ClampedArray; private B: Uint8ClampedArray;
-  private undos: Undo[] = []; private before: Uint8ClampedArray | null = null;
-  private pen: Pen = DEFAULT_PEN; private last: { x: number; y: number; p: number } | null = null; private carryAt = 0;
+  /** The photo, and what's seen under the active layer (the photo with the visible layers below it). */
+  private B: Uint8ClampedArray; private under: Uint8ClampedArray | null = null;
+  private undos: Undo[] = []; private redos: Undo[] = []; private before: Uint8ClampedArray | null = null;
+  /** Everything done so far, in order (undone strokes are taken out). */
+  ops: Op[] = []; private cur: (Op & { t: 's' }) | null = null; private lastT = 0;
+  private pen: Pen = DEFAULT_PEN; private last: { x: number; y: number; p: number } | null = null; private rand = Math.random;
   private box = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity }; private dirty = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
   private raf = 0; private carry: Float32Array | null = null; private cr = 0; private res: RGB = [0, 0, 0]; private load = 1; private bristle: Float32Array | null = null;
-  private grain: CanvasPattern | null = null;
-  /** Something has been painted since the layer was made. */
+  /** Something has been painted since the layers were made. */
   painted = false;
   baseKey = '';
+  /** Called after anything that changes what undo, redo or the layers list show. */
+  onChange: () => void = () => {};
 
   constructor(aspect: number) {
     this.H = PAINT_H; this.W = Math.max(1, Math.round(PAINT_H * aspect));
-    const cv = () => { const c = document.createElement('canvas'); c.width = this.W; c.height = this.H; Object.assign(c.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none' }); return c; };
     this.el = document.createElement('div'); Object.assign(this.el.style, { position: 'absolute', inset: '0', pointerEvents: 'none' });
-    this.view = cv(); this.buf = cv(); this.el.append(this.view, this.buf);
-    this.vctx = this.view.getContext('2d')!; this.bctx = this.buf.getContext('2d')!;
-    this.img = new ImageData(this.W, this.H); this.L = this.img.data; this.B = new Uint8ClampedArray(this.W * this.H * 4).fill(255);
+    this.buf = this.canvas(); this.bctx = this.buf.getContext('2d')!;
+    this.B = new Uint8ClampedArray(this.W * this.H * 4).fill(255);
+    this.addLayer(false);
+  }
+  private canvas() { const c = document.createElement('canvas'); c.width = this.W; c.height = this.H; Object.assign(c.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none' }); return c; }
+  private get lay() { return this.layers[this.active]; }
+  private get L() { return this.lay.L; }
+
+  // ---------- layers ----------
+  get layerList(): LayerInfo[] { return this.layers.map((l, i) => ({ id: l.id, name: l.name, visible: l.visible, opacity: l.opacity, active: i === this.active })); }
+  addLayer(record = true) {
+    if (this.layers.length >= MAX_LAYERS) return;
+    const img = new ImageData(this.W, this.H), view = this.canvas(), id = this.nextId++;
+    this.layers.push({ id, name: `Layer ${id}`, visible: true, opacity: 1, img, L: img.data, view, vctx: view.getContext('2d')! });
+    this.active = this.layers.length - 1; this.under = null; this.order();
+    if (record) { this.ops.push({ t: 'a' }); this.onChange(); }
+  }
+  removeLayer(i: number) {
+    if (this.layers.length <= 1 || !this.layers[i]) return;
+    const [gone] = this.layers.splice(i, 1); gone.view.remove();
+    // Undo steps for it go with it.
+    this.undos = this.undos.filter(u => u.layer !== gone); this.redos = this.redos.filter(u => u.layer !== gone);
+    this.active = Math.min(this.active, this.layers.length - 1); this.under = null; this.ops.push({ t: 'r', l: i }); this.order(); this.onChange();
+  }
+  setActive(i: number) { if (this.layers[i] && i !== this.active) { this.active = i; this.under = null; this.order(); this.onChange(); } }
+  setVisible(i: number, on: boolean) { const l = this.layers[i]; if (!l) return; l.visible = on; l.view.style.display = on ? '' : 'none'; this.under = null; this.onChange(); }
+  setOpacity(i: number, o: number) { const l = this.layers[i]; if (!l) return; l.opacity = o; l.view.style.opacity = String(o); this.onChange(); }
+  /** The layers' canvases in order, with the stroke being drawn just above the active one. */
+  private order() {
+    this.layers.forEach((l, i) => { this.el.append(l.view); if (i === this.active) this.el.append(this.buf); });
+  }
+  /** What's seen under the active layer: the photo with the visible layers below it, worked out when needed. */
+  private below(): Uint8ClampedArray {
+    if (this.under) return this.under;
+    const out = this.B.slice();
+    for (let k = 0; k < this.active; k++) {
+      const l = this.layers[k]; if (!l.visible) continue;
+      const L = l.L, o = l.opacity;
+      for (let i = 0; i < out.length; i += 4) { const a = L[i + 3] / 255 * o; if (!a) continue; out[i] += (L[i] - out[i]) * a; out[i + 1] += (L[i + 1] - out[i + 1]) * a; out[i + 2] += (L[i + 2] - out[i + 2]) * a; }
+    }
+    return this.under = out;
   }
 
   /** The photo as it will be saved, for the wet tools to pick up and the colour picker to read. */
@@ -68,36 +123,45 @@ export class Painter {
     if (key === this.baseKey) return;
     const c = document.createElement('canvas'); c.width = this.W; c.height = this.H; const ctx = c.getContext('2d', { willReadFrequently: true })!;
     draw(ctx, this.W, this.H);
-    try { this.B = ctx.getImageData(0, 0, this.W, this.H).data; this.baseKey = key; } catch { /* unreadable image: paper white */ }
+    try { this.B = ctx.getImageData(0, 0, this.W, this.H).data; this.baseKey = key; this.under = null; } catch { /* unreadable image: paper white */ }
   }
 
-  /** The colour on the page at (x, y), in 0–1 page coordinates. */
+  /** The colour on the page at (x, y), in 0–1 page coordinates: the photo with every visible layer over it. */
   colorAt(x: number, y: number): string {
     const i = (Math.min(this.H - 1, Math.max(0, Math.round(y * this.H))) * this.W + Math.min(this.W - 1, Math.max(0, Math.round(x * this.W)))) * 4;
-    const c = this.comp(i); return rgbHex(c);
+    const c: number[] = [this.B[i], this.B[i + 1], this.B[i + 2]];
+    for (const l of this.layers) { if (!l.visible) continue; const a = l.L[i + 3] / 255 * l.opacity; for (let k = 0; k < 3; k++) c[k] += (l.L[i + k] - c[k]) * a; }
+    return rgbHex(c);
   }
   get canUndo() { return this.undos.length > 0; }
+  get canRedo() { return this.redos.length > 0; }
+  get drawing() { return !!this.last; }
 
-  begin(pen: Pen, x: number, y: number, pressure: number) {
-    this.pen = pen; this.before = this.L.slice();
+  begin(pen: Pen, x: number, y: number, pressure: number, seed = Math.floor(Math.random() * 2 ** 31)) {
+    this.pen = pen; this.before = this.L.slice(); this.rand = rng(seed); this.lastT = performance.now();
+    this.cur = { t: 's', l: this.active, pen: { ...pen }, seed, pts: [] }; this.rec(x, y, pressure);
     this.box = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
     const X = x * this.W, Y = y * this.H; this.last = { x: X, y: Y, p: pressure };
     if (this.lined()) {
       const b = this.bctx; b.clearRect(0, 0, this.W, this.H);
-      this.buf.style.opacity = String(this.strokeAlpha()); this.buf.style.mixBlendMode = pen.tool === 'marker' ? 'multiply' : '';
+      this.buf.style.opacity = String(this.strokeAlpha() * this.lay.opacity); this.buf.style.mixBlendMode = pen.tool === 'marker' ? 'multiply' : '';
       b.lineCap = 'round'; b.lineJoin = 'round';
       b.strokeStyle = pen.tool === 'pencil' ? this.pencilGrain(pen.color) : pen.color;
       this.segment(X, Y, X + 0.01, Y, pressure);
     } else {
-      this.res = hexRgb(pen.color); this.load = 1; this.carry = null; this.carryAt = 0;
-      this.bristle = new Float32Array(64).map(() => 0.55 + Math.random() * 0.45);
+      this.res = hexRgb(pen.color); this.load = 1; this.carry = null;
+      this.bristle = new Float32Array(64).map(() => 0.55 + this.rand() * 0.45);
       this.dab(X, Y, pressure, 0);
     }
     this.show();
   }
+  private rec(x: number, y: number, p: number, dt = 0) {
+    this.cur?.pts.push(Math.round(x * 4095), Math.round(y * 4095), Math.round(p * 255), Math.min(60000, Math.round(dt)));
+  }
 
   move(x: number, y: number, pressure: number) {
     const l = this.last; if (!l) return;
+    const now = performance.now(); this.rec(x, y, pressure, now - this.lastT); this.lastT = now;
     const X = x * this.W, Y = y * this.H, d = Math.hypot(X - l.x, Y - l.y);
     if (this.lined()) {
       if (d < 0.6) return;
@@ -117,29 +181,64 @@ export class Painter {
     if (!this.last) return false;
     if (this.lined()) this.layDown();
     this.last = null; this.flush();
-    const b = this.box, before = this.before; this.before = null;
-    if (!before || b.x1 < b.x0) return false;
+    const b = this.box, before = this.before, op = this.cur; this.before = null; this.cur = null;
+    if (!before || !op || b.x1 < b.x0) return false;
+    const u = this.region(before, b); if (!u) return false;
+    this.push({ ...u, layer: this.lay, op }); this.ops.push(op);
+    this.painted = true; this.onChange(); return true;
+  }
+  /** Drops the stroke being drawn (a second finger came down: it's a pinch, not a stroke). */
+  cancel() {
+    if (!this.last) return;
+    this.bctx.clearRect(0, 0, this.W, this.H);
+    if (this.before) { this.L.set(this.before); this.mark(0, 0, this.W, this.H); }
+    this.last = null; this.before = null; this.cur = null; this.flush();
+  }
+  private region(src: Uint8ClampedArray, b: { x0: number; y0: number; x1: number; y1: number }) {
     const x = Math.max(0, Math.floor(b.x0)), y = Math.max(0, Math.floor(b.y0)), w = Math.min(this.W, Math.ceil(b.x1) + 1) - x, h = Math.min(this.H, Math.ceil(b.y1) + 1) - y;
-    if (w <= 0 || h <= 0) return false;
+    if (w <= 0 || h <= 0) return null;
     const px = new Uint8ClampedArray(w * h * 4);
-    for (let r = 0; r < h; r++) px.set(before.subarray(((y + r) * this.W + x) * 4, ((y + r) * this.W + x + w) * 4), r * w * 4);
-    this.undos.push({ x, y, w, h, px }); if (this.undos.length > UNDO) this.undos.shift();
-    this.painted = true; return true;
+    for (let r = 0; r < h; r++) px.set(src.subarray(((y + r) * this.W + x) * 4, ((y + r) * this.W + x + w) * 4), r * w * 4);
+    return { x, y, w, h, px };
   }
-
+  private push(u: Undo) { this.undos.push(u); if (this.undos.length > UNDO) this.undos.shift(); this.redos = []; }
+  /** Swaps a step's saved pixels with the layer's, so the same step serves undo and redo. */
+  private swap(u: Undo) {
+    const L = u.layer.L, now = new Uint8ClampedArray(u.px.length);
+    for (let r = 0; r < u.h; r++) { const at = ((u.y + r) * this.W + u.x) * 4, row = r * u.w * 4; now.set(L.subarray(at, at + u.w * 4), row); L.set(u.px.subarray(row, row + u.w * 4), at); }
+    u.px = now; this.markLayer(u.layer, u.x, u.y, u.x + u.w, u.y + u.h); this.under = null;
+  }
   undo() {
-    const u = this.undos.pop(); if (!u) return;
-    for (let r = 0; r < u.h; r++) this.L.set(u.px.subarray(r * u.w * 4, (r + 1) * u.w * 4), ((u.y + r) * this.W + u.x) * 4);
-    this.mark(u.x, u.y, u.x + u.w, u.y + u.h); this.flush();
+    const u = this.undos.pop(); if (!u) return; this.swap(u); this.redos.push(u);
+    const i = this.ops.lastIndexOf(u.op); if (i >= 0) this.ops.splice(i, 1);
+    this.flushAll(); this.onChange();
   }
+  redo() { const u = this.redos.pop(); if (!u) return; this.swap(u); this.undos.push(u); this.ops.push(u.op); this.flushAll(); this.onChange(); }
+  /** Clears the active layer (undoable). */
   clear() {
-    this.undos.push({ x: 0, y: 0, w: this.W, h: this.H, px: this.L.slice() }); if (this.undos.length > UNDO) this.undos.shift();
-    this.L.fill(0); this.mark(0, 0, this.W, this.H); this.flush();
+    const op: Op = { t: 'c', l: this.active };
+    this.push({ layer: this.lay, x: 0, y: 0, w: this.W, h: this.H, px: this.L.slice(), op }); this.ops.push(op);
+    this.L.fill(0); this.mark(0, 0, this.W, this.H); this.under = null; this.flush(); this.onChange();
   }
-  /** Draws the paint onto a saved page of W × H. */
+  /** Draws the visible layers onto a saved page of W × H. */
   drawOnto(ctx: CanvasRenderingContext2D, W: number, H: number) {
     if (!this.painted) return;
-    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingQuality = 'high'; ctx.drawImage(this.view, 0, 0, W, H); ctx.restore();
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingQuality = 'high';
+    for (const l of this.layers) if (l.visible) { ctx.globalAlpha = l.opacity; ctx.drawImage(l.view, 0, 0, W, H); }
+    ctx.restore();
+  }
+
+  // ---------- drafts ----------
+  snapshot(withPixels = true): Snapshot {
+    return { w: this.W, h: this.H, active: this.active, ops: this.ops.slice(), layers: this.layers.map(l => ({ name: l.name, visible: l.visible, opacity: l.opacity, ...(withPixels ? { px: l.L.slice() } : {}) })) };
+  }
+  restore(s: Snapshot) {
+    if (s.w !== this.W || s.h !== this.H) return false;
+    this.layers.forEach(l => l.view.remove()); this.layers = []; this.nextId = 1;
+    s.layers.forEach(d => { this.addLayer(false); const l = this.lay; l.name = d.name; if (d.px) l.L.set(d.px); this.setVisible(this.active, d.visible); this.setOpacity(this.active, d.opacity); this.markLayer(l, 0, 0, this.W, this.H); });
+    this.active = Math.min(s.active, this.layers.length - 1); this.order(); this.under = null;
+    this.ops = s.ops.slice(); this.undos = []; this.redos = []; this.painted = this.ops.length > 0; this.flushAll(); this.onChange();
+    return true;
   }
 
   // ---------- pen, pencil and marker ----------
@@ -159,8 +258,8 @@ export class Painter {
   /** Paper grain for the pencil: the colour with a speckled see-through pattern, fixed to the page so strokes share it. */
   private pencilGrain(color: string) {
     const c = document.createElement('canvas'); c.width = c.height = 96; const g = c.getContext('2d')!, im = g.createImageData(96, 96), [r, gg, bl] = hexRgb(color);
-    for (let i = 0; i < 96 * 96; i++) { const n = Math.random(); im.data.set([r, gg, bl, n < 0.22 ? 0 : Math.round(255 * Math.min(1, 0.45 + n * 0.7))], i * 4); }
-    g.putImageData(im, 0, 0); this.grain = this.bctx.createPattern(c, 'repeat'); return this.grain!;
+    for (let i = 0; i < 96 * 96; i++) { const n = this.rand(); im.data.set([r, gg, bl, n < 0.22 ? 0 : Math.round(255 * Math.min(1, 0.45 + n * 0.7))], i * 4); }
+    g.putImageData(im, 0, 0); return this.bctx.createPattern(c, 'repeat')!;
   }
   /** The finished line goes into the layer: over it, or for the marker multiplied with what's under it (as ink is). */
   private layDown() {
@@ -185,9 +284,9 @@ export class Painter {
   }
 
   // ---------- wet tools and the eraser ----------
-  /** The colour seen at pixel offset i: paint over the photo. */
+  /** The colour seen at pixel offset i: the active layer over what's under it. */
   private comp(i: number, L = this.L): RGB {
-    const B = this.B, a = L[i + 3] / 255;
+    const B = this.below(), a = L[i + 3] / 255;
     return [L[i] * a + B[i] * (1 - a), L[i + 1] * a + B[i + 1] * (1 - a), L[i + 2] * a + B[i + 2] * (1 - a)];
   }
   private dab(cx: number, cy: number, p: number, ang: number) {
@@ -269,10 +368,19 @@ export class Painter {
   private flush() {
     cancelAnimationFrame(this.raf); this.raf = 0;
     const d = this.dirty; if (d.x1 <= d.x0) return;
-    const x = Math.max(0, Math.floor(d.x0)), y = Math.max(0, Math.floor(d.y0)), w = Math.min(this.W, Math.ceil(d.x1)) - x, h = Math.min(this.H, Math.ceil(d.y1)) - y;
-    if (w > 0 && h > 0) this.vctx.putImageData(this.img, 0, 0, x, y, w, h);
-    this.dirty = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+    this.put(this.lay, d); this.dirty = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
   }
+  private put(l: Layer, d: { x0: number; y0: number; x1: number; y1: number }) {
+    const x = Math.max(0, Math.floor(d.x0)), y = Math.max(0, Math.floor(d.y0)), w = Math.min(this.W, Math.ceil(d.x1)) - x, h = Math.min(this.H, Math.ceil(d.y1)) - y;
+    if (w > 0 && h > 0) l.vctx.putImageData(l.img, 0, 0, x, y, w, h);
+  }
+  /** Changes on a layer other than the active one (undo on another layer, restoring a draft) go on screen at once. */
+  private pending = new Map<Layer, { x0: number; y0: number; x1: number; y1: number }>();
+  private markLayer(l: Layer, x0: number, y0: number, x1: number, y1: number) {
+    const d = this.pending.get(l) || { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+    d.x0 = Math.min(d.x0, x0); d.y0 = Math.min(d.y0, y0); d.x1 = Math.max(d.x1, x1); d.y1 = Math.max(d.y1, y1); this.pending.set(l, d);
+  }
+  private flushAll() { this.flush(); this.pending.forEach((d, l) => this.put(l, d)); this.pending.clear(); }
 }
 
 /** Hue (0–360), saturation and brightness (0–1) of a colour, and back: for the colour wheel. */

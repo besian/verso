@@ -751,8 +751,28 @@ function Layers({ v, inPad }: { v: V; inPad?: boolean }) {
 }
 
 /** The page-shaped frame: the image (dragged, pinched, twisted) under a thirds grid in Fit; a canvas in Draw and Write. */
+/** Drawing zoomed in: how far, with zoom out / in and a way straight back (phones show it only while zoomed). */
+function ZoomChip({ v }: { v: V }) {
+  const b: CSSProperties = { width: 28, height: 28, padding: 0, border: 'none', borderRadius: 14, background: 'none', color: '#F6F2E8', font: `500 16px ${SANS}`, cursor: 'pointer' };
+  return (
+    <div onPointerDown={e => e.stopPropagation()} style={{ position: 'absolute', right: 8, bottom: 8, display: 'flex', alignItems: 'center', gap: 2, padding: 2, borderRadius: 16, background: 'rgba(34,35,32,.78)', color: '#F6F2E8', font: `500 12px ${SANS}` }}>
+      {v.notMob && <button onClick={v.zoomOutDraw} aria-label="Zoom out" style={b}>−</button>}
+      <button onClick={v.zoomResetDraw} title="Back to the whole page" aria-label={`Zoom ${v.edZoomPct}, back to the whole page`} style={{ ...b, width: 'auto', padding: '0 8px', fontSize: 12 }}>{v.edZoomPct}</button>
+      {v.notMob && <button onClick={v.zoomInDraw} aria-label="Zoom in" style={b}>+</button>}
+    </div>
+  );
+}
+
 function EditFrame({ v, radius, shadow, wheel }: { v: V; radius: string; shadow: string; wheel?: boolean }) {
   const pen = v.edDraw || (v.edWrite && !v.edPad), t = v.edTurn;
+  // Drawing: pinch on a trackpad and scroll need a listener that can stop the browser zooming the whole page.
+  const wheelRef = useRef<HTMLDivElement | null>(null), handler = useRef(v.drawWheel); handler.current = v.drawWheel;
+  const frameWheel = (el: HTMLDivElement | null) => {
+    if (wheelRef.current === el) return;
+    const h = (e: WheelEvent) => handler.current?.(e);
+    wheelRef.current?.removeEventListener('wheel', (wheelRef.current as unknown as { _wh: EventListener })._wh);
+    wheelRef.current = el; if (el) { (el as unknown as { _wh: EventListener })._wh = h as EventListener; el.addEventListener('wheel', h, { passive: false }); }
+  };
   // Turned on screen (Draw): a box the turned page fits, with the page rotated and scaled inside it.
   if (t.q) return (
     <div style={{ width: t.bw, height: t.bh, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'width .25s, height .25s' }}>
@@ -760,11 +780,13 @@ function EditFrame({ v, radius, shadow, wheel }: { v: V; radius: string; shadow:
     </div>
   );
   return (
-    <div onPointerDown={v.edDown} onPointerMove={v.edMove} onPointerUp={v.edUp} onPointerCancel={v.edUp} onWheel={wheel && v.edMode === 'fit' ? v.edWheel : undefined} style={{ position: 'relative', width: v.fw, height: v.fh, flexShrink: 0, overflow: 'hidden', borderRadius: radius, boxShadow: shadow, cursor: pen ? 'crosshair' : v.edWrite ? 'pointer' : v.edMode === 'pick' ? 'default' : 'move', touchAction: 'none' }}>
+    <div ref={frameWheel} onPointerDown={v.edDown} onPointerMove={v.edMove} onPointerUp={v.edUp} onPointerCancel={v.edUp} onWheel={wheel && v.edMode === 'fit' ? v.edWheel : undefined} style={{ position: 'relative', width: v.fw, height: v.fh, flexShrink: 0, overflow: 'hidden', borderRadius: radius, boxShadow: shadow, cursor: pen ? 'crosshair' : v.edWrite ? 'pointer' : v.edMode === 'pick' ? 'default' : 'move', touchAction: 'none' }}>
       <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
         <filter id="ed-adjust" colorInterpolationFilters="sRGB"><feColorMatrix type="matrix" values={v.edFx} /></filter>
       </svg>
-      <Layers v={v} />
+      {/* Zoomed in while drawing: the page (photo, paint and text) is scaled and moved inside the frame. */}
+      <div style={{ position: 'absolute', inset: 0, transformOrigin: '0 0', transform: v.edZoomT || undefined }}><Layers v={v} /></div>
+      {v.edDraw && (v.edZoomed || v.notMob) && <ZoomChip v={v} />}
       {v.edMode === 'fit' && <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundImage: 'linear-gradient(rgba(var(--ink-rgb),.35) 1px,transparent 1px),linear-gradient(90deg,rgba(var(--ink-rgb),.35) 1px,transparent 1px)', backgroundSize: '33.34% 33.34%', mixBlendMode: 'difference', opacity: .5 }} />}
       {/* Profile photo: everything outside the circle is dimmed, as it won't show. */}
       {v.edAvatar && <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', boxShadow: '0 0 0 9999px rgba(20,20,22,.5)', outline: '1.5px solid rgba(255,255,255,.85)', pointerEvents: 'none' }} />}
@@ -980,6 +1002,11 @@ function MobileEditor({ v }: { v: V }) {
         {v.edPad && <WritePad v={v} />}
         {hint && <div style={{ fontSize: 12, color: 'rgba(var(--ink-rgb),.6)' }}>{hint}</div>}
         {draw && v.edEyedrop && <span style={{ position: 'absolute', top: 6, left: '50%', transform: 'translateX(-50%)', padding: '5px 12px', borderRadius: 12, background: 'rgba(34,35,32,.85)', color: '#F6F2E8', font: `500 12px ${SANS}`, whiteSpace: 'nowrap' }}>Tap the page to pick up a colour</span>}
+        {draw && v.layersOpen && !wheel && (
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 6, padding: 12, background: PAPER, border: '1px solid rgba(var(--ink-rgb),.18)', borderRadius: 6, boxShadow: '0 10px 30px rgba(20,20,30,.22)' }}>
+            <LayersList v={v} onDone={v.toggleLayers} />
+          </div>
+        )}
         {draw && wheel && (
           <div style={{ position: 'absolute', left: 0, right: 0, bottom: 6, padding: 12, background: PAPER, border: '1px solid rgba(var(--ink-rgb),.18)', borderRadius: 6, boxShadow: '0 10px 30px rgba(20,20,30,.22)', display: 'flex', flexDirection: 'column', gap: 10 }}>
             <ColourWheel color={v.penColor} onChange={v.setColor} size={112} />
@@ -1033,6 +1060,8 @@ function DeskToolbar({ v }: { v: V }) {
       {line}
       {item('pick', 'Pick a colour from the page', 'M19.6 4.4a2.2 2.2 0 0 0-3.1 0l-2.3 2.3-1.1-1.1-1.5 1.5 5.3 5.3 1.5-1.5-1.1-1.1 2.3-2.3a2.2 2.2 0 0 0 0-3.1zM12.4 8.4l-7.2 7.2-.7 3.9 3.9-.7 7.2-7.2', v.edEyedrop, v.toggleEyedrop)}
       {item('undo', 'Undo', 'M9 5L4 10l5 5M4 10h10a5 5 0 0 1 0 10h-3', false, v.undoMark, !v.hasMarks)}
+      {item('redo', 'Redo', 'M15 5l5 5-5 5M20 10H10a5 5 0 0 0 0 10h3', false, v.redoMark, !v.hasRedo)}
+      {item('layers', 'Layers', 'M12 4l8.5 4.5L12 13 3.5 8.5zM3.5 12.5L12 17l8.5-4.5M3.5 16.5L12 21l8.5-4.5', v.layersOpen, v.toggleLayers)}
       {item('clear', 'Clear the drawing', 'M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13', false, v.clearMarks)}
       {line}
       {item('turn', 'Turn the page to draw sideways', 'M20 11a8 8 0 1 0-2.3 5.7M20 4.5V11h-6.5', v.edTurned, v.turnView)}
@@ -1056,6 +1085,7 @@ function DrawPanel({ v }: { v: V }) {
       </div>
       <Slider name={v.penTool === 'eraser' ? 'Eraser size' : 'Size'} lbl={String(v.penSize)} min={1} max={40} step={1} value={v.penSize} onChange={v.onPenSize} />
       <Slider name={strength ? 'Strength' : 'Opacity'} lbl={`${v.penOpacity}%`} min={5} max={100} step={1} value={v.penOpacity} onChange={v.onPenOpacity} />
+      {v.layersOpen && <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}><span style={{ fontSize: 13 }}>Layers</span><LayersList v={v} /></div>}
     </div>
   );
 }
@@ -1073,6 +1103,30 @@ function PageButtons({ v, labels }: { v: V; labels?: boolean }) {
         {svg('M3.5 5.5h8v13h-8zM12.5 5.5h8v13h-8z')}{labels && 'Two pages'}
       </button>}
     </>
+  );
+}
+
+/** The layers, top first: show or hide, choose which one you draw on, its opacity; add one, delete one, clear one. */
+export function LayersList({ v, onDone }: { v: V; onDone?: () => void }) {
+  const eye = (on: boolean) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{on ? <><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" /><circle cx="12" cy="12" r="3" /></> : <><path d="M3 3l18 18M10.6 6a9.6 9.6 0 0 1 1.4-.1c6 0 9.5 6.1 9.5 6.1a16 16 0 0 1-2.6 3.3M6.6 6.7C4 8.3 2.5 12 2.5 12S6 18.5 12 18.5c1.6 0 3-.4 4.2-1" /></>}</svg>;
+  const small: CSSProperties = { padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {v.layers.map((l: V) => (
+        <div key={l.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', borderRadius: 6, border: `1px solid ${l.active ? INK : 'rgba(var(--ink-rgb),.15)'}`, background: l.active ? 'rgba(var(--ink-rgb),.05)' : 'none' }}>
+          <button onClick={l.toggle} aria-label={l.visible ? `Hide ${l.name}` : `Show ${l.name}`} aria-pressed={l.visible} style={{ ...small, width: 28, height: 28, opacity: l.visible ? 1 : 0.45 }}>{eye(l.visible)}</button>
+          <button onClick={l.pick} aria-pressed={l.active} style={{ ...small, justifyContent: 'flex-start', flex: '0 0 auto', minWidth: 64, font: `${l.active ? 600 : 500} 13px ${SANS}` }}>{l.name}</button>
+          <input type="range" min={0} max={100} step={1} value={l.opacity} onChange={l.onOpacity} aria-label={`${l.name} opacity`} style={{ flex: 1, minWidth: 0, accentColor: INK, height: 22 }} />
+          <span style={{ width: 34, textAlign: 'right', fontSize: 12, color: 'rgba(var(--ink-rgb),.6)' }}>{l.opacity}%</span>
+          {l.canRemove && <button onClick={l.remove} aria-label={`Delete ${l.name}`} className={hover(`color:${MARK}`)} style={{ ...small, width: 24, height: 24, fontSize: 18 }}>×</button>}
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+        <button onClick={v.addLayer} disabled={!v.canAddLayer} style={{ flex: 1, height: 34, border: '1px solid rgba(var(--ink-rgb),.3)', borderRadius: 2, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: v.canAddLayer ? 'pointer' : 'default', opacity: v.canAddLayer ? 1 : 0.4 }}>+ Add layer</button>
+        <button onClick={v.clearMarks} style={{ flex: 1, height: 34, border: '1px solid rgba(var(--ink-rgb),.3)', borderRadius: 2, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Clear layer</button>
+        {onDone && <button onClick={onDone} style={{ flex: 1, height: 34, border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Done</button>}
+      </div>
+    </div>
   );
 }
 
@@ -1104,12 +1158,16 @@ function DrawBar({ v, wheel, setWheel }: { v: V; wheel: boolean; setWheel: (f: (
       <div role="toolbar" aria-label={`Brushes · ${tool}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 3, border: '1px solid rgba(var(--ink-rgb),.15)', borderRadius: 13 }}>
         {DRAW_TOOLS.map(([k, l]) => <button key={k} onClick={() => v.setTool(k)} title={l} aria-label={l} aria-pressed={v.penTool === k} style={btn(v.penTool === k)}>{icon(BRUSH_ICONS[k])}</button>)}
         <span style={{ width: 1, height: 24, background: 'rgba(var(--ink-rgb),.15)', flexShrink: 0 }} />
-        <button onClick={v.undoMark} disabled={!v.hasMarks} title="Undo" aria-label="Undo" style={btn(false, !v.hasMarks)}>{icon('M9 5L4 10l5 5M4 10h10a5 5 0 0 1 0 10h-3')}</button>
-        <button onClick={v.clearMarks} title="Clear the drawing" aria-label="Clear the drawing" style={btn(false)}>{icon('M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13')}</button>
+        <button onClick={v.toggleLayers} title="Layers" aria-label="Layers" aria-pressed={v.layersOpen} style={btn(v.layersOpen)}>{icon('M12 4l8.5 4.5L12 13 3.5 8.5zM3.5 12.5L12 17l8.5-4.5M3.5 16.5L12 21l8.5-4.5')}</button>
       </div>
-      <div role="radiogroup" aria-label="Colour" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 3px', opacity: v.penNoColor ? 0.4 : 1 }}>
-        {swatches.map(c => <button key={c} role="radio" aria-checked={v.penColor === c} title={names[c] || c} aria-label={names[c] || c} onClick={() => v.setColor(c)} style={dot(c, v.penColor === c && !wheel)} />)}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 3px' }}>
+        <button onClick={v.undoMark} disabled={!v.hasMarks} title="Undo" aria-label="Undo" style={{ ...btn(false, !v.hasMarks), width: 32, height: 32 }}>{icon('M9 5L4 10l5 5M4 10h10a5 5 0 0 1 0 10h-3')}</button>
+        <button onClick={v.redoMark} disabled={!v.hasRedo} title="Redo" aria-label="Redo" style={{ ...btn(false, !v.hasRedo), width: 32, height: 32 }}>{icon('M15 5l5 5-5 5M20 10H10a5 5 0 0 0 0 10h3')}</button>
+        <span style={{ width: 1, height: 22, background: 'rgba(var(--ink-rgb),.15)', flexShrink: 0 }} />
+        <div role="radiogroup" aria-label="Colour" style={{ display: 'contents' }}>
+        {swatches.slice(0, 5).map(c => <button key={c} role="radio" aria-checked={v.penColor === c} title={names[c] || c} aria-label={names[c] || c} onClick={() => v.setColor(c)} style={{ ...dot(c, v.penColor === c && !wheel), opacity: v.penNoColor ? 0.4 : 1 }} />)}
         <button onClick={() => setWheel(w => !w)} title="Colour wheel" aria-label="Colour wheel" aria-expanded={wheel} style={dot('conic-gradient(red, yellow, lime, cyan, blue, magenta, red)', wheel)} />
+        </div>
         <button onClick={v.toggleEyedrop} title="Pick a colour from the page" aria-label="Pick a colour from the page" aria-pressed={v.edEyedrop} style={{ ...btn(v.edEyedrop), width: 32, height: 32, borderRadius: '50%', border: `1px solid ${v.edEyedrop ? INK : 'rgba(var(--ink-rgb),.25)'}` }}>{icon('M19.6 4.4a2.2 2.2 0 0 0-3.1 0l-2.3 2.3-1.1-1.1-1.5 1.5 5.3 5.3 1.5-1.5-1.1-1.1 2.3-2.3a2.2 2.2 0 0 0 0-3.1zM12.4 8.4l-7.2 7.2-.7 3.9 3.9-.7 7.2-7.2')}</button>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
