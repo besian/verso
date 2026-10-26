@@ -3,7 +3,6 @@
 // they're missing the app still runs, signed out and without community books.
 import { initializeApp } from 'firebase/app';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
-import { getAnalytics, isSupported as analyticsSupported, setAnalyticsCollectionEnabled } from 'firebase/analytics';
 import type { Analytics } from 'firebase/analytics';
 import { loadAnalytics } from './storage';
 import {
@@ -44,13 +43,16 @@ export const analyticsOffered = !!(app && config.measurementId && env.VITE_FIREB
 let analytics: Analytics | null = null;
 function startAnalytics() {
   if (!app || !config.measurementId) return;
-  if (analytics) return setAnalyticsCollectionEnabled(analytics, true);
-  analyticsSupported().then(ok => { if (ok) analytics = getAnalytics(app); }).catch(() => {});
+  // Loaded only once someone agrees, so nobody else downloads it.
+  import('firebase/analytics').then(async fa => {
+    if (analytics) return fa.setAnalyticsCollectionEnabled(analytics, true);
+    if (await fa.isSupported()) analytics = fa.getAnalytics(app);
+  }).catch(() => {});
 }
 /** Saves the visitor's choice: starts analytics, or stops it and removes its cookies. */
 export function analyticsConsent(on: boolean) {
   if (on) return startAnalytics();
-  if (analytics) setAnalyticsCollectionEnabled(analytics, false);
+  if (analytics) import('firebase/analytics').then(fa => fa.setAnalyticsCollectionEnabled(analytics!, false)).catch(() => {});
   for (const c of document.cookie.split(';').map(x => x.split('=')[0].trim()).filter(n => /^_ga/.test(n)))
     for (const domain of ['', location.hostname, '.' + location.hostname.replace(/^www\./, '')])
       document.cookie = `${c}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/${domain ? '; domain=' + domain : ''}`;

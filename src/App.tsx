@@ -1,4 +1,4 @@
-import { Component, createRef } from 'react';
+import { Component, Suspense, createRef, lazy } from 'react';
 import { flushSync } from 'react-dom';
 import type { ChangeEvent, DragEvent, MouseEvent, PointerEvent, ReactNode, WheelEvent } from 'react';
 import { CONFIG, GRID_WIDTH, MAX_MEDIUMS, MAX_TAGS, MEDIUMS, PALETTE, SHAPES, mediumKey, tagSlug } from './data';
@@ -31,10 +31,14 @@ import Stage from './views/Stage';
 import { findPage, fitPage } from './autofit';
 import type { Fit, Pt } from './autofit';
 import { AuthPage, BillingPage, Explore, HomeScreen, Profile, Settings } from './views/Screens';
-import { Admin, AuthAction, Legal, NotFound } from './views/Pages';
-import { Messages } from './views/Messages';
 import { CommentsPanel } from './views/Comments';
-import { ReplayPlayer } from './views/Replay';
+// Screens most visits never open are loaded when they're first shown, to keep the first load small.
+const Admin = lazy(() => import('./views/Pages').then(m => ({ default: m.Admin })));
+const AuthAction = lazy(() => import('./views/Pages').then(m => ({ default: m.AuthAction })));
+const Legal = lazy(() => import('./views/Pages').then(m => ({ default: m.Legal })));
+const NotFound = lazy(() => import('./views/Pages').then(m => ({ default: m.NotFound })));
+const Messages = lazy(() => import('./views/Messages').then(m => ({ default: m.Messages })));
+const ReplayPlayer = lazy(() => import('./views/Replay').then(m => ({ default: m.ReplayPlayer })));
 import { shareImage, sharePicture } from './shareImage';
 import { ArchiveModal, AskModal, CardModal, ConsentBar, CollectionModal, UnsavedBar, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
 
@@ -2986,12 +2990,14 @@ export default class App extends Component<object, State> {
         {v.isProfile && <Profile v={v} />}
         {v.isSettings && <Settings v={v} />}
         {v.isBilling && <BillingPage v={v} />}
-        {v.isLegal && <Legal v={v} />}
-        {v.isNotFound && <NotFound v={v} />}
-        {v.isAction && <AuthAction v={v} />}
-        {v.isAdminPage && <Admin v={v} />}
-        {v.isMessages && <Messages v={v} />}
-        {v.rpState && <ReplayPlayer v={v} />}
+        <Suspense fallback={null}>
+          {v.isLegal && <Legal v={v} />}
+          {v.isNotFound && <NotFound v={v} />}
+          {v.isAction && <AuthAction v={v} />}
+          {v.isAdminPage && <Admin v={v} />}
+          {v.isMessages && <Messages v={v} />}
+          {v.rpState && <ReplayPlayer v={v} />}
+        </Suspense>
         {v.cmOn && v.cmOpen && (v.isMine || v.isOther) && !v.editing && !v.managing && <CommentsPanel v={v} />}
         {v.reportOpen && <ReportModal v={v} />}
         {v.emOpen && <EmbedModal v={v} />}

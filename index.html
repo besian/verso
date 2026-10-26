@@ -21,11 +21,22 @@
 <script>try{var t=localStorage.getItem('sb-theme');if(t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<!-- Fonts load without holding up the first paint (they swap in when ready). -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet"></noscript>
+<style>
+  /* Shown straight from the HTML while the app loads; React replaces it. */
+  .boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #F4F1E9; }
+  .boot span { font: 400 46px/1 'Instrument Serif', Georgia, serif; letter-spacing: -.01em; color: #222320; animation: boot 1.6s ease-in-out infinite alternate; }
+  .boot b { font-weight: 400; color: #AD493A; }
+  :root[data-theme="dark"] .boot { background: #1A1B18; } :root[data-theme="dark"] .boot span { color: #ECE7DB; } :root[data-theme="dark"] .boot b { color: #D7705B; }
+  @keyframes boot { from { opacity: .55 } to { opacity: 1 } }
+  @media (prefers-reduced-motion: reduce) { .boot span { animation: none; } }
+</style>
 <link rel="stylesheet" href="/src/global.css">
 </head>
 <body>
-<div id="root"></div>
+<div id="root"><div class="boot" aria-label="Loading fletora"><span>fletora<b>.</b></span></div></div>
 <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>
