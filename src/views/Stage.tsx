@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { V } from '../App';
 import ClosedBook from '../ClosedBook';
@@ -34,8 +34,8 @@ function TopBar({ v }: { v: V }) {
       )}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: v.mNavGap }}>
         <button onClick={v.goHome} title="Home" style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', font: `400 30px/1 ${SERIF}`, letterSpacing: '-.01em', color: INK }}>fletora<span style={{ color: MARK }}>.</span></button>
-        {/* Phones, signed in: navigation lives in the tab bar at the bottom. */}
-        {!v.tabBar && <div style={{ display: 'flex', gap: v.mGap }}>
+        {/* Phones, signed in: navigation lives in the tab bar at the bottom; signed out, in the ☰ menu. */}
+        {!v.tabBar && !v.navCompact && <div style={{ display: 'flex', gap: v.mGap }}>
           <button onClick={v.goExplore} className={hover(`color:${MARK}`)} style={{ ...navLink, borderBottom: `1px solid ${v.navExLine}`, color: v.navExFg }}>Explore</button>
           {v.hasAcct && <button onClick={v.goMine} className={hover(`color:${MARK}`)} style={{ ...navLink, borderBottom: `1px solid ${v.navMineLine}`, color: v.navMineFg, whiteSpace: 'nowrap' }}>{v.navMineLbl}</button>}
           {v.promoPlus && <button onClick={v.openPlusPage} className={hover(`color:${MARK}`)} style={{ ...navLink, borderBottom: `1px solid ${v.navPlusLine}`, color: v.navPlusFg }}>Plus</button>}
@@ -48,12 +48,42 @@ function TopBar({ v }: { v: V }) {
         {v.hasAcct && <button onClick={v.openMe} title="Your profile" className={hover('transform:scale(1.06)')} style={{ width: 34, height: 34, flexShrink: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.22)', boxSizing: 'border-box', padding: 0, background: v.meAvBg, color: PAPER, font: `500 11px ${SANS}`, cursor: 'pointer', boxShadow: v.meRing }}>{v.meInit}</button>}
         {v.noAcct && (
           <>
-            <button onClick={v.openSignin} className={hover(`color:${MARK}`)} style={{ ...textBtn, padding: '0 6px 0 0' }}>Sign in</button>
+            {!v.navCompact && <button onClick={v.openSignin} className={hover(`color:${MARK}`)} style={{ ...textBtn, padding: '0 6px 0 0' }}>Sign in</button>}
             <button onClick={v.openMe} className={hover(`background:${MARK}`)} style={{ ...textBtn, padding: '0 14px', borderRadius: 2, background: INK, color: PAPER }}>Join</button>
+            {v.navCompact && <NavMenu v={v} />}
           </>
         )}
       </div>}
     </div>
+  );
+}
+
+/** Phones, signed out: Explore, Plus and Sign in behind one menu button, so the bar is just the logo and Join. */
+function NavMenu({ v }: { v: V }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    addEventListener('pointerdown', close); addEventListener('scroll', close, true);
+    return () => { removeEventListener('pointerdown', close); removeEventListener('scroll', close, true); };
+  }, [open]);
+  const item = (label: string, on: () => void, active = false) => (
+    <button key={label} role="menuitem" onClick={() => { setOpen(false); on(); }} className={hover('background:rgba(var(--ink-rgb),.06)')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '14px 16px', border: 'none', background: 'none', color: active ? MARK : INK, font: `500 15px ${SANS}`, cursor: 'pointer' }}>{label}</button>
+  );
+  return (
+    <span style={{ position: 'relative' }} onPointerDown={e => e.stopPropagation()}>
+      <button onClick={() => setOpen(o => !o)} aria-label="Menu" aria-haspopup="menu" aria-expanded={open} style={{ width: 40, height: 40, marginRight: -8, padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">{open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}</svg>
+      </button>
+      {open && (
+        <span role="menu" style={{ position: 'absolute', right: -8, top: 'calc(100% + 8px)', zIndex: 30, width: 220, padding: 6, background: PAPER, border: `1px solid ${INK}`, boxShadow: '0 14px 34px rgba(34,35,32,.16)' }}>
+          {item('Explore', v.goExplore, v.navExFg === INK)}
+          {v.promoPlus && item('Fletora Plus', v.openPlusPage, v.navPlusFg === INK)}
+          <span style={{ display: 'block', height: 1, margin: '4px 10px', background: 'rgba(var(--ink-rgb),.12)' }} />
+          {item('Sign in', v.openSignin)}
+        </span>
+      )}
+    </span>
   );
 }
 

@@ -2223,6 +2223,7 @@ export default class App extends Component<object, State> {
       newBook: this.openNewPick, stopPD: (e: PointerEvent) => e.stopPropagation(),
       vw: s.vw, isTouch: IS_TOUCH,
       tabBar: m && !!s.acct && mode !== 'auth' && !s.embed,
+      navCompact: m && !s.acct && !s.embed,
       embed: !!s.embed, embedHref: (() => { const o = other as OtherBook | null; return o ? `${location.origin}/@${o.handle}/${o.id}` : location.origin; })(),
       // Embed code for a public sketchbook.
       bkEmbed: () => { const o = other as OtherBook | null, mb = books[active]; const id = o?.id || mb?.id, title = o?.name || mb?.name; if (id && !id.startsWith('local')) this.setState({ embedFor: { id, title }, more: null }); },
