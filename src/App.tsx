@@ -25,6 +25,8 @@ import type { Paper } from './paper';
 import type { Wear } from './wear';
 import { INK, MARK, PAPER, STONE } from './theme';
 import Stage from './views/Stage';
+import { findPage, fitPage } from './autofit';
+import type { Fit, Pt } from './autofit';
 import { AuthPage, BillingPage, Explore, HomeScreen, Profile, Settings } from './views/Screens';
 import { Admin, AuthAction, Legal, NotFound } from './views/Pages';
 import { Messages } from './views/Messages';
@@ -53,6 +55,8 @@ interface EditState {
   marks: Mark[]; pen: Pen; pad: boolean; box?: { x: number; y: number };
   /** A new picture across two pages: the frame is two pages wide, and the picture is cut into a left and a right page. */
   spread?: boolean;
+  /** A new photo of a page: the page's corners found in it, and the settings that straighten and crop it to the frame. */
+  autoP?: Pt[] | null; auto?: Fit | null;
 }
 type EdMode = 'fit' | 'adjust' | 'write' | 'draw' | 'pick';
 
@@ -1182,8 +1186,19 @@ export default class App extends Component<object, State> {
     const im = new Image();
     // Stored pages are re-drawn to a canvas, so they must load with CORS (see cors.json).
     if (!isData(src)) im.crossOrigin = 'anonymous';
-    im.onload = () => { this.editImg = im; this.setState(s => s.edit ? { edit: { ...s.edit, nw: im.naturalWidth, nh: im.naturalHeight } } : null); };
+    im.onload = () => {
+      this.editImg = im; const e = this.state.edit, nw = im.naturalWidth, nh = im.naturalHeight;
+      // A new photo of a page is straightened and cropped to the frame straight away (Reset puts it back as taken).
+      const autoP = e && isData(src) && !e.target && !e.paper && e.replaceIdx == null ? findPage(im, nw, nh) : null;
+      this.setState(s => s.edit ? { edit: { ...s.edit, nw, nh, autoP } } : null, () => this.applyAuto());
+    };
     im.src = this.blobUrl(src);
+  }
+  /** Fits the found page to the frame (again after the frame changes shape). */
+  applyAuto() {
+    const e = this.state.edit; if (!e?.autoP || !e.nw) return;
+    const { fw, fh } = this.frame(), { bw, bh } = this.baseSize(), auto = fitPage(e.autoP, e.nw, e.nh, bw, bh, fw, fh);
+    this.setEd(auto ? { ...auto, auto } : { auto: null });
   }
   frame() {
     const { vw, vh } = this.state, a = this.edAspect();
@@ -1244,7 +1259,7 @@ export default class App extends Component<object, State> {
     const e = this.state.edit; if (!e) return; const i = e.i + 1;
     if (i >= e.queue.length || e.replaceIdx != null) { this.setState({ edit: null }); cancelAnimationFrame(this.raf); this.target = Math.round(this.target); this.setState({ p: this.target }); return; }
     // The next image keeps the same adjustments: a batch of scans usually needs the same fix.
-    this.setState({ edit: { ...e, i, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, ink: [], texts: [], sel: null, inkErr: '', marks: [], box: undefined, spread: false } }); this.loadEditImg(e.queue[i]);
+    this.setState({ edit: { ...e, i, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, ink: [], texts: [], sel: null, inkErr: '', marks: [], box: undefined, spread: false, autoP: null, auto: null } }); this.loadEditImg(e.queue[i]);
   }
 
   /** Write mode: send the handwriting to be read, and place the words where it was written. */
@@ -2060,13 +2075,16 @@ export default class App extends Component<object, State> {
       // Across two pages: only for a new picture (not a cover, profile photo, blank page or one being re-fitted).
       edCanSpread: !ed.target && ed.replaceIdx == null && !ed.paper, edSpread: !!ed.spread,
       edSpreadNote: isLeftPage(this.state.images.length) ? 'It’s cut at the dashed line onto two facing pages.' : 'It’s cut at the dashed line onto two facing pages. A blank page goes first, so they face each other.',
-      setSpread: (on: boolean) => this.setEd({ spread: on, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0 }),
+      setSpread: (on: boolean) => this.setState(s => ({ edit: { ...s.edit!, spread: on, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0 } }), () => this.applyAuto()),
       edTitle: ed.target === 'avatar' ? 'Profile photo' : ed.paper ? `${ed.paper[0].toUpperCase()}${ed.paper.slice(1)} page` : ed.target === 'cover' ? 'Cover image' : ed.replaceIdx != null ? `Edit page ${ed.replaceIdx + 1}` : `Image ${ed.i + 1} of ${ed.queue.length}`,
       scale: ed.scale, rot: ed.rot, skx: ed.skx, sky: ed.sky,
       scaleLbl: `${Math.round(ed.scale * 100)}%`, rotLbl: `${ed.rot}°`, skxLbl: `${ed.skx}°`, skyLbl: `${ed.sky}°`,
       onScale: num('scale'), onRot: num('rot'), onSkx: num('skx'), onSky: num('sky'),
       rot90: () => this.setEd({ rot: ((ed.rot + 90 + 180) % 360) - 180 }),
       resetEd: () => ed.mode === 'adjust' ? this.setEd({ adj: NO_ADJUST }) : this.setEd({ scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0 }),
+      // Straightened and cropped automatically: say so, with the way back (and back again).
+      edAuto: !!ed.auto, edAutoOn: !!ed.auto && (['scale', 'rot', 'skx', 'sky', 'tx', 'ty'] as const).every(k => ed[k] === ed.auto![k]),
+      autoFit: () => ed.auto && this.setEd({ ...ed.auto }),
       edMode: ed.mode, setEdMode: (mode: EdMode) => this.setEd({ mode, sel: null }), edBlank: !!ed.paper,
       ...this.drawVals(ed, fr),
       ...this.writeVals(ed, fr),

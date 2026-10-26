@@ -921,11 +921,20 @@ function MobileEditor({ v }: { v: V }) {
           {adjust ? <PeekBtn v={v} style={outline} /> : <button onClick={v.rot90} style={outline}>Rotate 90°</button>}
           <button onClick={v.resetEd} style={outline}>{adjust ? 'Reset colour' : 'Reset'}</button>
         </div>
+        {!adjust && <AutoNote v={v} />}
         </>}
         {!pick && <button onClick={v.applyEdit} style={{ height: 52, borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 16px ${SANS}`, cursor: 'pointer' }}>{v.applyLbl}</button>}
       </div>
     </div>
   );
+}
+
+/** After a photo of a page was straightened and cropped automatically: says so, and offers it again after a Reset or a change. */
+function AutoNote({ v }: { v: V }) {
+  if (!v.edAuto) return null;
+  return v.edAutoOn
+    ? <span style={{ fontSize: 12, lineHeight: 1.45, color: 'rgba(var(--ink-rgb),.6)' }}>Straightened and cropped to the page for you. Reset shows the photo as you took it.</span>
+    : <button onClick={v.autoFit} className={hover(`color:${MARK}`)} style={{ ...linkBtn(INK), alignSelf: 'flex-start', fontSize: 13 }}>Straighten and crop automatically</button>;
 }
 
 /** The page editor: Fit (crop, zoom, rotate, skew), Adjust (light and colour), Draw, and Write (handwriting to text). */
@@ -966,6 +975,7 @@ export function Editor({ v }: { v: V }) {
               <button onClick={v.rot90} style={outline}>Rotate 90°</button>
               <button onClick={v.resetEd} style={outline}>Reset</button>
             </div>
+            <AutoNote v={v} />
           </>
         )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
