@@ -56,7 +56,8 @@ export function Notice({ err, info }: { err?: string; info?: string }) {
 export function EditProfile({ v }: { v: V }) {
   const grid: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 14 };
   const save = <button onClick={v.pfSave} disabled={v.dBusy} style={{ height: v.notMob ? 44 : 40, padding: '0 22px', borderRadius: 2, border: 'none', background: MARK, color: PAPER, font: `500 ${v.notMob ? 14 : 15}px ${SANS}`, cursor: v.dBusy ? 'progress' : 'pointer', opacity: v.dBusy ? 0.6 : 1 }}>{v.dBusy ? 'Saving…' : 'Save'}</button>;
-  const fields = (
+  // You (picture, name, handle, bio), and how people reach you.
+  const you = (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         <div style={{ width: 80, height: 80, flexShrink: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.22)', boxSizing: 'border-box', background: v.dAvBg, color: PAPER, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 600 }}>{v.dInit}</div>
@@ -73,13 +74,16 @@ export function EditProfile({ v }: { v: V }) {
         <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Bio</span><span style={{ color: 'rgba(var(--ink-rgb),.5)' }}>{v.dBioCount}</span></div>
         <textarea value={v.dBio} onChange={v.onDBio} maxLength={160} rows={3} placeholder="What do you draw?" className={focusMark} style={{ ...field, height: undefined, padding: '12px 14px', font: `500 14px/1.45 ${SANS}`, resize: 'none' }} />
       </label>
+    </>
+  );
+  const reach = (
+    <>
       <div style={grid}>
         <TextField label="Location" value={v.dLoc} onChange={v.onDLoc} placeholder="City" />
         <TextField label="Website" value={v.dWeb} onChange={v.onDWeb} placeholder="yoursite.com" />
-        <TextField label="Contact email (shown on your profile)" value={v.dMail} onChange={v.onDMail} placeholder="hello@yoursite.com" type="email" />
       </div>
+      <TextField label="Contact email (shown on your profile)" value={v.dMail} onChange={v.onDMail} placeholder="hello@yoursite.com" type="email" />
       <SocialFields v={v} />
-      <Notice err={v.dErr} />
     </>
   );
   const account = (
@@ -100,15 +104,22 @@ export function EditProfile({ v }: { v: V }) {
         <span style={{ justifySelf: 'end' }}>{save}</span>
       </header>
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 16px calc(32px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 18 }}>
-        {fields}
+        {you}{reach}
+        <Notice err={v.dErr} />
         <div style={{ paddingTop: 16, borderTop: '1px solid rgba(var(--ink-rgb),.12)' }}>{account}</div>
       </div>
     </div>
   );
+  // Larger screens: two columns (you on the left, how to reach you on the right), so it fits without scrolling.
+  const col: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 };
   return (
-    <Modal onClose={v.pfClose} pad={v.mModalPad} maxWidth={520}>
-      <div style={heading}>Edit profile</div>
-      {fields}
+    <Modal onClose={v.pfClose} pad={v.mModalPad} maxWidth={860}>
+      <div style={{ ...heading, fontSize: 34 }}>Edit profile</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 32, alignItems: 'start' }}>
+        <div style={col}>{you}</div>
+        <div style={col}>{reach}</div>
+      </div>
+      <Notice err={v.dErr} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', paddingTop: 14, borderTop: '1px solid rgba(var(--ink-rgb),.12)' }}>
         {account}
         <button onClick={v.pfCancel} className={hoverTint} style={{ ...ghostBtn, height: 44, padding: '0 18px', fontSize: 14 }}>Cancel</button>

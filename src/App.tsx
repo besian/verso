@@ -15,7 +15,7 @@ import { currentPrompt } from './prompts';
 import { COVER_INSIDE, pageWear } from './wear';
 import { ADJUSTERS, NO_ADJUST, applyToCanvas, feValues, isAdjusted } from './adjust';
 import type { Adjust } from './adjust';
-import { LINE_H, drawTexts, inkPng, readInk, textFromInk, textWidth, wrapLines } from './handwriting';
+import { LINE_H, TEXT_INK, drawTexts, inkPng, readInk, textFromInk, textWidth, wrapLines } from './handwriting';
 import type { PageText, Stroke } from './handwriting';
 import { RULED, paperUrl } from './paper';
 import { MAX_SOCIALS, PLATFORM, PLATFORMS, cleanHandle, socialLinks } from './socials';
@@ -1366,7 +1366,11 @@ export default class App extends Component<object, State> {
       run: () => { if (!p.restore(d.snap)) this.toast('That drawing was for a different page shape.'); }, onNo: () => deleteDraft(key) });
   }
   async applyEdit() {
-    const e = this.state.edit, im = this.editImg; if (!e || !im || e.inkBusy) return;
+    // Handwriting not converted yet is converted first, so it isn't lost.
+    // If it can't be read (offline, or the month's conversions are used up), it's kept as handwriting.
+    if (!this.state.edit || this.state.edit.inkBusy) return;
+    if (this.state.edit.ink.length) { await this.convertInk(); await new Promise<void>(r => this.setState({}, r)); }
+    const e = this.state.edit, im = this.editImg; if (!e || !im) return;
     const { fh } = this.frame(), { bw, bh } = this.baseSize(), avatar = e.target === 'avatar';
     const detail = e.nh && bh ? Math.round(fh * e.nh / (bh * e.scale)) : PAGE_H;
     const outH = avatar ? 512 : !e.target && this.state.plus ? Math.max(PAGE_H, Math.min(PAGE_H_PLUS, detail)) : PAGE_H;
@@ -1377,6 +1381,11 @@ export default class App extends Component<object, State> {
     this.livePainter()?.drawOnto(ctx, outW, outH);
     if (this.livePainter()?.painted) deleteDraft(this.draftKey());
     await drawTexts(ctx, e.texts.filter(t => t.text.trim()), outW, outH);
+    if (e.ink.length) {
+      ctx.save(); ctx.strokeStyle = TEXT_INK; ctx.lineWidth = Math.max(2, outH * 0.0035); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      for (const st of e.ink) { ctx.beginPath(); for (let k = 0; k < st.length; k += 2) { const x = st[k] * outW, y = st[k + 1] * outH; if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); } if (st.length === 2) ctx.lineTo(st[0] * outW + 0.1, st[1] * outH); ctx.stroke(); }
+      ctx.restore();
+    }
     const images = [...this.state.images], replay = !e.target ? this.replayOf() : null;
     if (e.spread && e.replaceIdx == null && !e.target) {
       // Two pages: one picture cut down the middle, the halves kept together on facing pages.
@@ -2486,7 +2495,7 @@ export default class App extends Component<object, State> {
       // Straightened and cropped automatically: say so, with the way back (and back again).
       edAuto: !!ed.auto, edAutoOn: !!ed.auto && (['scale', 'rot', 'skx', 'sky', 'tx', 'ty'] as const).every(k => ed[k] === ed.auto![k]),
       autoFit: () => ed.auto && this.setEd({ ...ed.auto }),
-      edMode: ed.mode, setEdMode: (mode: EdMode) => { this.setEd({ mode, sel: null }); if (mode === 'draw') this.checkDraft(); }, edBlank: !!ed.paper,
+      edMode: ed.mode, setEdMode: (mode: EdMode) => { if (ed.mode === 'write' && mode !== 'write' && ed.ink.length && !ed.inkBusy) this.convertInk(); this.setEd({ mode, sel: null }); if (mode === 'draw') this.checkDraft(); }, edBlank: !!ed.paper,
       ...this.drawVals(ed),
       ...this.writeVals(ed, fr),
       edAdjTool: this.state.edAdjTool || 'white', setEdAdjTool: (t: string) => this.setState({ edAdjTool: t }),
