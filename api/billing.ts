@@ -22,6 +22,9 @@ const originOf = (req: Request) => {
 const BRANDING = { display_name: 'Fletora', background_color: '#F4F1E9', button_color: '#AD493A', border_style: 'rectangular' };
 // The product in Stripe whose monthly and yearly prices are offered.
 const PRODUCT = process.env.STRIPE_PRODUCT_NAME || 'Fletora Plus';
+const DAY = 86_400_000, TRIAL_DAYS = 14;
+/** Free trials are for accounts made from this day on. */
+const TRIAL_FROM = Date.parse('2026-10-26T00:00:00Z');
 const json = (status: number, body: object) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
 function admin() {
@@ -50,8 +53,9 @@ export async function POST(req: Request) {
   try {
     if (body.action === 'checkout') {
       const plan = body.plan === 'year' ? 'year' : 'month';
+      // A trial or a gift can be turned into a subscription; only paid Plus can't be bought twice.
       const plus = (await db.collection('plus').doc(uid).get()).data();
-      if (plus?.on && plus.until > Date.now()) return json(409, { error: 'already-plus' });
+      if (plus?.on && plus.paid && Number(plus.until) > Date.now()) return json(409, { error: 'already-plus' });
       const price = await priceFor(plan);
       if (!price) return json(503, { error: 'no-price' });
       const base = {
@@ -137,6 +141,21 @@ export async function POST(req: Request) {
       await stripe('POST', `customers/${bill.customer}`, { invoice_settings: { default_payment_method: pm } });
       if (bill.sub) await stripe('POST', `subscriptions/${bill.sub}`, { default_payment_method: pm });
       return json(200, { ok: true });
+    }
+    if (body.action === 'trial') {
+      // A new account's free trial: 14 days of Plus, no card, once per email address (kept as a hash, so the same
+      // address can't start another by making a new account). Only for accounts made since trials began.
+      const u = await auth.getUser(uid), made = Date.parse(u.metadata.creationTime || '');
+      if (!email || !made || made < TRIAL_FROM || Date.now() - made > 3 * DAY) return json(200, { ok: false, why: 'not-new' });
+      const key = db.collection('trials').doc(createHash('sha256').update(email.toLowerCase()).digest('hex')), ref = db.collection('plus').doc(uid);
+      const until = await db.runTransaction(async tx => {
+        const [t, p] = await Promise.all([tx.get(key), tx.get(ref)]);
+        if (t.exists || p.exists) return 0;
+        const end = Date.now() + TRIAL_DAYS * DAY;
+        tx.set(key, { at: Date.now() }); tx.set(ref, { on: true, until: end, trial: true, at: Date.now() });
+        return end;
+      });
+      return json(200, until ? { ok: true, until } : { ok: false, why: 'used' });
     }
     if (body.action === 'gift') {
       // Moderators only. A gift is plus/{uid} with gift: true and no subscription behind it; a paid subscription

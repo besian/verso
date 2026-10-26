@@ -176,6 +176,7 @@ const names = (l: { name: string; handle: string }[] = []) => {
 };
 const fmtDate = (d?: string) => { if (!d) return ''; const t = new Date(d + 'T12:00:00'); return isNaN(+t) ? '' : t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); };
 /** "Lisbon · 12 Mar 2026" */
+const fmtLong = (t: number) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 const noteText = (n?: PageNote) => [n?.c?.trim(), fmtDate(n?.d)].filter(Boolean).join(' · ');
 
 export default class App extends Component<object, State> {
@@ -270,7 +271,8 @@ export default class App extends Component<object, State> {
       this.setState(s => ({ acct: a, verified: acct ? false : !!u.verified, follows, saved, blocked, books, active: 0, images: books[0].images, p: 0, authReady: true, mode: this.routed && (s.mode === 'home' || s.mode === 'auth') ? 'mine' : s.mode }),
         () => { if (fresh || legacy) this.persist(books); this.backfillThumbs(); this.loadFollowFeed(); api.mirrorFollows(u.uid, follows).catch(e => console.warn('follower backfill', e));
           api.isAdmin(u.uid).then(admin => this.setState({ admin }, () => { if (admin && this.state.mode === 'admin') this.loadReports(); }));
-          if (this.pendingCheckout) this.confirmPlus(this.pendingCheckout); });
+          if (this.pendingCheckout) this.confirmPlus(this.pendingCheckout);
+          this.startTrial(u.uid); });
     } catch (e) {
       console.error(e);
       this.setState({ authReady: true });
@@ -478,6 +480,9 @@ export default class App extends Component<object, State> {
     if (me) want.set('ch:' + me, () => api.watchChats(me, chats => this.setState({ chats })));
     if (me) want.set('pl:' + me, () => api.watch(['plus', me], d => {
       const on = api.plusOn(d), info = api.plusInfo(d);
+      // In the trial's last two days, a reminder once a day.
+      const left = info.until - Date.now(), day = 'sb-trial-note-' + new Date().toISOString().slice(0, 10);
+      if (on && info.trial && left < 2 * 86_400_000) { try { if (!localStorage.getItem(day)) { localStorage.setItem(day, '1'); this.toast(`Your Plus trial ends ${fmtLong(info.until)}. Keep it in Account settings → Plan.`); } } catch { /* storage unavailable */ } }
       // Without Plus, link-only sketchbooks are private again (the server changes the stored ones).
       this.setState(st => ({ plus: on, myGift: on ? info : null, books: on ? st.books : st.books.map(b => b.linkOnly ? { ...b, linkOnly: false } : b) }));
     }));
@@ -532,6 +537,17 @@ export default class App extends Component<object, State> {
     this.setState({ mode: 'other', other: b, images: b.images, p: 0, focus: false, fz: 0 });
   }
   viewed = new Set<string>();
+  /** A new account's free 14-day trial of Plus: asked for once (the server decides), then welcomed. */
+  async startTrial(uid: string) {
+    if (!api.isNewAccount() || this.state.plus) return;
+    const key = 'sb-trial-' + uid; try { if (localStorage.getItem(key)) return; } catch { /* storage unavailable */ }
+    try {
+      const r = await api.startTrial(); try { localStorage.setItem(key, '1'); } catch { /* storage unavailable */ }
+      if (!r.ok || !r.until) return;
+      this.ask({ title: 'Plus is on, free for 14 days', yes: 'Start drawing', notice: true, run: () => {},
+        text: `Everything in Fletora Plus until ${fmtLong(r.until)}: unlimited sketchbooks, 300 pages each, PDFs, stats, link-only sketchbooks and more. No card needed. Afterwards you’re back on the free plan, and nothing you’ve made is deleted.` });
+    } catch (e) { console.warn('trial', e); }
+  }
   setMature(on: boolean, then?: () => void) { store.saveMature(on); api.setShowMature(on); this.setState({ showMature: on }, () => { this.loadCommunity(); then?.(); }); }
   pendingCheckout: string | null = null;
   confirmPlus(session: string | null) {
@@ -1457,7 +1473,9 @@ export default class App extends Component<object, State> {
         finally { this.setState({ giftBusy: false }); }
       },
       // The Fletora Plus sheet.
-      plOpen: s.plusFor != null && !!a, plReason: (s.plusFor && REASONS[s.plusFor]) || '', plHave: !!s.plus,
+      plOpen: s.plusFor != null && !!a, plHave: !!s.plus && !s.myGift?.trial,
+      // On a trial: when it ends, and the plans to keep Plus.
+      plReason: s.plus && s.myGift?.trial ? `Your free trial ends ${fmtLong(s.myGift.until)}. Choose a plan to keep Plus.` : (s.plusFor && REASONS[s.plusFor]) || '',
       plPerks: PERKS.map(([t, n]) => ({ key: t, title: t, note: n })),
       plPlan: s.plusPlan || 'year', plSetPlan: (k: 'month' | 'year') => this.setState({ plusPlan: k }),
       plPlans: ([['month', 'Monthly', `${PRICE.month} a month`], ['year', 'Yearly', `${PRICE.year} a year · save ${YEAR_SAVING}`]] as const).map(([k, l, n]) => ({ key: k, label: l, note: n })),
@@ -1672,9 +1690,14 @@ export default class App extends Component<object, State> {
       ...(() => {
         const b = s.bill, end = b?.periodEnd ? new Date(b.periodEnd).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
         // Plus from Fletora: given by a moderator, or turned on in Firebase by hand (no subscription behind it).
-        const live = ['active', 'trialing', 'past_due'].includes(b?.status || ''), gift = !!s.plus && !!s.myGift && (s.myGift.gift || (s.bill !== undefined && !live));
+        const live = ['active', 'trialing', 'past_due'].includes(b?.status || ''), trial = !!s.plus && !!s.myGift?.trial && !live;
+        const gift = !trial && !!s.plus && !!s.myGift && (s.myGift.gift || (s.bill !== undefined && !live));
+        const daysLeft = trial && s.myGift ? Math.max(1, Math.ceil((s.myGift.until - Date.now()) / 86_400_000)) : 0;
         return {
           acPlus: !!s.plus, acHasBilling: !!b,
+          // The free trial: days left, and a way to keep Plus.
+          acTrial: trial, acTrialLine: trial && s.myGift ? `Free trial of Fletora Plus · ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left (until ${fmtLong(s.myGift.until)}). No card on file.` : '',
+          keepPlus: () => this.openPlus('trial'),
           acGift: gift, acGiftLine: gift && s.myGift ? (s.myGift.forever || s.myGift.until > Date.UTC(2099, 0) ? 'Fletora Plus, from Fletora. It’s yours for good, no payment needed.' : `Fletora Plus, from Fletora, until ${new Date(s.myGift.until).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}. No payment needed.`) : '',
           acPlan: !s.plus ? 'You’re on the free plan.' : gift ? 'Fletora Plus, from Fletora.' : `Fletora Plus${b?.interval ? ` · ${b.interval === 'year' ? 'yearly' : 'monthly'}` : ''}${end ? (b?.renews ? ` · renews ${end}` : ` · ends ${end}`) : ''}.`,
           acPastDue: b?.status === 'past_due',

@@ -159,6 +159,20 @@ viewer is signed in and has turned on **Show Mature sketchbooks** (Account setti
    prefix `pending/` older than 1 day (leftovers from uploads that were interrupted).
 5. Cost: about a cent per picture checked. Set a monthly spend limit in the Anthropic console.
 
+## Free trial and the daily job
+
+New accounts (made from 26 October 2026) get Fletora Plus free for 14 days, with no card: the app asks
+`api/billing` (`trial`) once, and the server checks the account is new and the email hasn't had a trial before
+(`trials/{sha256(email)}`, kept for good). `plus/{uid}` then has `trial: true`.
+
+`api/cron.ts` runs once a day (vercel.json → crons). It emails people whose trial ends within two days (once), and
+switches off Plus that has run out without a subscription (trials, gifts, Plus set by hand), making their link-only
+sketchbooks private. Paid Plus is left to the Stripe webhook.
+
+1. Vercel → Settings → Environment Variables → add `CRON_SECRET` (any long random string). Vercel sends it to the
+   job; without it the job refuses to run.
+2. Redeploy. The job appears under Vercel → your project → Settings → Cron Jobs.
+
 ## Messages
 
 Direct messages live in `chats/{a}_{b}` (and `chats/…/messages`), with a daily limit on new conversations in

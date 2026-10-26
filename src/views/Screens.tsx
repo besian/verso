@@ -590,9 +590,9 @@ export function Settings({ v }: { v: V }) {
           </span>
         </div>
         {(v.acErr || v.acInfo) && <Notice err={v.acErr} info={v.acInfo} />}
-        <SettingsSection title="Plan" note={v.acGift ? 'A gift from Fletora: everything in Plus, free.' : v.acPlus ? 'Your plan, card and receipts are on the billing page.' : 'Plus adds unlimited sketchbooks, link-only sketchbooks, stats, more handwriting and more.'}>
-          <span style={{ fontSize: 14, lineHeight: 1.5, color: v.acPastDue ? MARK : INK }}>{v.acGift ? v.acGiftLine : v.acPastDue ? 'Your last payment didn’t go through. Update your card to keep Plus.' : v.acPlan}</span>
-          {v.acGift ? <button onClick={v.seePlus} className={hoverLine} style={{ ...underlineBtn(14), alignSelf: 'flex-start' }}>What’s included</button>
+        <SettingsSection title="Plan" note={v.acTrial ? 'Everything in Plus, free while the trial lasts. Afterwards you’re back on the free plan, and nothing you’ve made is deleted.' : v.acGift ? 'A gift from Fletora: everything in Plus, free.' : v.acPlus ? 'Your plan, card and receipts are on the billing page.' : 'Plus adds unlimited sketchbooks, link-only sketchbooks, stats, more handwriting and more.'}>
+          <span style={{ fontSize: 14, lineHeight: 1.5, color: v.acPastDue ? MARK : INK }}>{v.acTrial ? v.acTrialLine : v.acGift ? v.acGiftLine : v.acPastDue ? 'Your last payment didn’t go through. Update your card to keep Plus.' : v.acPlan}</span>
+          {v.acTrial ? <button onClick={v.keepPlus} style={formBtn()}>Keep Plus</button> : v.acGift ? <button onClick={v.seePlus} className={hoverLine} style={{ ...underlineBtn(14), alignSelf: 'flex-start' }}>What’s included</button>
             : v.acPlus ? <button onClick={v.openBilling} style={formBtn()}>Manage billing</button> : <button onClick={v.seePlus} style={formBtn()}>See Plus</button>}
         </SettingsSection>
         <SettingsSection title="Email" note={v.acVerified ? 'Your email is confirmed.' : <>Not confirmed yet. Open the link we sent to <b style={{ fontWeight: 600 }}>{v.acEmail}</b>.</>}>
@@ -672,9 +672,9 @@ export function BillingPage({ v }: { v: V }) {
   if (!v.acPlus || !v.bdShow) return (
     <div style={screen()}><div style={{ ...pagePad(mob), display: 'flex', flexDirection: 'column', gap: 32, minHeight: '100%', paddingBottom: 20 }}>
       {head}
-      <SettingsSection title="Plan" note={v.acGift ? 'A gift from Fletora. There’s nothing to pay and no card on file.' : undefined}>
-        <span style={{ fontSize: 14, lineHeight: 1.5 }}>{v.acGift ? v.acGiftLine : v.acPlan}</span>
-        <button onClick={v.seePlus} style={formBtn()}>{v.acGift ? 'What’s included' : 'See Plus'}</button>
+      <SettingsSection title="Plan" note={v.acGift ? 'A gift from Fletora. There’s nothing to pay and no card on file.' : v.acTrial ? 'A free trial. There’s nothing to pay and no card on file.' : undefined}>
+        <span style={{ fontSize: 14, lineHeight: 1.5 }}>{v.acTrial ? v.acTrialLine : v.acGift ? v.acGiftLine : v.acPlan}</span>
+        <button onClick={v.acTrial ? v.keepPlus : v.seePlus} style={formBtn()}>{v.acTrial ? 'Keep Plus' : v.acGift ? 'What’s included' : 'See Plus'}</button>
       </SettingsSection>
       <SiteFooter v={v} />
     </div></div>

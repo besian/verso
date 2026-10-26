@@ -731,13 +731,13 @@ const untilMs = (u: unknown): number => typeof u === 'number' ? u : typeof u ===
 export const plusOn = (d: DocumentData | null) => !!d && d.on === true && untilMs(d.until) > Date.now();
 /** Someone's Plus: whether it's on, and if it was given by Fletora (a gift) rather than paid for, until when. */
 /** `paid`: from a subscription. `gift`: given by a moderator. Neither: switched on by hand in the Firebase console. */
-export interface PlusInfo { on: boolean; gift: boolean; paid: boolean; until: number; forever: boolean }
-export const plusInfo = (d: DocumentData | null): PlusInfo => ({ on: plusOn(d), gift: !!d?.gift, paid: !!d?.paid, until: untilMs(d?.until), forever: !!d?.forever });
+export interface PlusInfo { on: boolean; gift: boolean; paid: boolean; trial: boolean; until: number; forever: boolean }
+export const plusInfo = (d: DocumentData | null): PlusInfo => ({ on: plusOn(d), gift: !!d?.gift, paid: !!d?.paid, trial: !!d?.trial, until: untilMs(d?.until), forever: !!d?.forever });
 export async function getPlus(uid: string): Promise<PlusInfo> {
   try { return plusInfo((await getDoc(doc(need().db, 'plus', uid))).data() || null); } catch { return plusInfo(null); }
 }
 
-type BillingAction = 'checkout' | 'portal' | 'sync' | 'close' | 'details' | 'cancel' | 'resume' | 'switch' | 'card' | 'card-done' | 'gift';
+type BillingAction = 'checkout' | 'portal' | 'sync' | 'close' | 'details' | 'cancel' | 'resume' | 'switch' | 'card' | 'card-done' | 'gift' | 'trial';
 /** Calls api/billing: a Stripe page to go to (url), a checkout or card form for our page (clientSecret, ui), or data. */
 async function billing<T = { url?: string; clientSecret?: string; ui?: 'elements' | 'embedded'; plus?: boolean; refused?: string[] }>(action: BillingAction, extra: object = {}): Promise<T> {
   const u = need().auth.currentUser; if (!u) throw Object.assign(new Error('signed out'), { code: 'auth/no-current-user' });
@@ -770,6 +770,10 @@ export const cardSetup = async () => (await billing<{ clientSecret: string }>('c
 export const cardDone = (setup: string) => billing<{ ok: boolean }>('card-done', { setup });
 /** Moderators: give someone Plus for some months (0 = for good), or take a gift back. */
 export const giftPlus = (target: string, months: number) => billing<{ ok: boolean }>('gift', { target, months });
+/** Starts a new account's free 14-day trial of Plus (the server checks it's new and hasn't had one). */
+export const startTrial = () => billing<{ ok: boolean; until?: number }>('trial');
+/** Whether the signed-in account was made in the last three days (only those can start a trial). */
+export const isNewAccount = () => { const t = Date.parse(auth?.currentUser?.metadata.creationTime || ''); return !!t && Date.now() - t < 3 * 86_400_000; };
 export const ungiftPlus = (target: string) => billing<{ ok: boolean }>('gift', { target, remove: true });
 
 /** Where a view came from, for the owner's stats. */
