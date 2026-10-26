@@ -897,8 +897,14 @@ export default class App extends Component<object, State> {
     this.setState({ pdfBusy: `0/${b.images.length}` });
     try {
       const { makePdf } = await import('./pdf');
-      const blob = await makePdf(b.name, `by ${b.owner?.name || s.acct?.name || ''}`, b.images.map(u => ({ url: this.blobUrl(u), note: noteText(b.notes?.[u]) })),
-        (d, n) => this.setState({ pdfBusy: `${d}/${n}` }), await api.idToken());
+      // Blank pages that only keep spreads on facing pages are left out; a spread's halves go on one page.
+      const sp = b.spreads || {}, rights = new Set(Object.values(sp)), handle = b.owner?.handle || s.acct?.handle || '';
+      const pages = b.images.filter(u => !b.fillers?.[u] && !rights.has(u))
+        .map(u => ({ url: this.blobUrl(u), caption: b.notes?.[u]?.c || '', date: b.notes?.[u]?.d || '', ...(sp[u] ? { right: this.blobUrl(sp[u]) } : {}) }));
+      const blob = await makePdf({
+        title: b.name || 'sketchbook', artist: `by ${b.owner?.name || s.acct?.name || ''}`, color: b.color, cover: b.coverImg ? this.blobUrl(b.coverImg) : null, mediums: b.mediums,
+        link: handle && !b.id.startsWith('local') ? `fletora.studio/@${handle}/${b.id}` : 'fletora.studio',
+      }, pages, (d, n) => this.setState({ pdfBusy: `${d}/${n}` }), await api.idToken());
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${(b.name || 'sketchbook').replace(/[\\/:*?"<>|]+/g, ' ').trim()}.pdf`;
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
     } catch (e) { console.error('pdf', e); this.toast(`Couldn’t make the PDF (${(e as Error).message || 'unknown error'}). Try again.`); }
