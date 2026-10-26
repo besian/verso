@@ -1223,8 +1223,14 @@ export default class App extends Component<object, State> {
       const autoP = e && isData(src) && !e.target && !e.paper && e.replaceIdx == null ? findPage(im, nw, nh) : null;
       this.setState(s => s.edit ? { edit: { ...s.edit, nw, nh, autoP } } : null, () => this.applyAuto());
     };
-    im.src = this.blobUrl(src);
+    im.onerror = () => { if (this.state.edit && this.editSrc === src) this.toast('Couldn’t open that page to edit. Try again.'); };
+    // A stored page is read fresh as a file (or through fletora.studio, as Download does): the copy the browser
+    // kept from showing the book has no CORS headers, which would leave the canvas unreadable and Save failing.
+    this.editSrc = src; this.editImg = undefined;
+    if (/^https?:/.test(src)) api.pageBlob(src).then(b => { if (this.editSrc === src) { im.removeAttribute('crossorigin'); im.src = URL.createObjectURL(b); } }, () => { if (this.editSrc === src) im.src = this.blobUrl(src); });
+    else im.src = this.blobUrl(src);
   }
+  editSrc = '';
   /** Fits the found page to the frame (again after the frame changes shape). */
   applyAuto() {
     const e = this.state.edit; if (!e?.autoP || !e.nw) return;
@@ -1370,7 +1376,8 @@ export default class App extends Component<object, State> {
     // If it can't be read (offline, or the month's conversions are used up), it's kept as handwriting.
     if (!this.state.edit || this.state.edit.inkBusy) return;
     if (this.state.edit.ink.length) { await this.convertInk(); await new Promise<void>(r => this.setState({}, r)); }
-    const e = this.state.edit, im = this.editImg; if (!e || !im) return;
+    const e = this.state.edit, im = this.editImg; if (!e) return;
+    if (!im) return this.toast('The page is still loading. Try again in a moment.');
     const { fh } = this.frame(), { bw, bh } = this.baseSize(), avatar = e.target === 'avatar';
     const detail = e.nh && bh ? Math.round(fh * e.nh / (bh * e.scale)) : PAGE_H;
     const outH = avatar ? 512 : !e.target && this.state.plus ? Math.max(PAGE_H, Math.min(PAGE_H_PLUS, detail)) : PAGE_H;
@@ -1395,7 +1402,9 @@ export default class App extends Component<object, State> {
       if (replay) this.pendingReplays.set(l, replay);
       this.setImages([...images, l, r], { spreads: { ...cur.spreads, [l]: r } }); this.nextEdit(); return;
     }
-    const url = c.toDataURL('image/jpeg', 0.9);
+    let url = '';
+    try { url = c.toDataURL('image/jpeg', 0.9); }
+    catch (err) { console.error('save page', err); return this.toast('Couldn’t save that page. Close the editor and try again.'); }
     if (e.target === 'cover') { this.updateBook({ coverImg: url }); this.setState({ edit: null }); return; }
     if (avatar) { this.setState(st => ({ edit: null, draft: st.draft ? { ...st.draft, av: url } : st.draft })); return; }
     if (replay) this.pendingReplays.set(url, replay);
