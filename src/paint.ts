@@ -196,7 +196,7 @@ export class Painter {
     if (x1 < x0 || y1 < y0) return;
     this.grow(x0, y0, x1 + 1, y1 + 1, true);
     // Soft round brush: full strength in the middle, fading over the outer part.
-    const hard = tool === 'oil' ? 0.55 : tool === 'eraser' ? 0.5 : 0.25, fall = (d: number) => d >= 1 ? 0 : d <= hard ? 1 : 1 - (d - hard) / (1 - hard);
+    const hard = tool === 'oil' ? 0.3 : tool === 'eraser' ? 0.5 : tool === 'water' ? 0.05 : 0.25, fall = (d: number) => d >= 1 ? 0 : d <= hard ? 1 : 1 - (d - hard) / (1 - hard);
     if (tool === 'eraser') {
       const k = o * (0.4 + 0.6 * p);
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
@@ -215,12 +215,14 @@ export class Painter {
       // What was there before this stroke is still wet: the new colour mixes into it, as it would on paper.
       const under = this.average(cx, cy, r);
       if (tool === 'oil') {
-        this.res = pigment(this.res, under, 0.04 * (1 - this.load * 0.5)); this.load *= 0.994;
-        flow = o * (0.35 + 0.65 * this.load) * (0.5 + 0.5 * p); paint = pigment(this.res, under, 0.3);
-      } else { this.res = pigment(this.res, under, 0.02); flow = o * 0.3 * (0.4 + 0.6 * p); paint = pigment(under, this.res, 0.5); }
+        // Oil is never laid down pure: it always takes in some of the wet paint it goes over, and more as it runs out.
+        this.res = pigment(this.res, under, 0.08 * (1 - this.load * 0.5)); this.load *= 0.993;
+        flow = o * (0.45 + 0.45 * this.load) * (0.6 + 0.4 * p); paint = pigment(this.res, under, 0.35);
+      } else { this.res = pigment(this.res, under, 0.05); flow = o * 0.28 * (0.4 + 0.6 * p); paint = pigment(under, this.res, 0.5); }
     }
     // How much of the carried patch is wiped down, and how much of the page the patch then takes up.
-    const smear = tool === 'blend' ? o * (0.55 + 0.4 * p) : tool === 'oil' ? 0.75 * (1 - this.load * 0.6) : 0.35, pick = tool === 'blend' ? 0.3 : tool === 'oil' ? 0.22 : 0.35;
+    // Oil and watercolour drag colour along as they go (watercolour bleeds furthest), so neighbouring colours run together.
+    const smear = tool === 'blend' ? o * (0.55 + 0.4 * p) : tool === 'oil' ? 0.45 + 0.35 * (1 - this.load) : 0.4, pick = tool === 'blend' ? 0.3 : tool === 'oil' ? 0.3 : 0.55;
     const cs = Math.cos(ang), sn = Math.sin(ang), br = this.bristle!;
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       let w = fall(Math.hypot(x - cx, y - cy) / r); if (!w) continue;
