@@ -19,11 +19,10 @@
 <meta name="apple-mobile-web-app-title" content="fletora">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <script>try{var t=localStorage.getItem('sb-theme');if(t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<!-- Fonts load without holding up the first paint (they swap in when ready). -->
-<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" onload="this.onload=null;this.rel='stylesheet'">
-<noscript><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet"></noscript>
+<!-- Fonts are served from the site itself (public/fonts, made by scripts/getfonts.py); the two the first screen uses load first. -->
+<link rel="preload" as="font" type="font/woff2" href="/fonts/instrument-serif-13-latin.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="/fonts/geist-9-latin.woff2" crossorigin>
+<link rel="stylesheet" href="/fonts/fonts.css">
 <style>
   /* Shown straight from the HTML while the app loads; React replaces it. */
   .boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #F4F1E9; }

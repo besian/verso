@@ -1,12 +1,41 @@
 {
-  "functions": { "api/image.ts": { "maxDuration": 60 } },
-  "crons": [{ "path": "/api/cron", "schedule": "23 9 * * *" }],
+  "functions": {
+    "api/image.ts": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron",
+      "schedule": "23 9 * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/:path(@.*)",
-      "has": [{ "type": "header", "key": "user-agent", "value": "(?i).*(bot|crawler|spider|facebookexternalhit|facebot|twitterbot|slackbot|discordbot|whatsapp|telegrambot|linkedinbot|embedly|pinterest|skypeuripreview|redditbot|applebot|iframely|vkshare|bluesky|mastodon).*" }],
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|facebookexternalhit|facebot|twitterbot|slackbot|discordbot|whatsapp|telegrambot|linkedinbot|embedly|pinterest|skypeuripreview|redditbot|applebot|iframely|vkshare|bluesky|mastodon).*"
+        }
+      ],
       "destination": "/api/meta?path=/:path"
     },
-    { "source": "/((?!assets/|api/).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!assets/|api/).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/fonts/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=2592000"
+        }
+      ]
+    }
   ]
 }

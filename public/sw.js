@@ -1,7 +1,7 @@
 // fletora. service worker: makes the site installable and quick to reopen.
 // Pages: network first, falling back to the cached app when offline.
 // Built assets (hashed names) and page images (immutable URLs): cache first.
-const VERSION = 'v3', APP = 'verso-app-' + VERSION, IMG = 'verso-img-' + VERSION, MAX_IMAGES = 400;
+const VERSION = 'v4', APP = 'verso-app-' + VERSION, IMG = 'verso-img-' + VERSION, MAX_IMAGES = 400;
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(APP).then(c => c.addAll(['/', '/manifest.webmanifest', '/icons/icon-192.png'])).then(() => self.skipWaiting()));
@@ -27,7 +27,7 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   if (req.mode === 'navigate') {
     e.respondWith(fetch(req).then(res => { const copy = res.clone(); caches.open(APP).then(c => c.put('/', copy)); return res; }).catch(() => caches.match('/')));
-  } else if (url.origin === location.origin && (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/'))) {
+  } else if (url.origin === location.origin && (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/') || url.pathname.startsWith('/fonts/'))) {
     e.respondWith(cacheFirst(req, APP));
   } else if (url.hostname === 'firebasestorage.googleapis.com' && url.searchParams.get('alt') === 'media') {
     e.respondWith(cacheFirst(req, IMG));
