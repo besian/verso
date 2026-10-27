@@ -30,7 +30,7 @@ function Kicker() {
  *  then a shelf of community sketchbooks along the bottom. */
 /** The home shelf's open book: a spread that turns its own pages, slowly, so the first thing visitors see is a
  *  sketchbook being leafed through. Still (an open spread) for people who prefer reduced motion. */
-function TurningBook({ pages, board }: { pages: string[]; board: string }) {
+export function TurningBook({ pages, board }: { pages: string[]; board: string }) {
   const [i, setI] = useState(0), [turning, setTurning] = useState(false), n = pages.length;
   const reduce = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   useEffect(() => {
@@ -88,8 +88,8 @@ export function HomeScreen({ v }: { v: V }) {
               <div onClick={signedOut ? v.openMe : v.startOwn} className={hover(`border-color:${MARK};color:${MARK}`)} style={{ width: Math.round(v.hmShelfH * 0.72), height: v.hmShelfH, boxSizing: 'border-box', border: '2px dashed rgba(var(--ink-rgb),.35)', borderBottom: 'none', borderRadius: '2px 8px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 12, cursor: 'pointer', color: 'rgba(var(--ink-rgb),.7)', font: `400 ${mob ? 17 : 20}px/1.1 ${SERIF}` }}>Your sketchbook<br />goes here</div>
             )}
             {v.hmShelf.map((sh: V) => (
-              <div key={sh.key} onClick={sh.open} title={sh.title} className={hover('transform:translateY(-12px)')} style={{ position: 'relative', flexShrink: 0, width: sh.w, height: sh.h, transform: `rotate(${sh.demo ? 0 : sh.rot}deg)`, transformOrigin: '50% 100%', cursor: 'pointer', transition: 'transform .5s cubic-bezier(.2,.8,.2,1)' }}>
-                {sh.demo ? <TurningBook pages={sh.demo} board={sh.color} /> : <ClosedBook size="sm" bg={sh.bg} board={sh.color} label={sh.showLabel ? sh.name : null} labelStyle={{ padding: '6px 8px', font: `400 ${sh.fs}px/1.1 ${SERIF}` }} />}
+              <div key={sh.key} onClick={sh.open} title={sh.title} className={hover('transform:translateY(-12px)')} style={{ position: 'relative', flexShrink: 0, width: sh.w, height: sh.h, transform: `rotate(${sh.rot}deg)`, transformOrigin: '50% 100%', cursor: 'pointer', transition: 'transform .5s cubic-bezier(.2,.8,.2,1)' }}>
+                <ClosedBook size="sm" bg={sh.bg} board={sh.color} label={sh.showLabel ? sh.name : null} labelStyle={{ padding: '6px 8px', font: `400 ${sh.fs}px/1.1 ${SERIF}` }} />
                 {sh.isPick && <span style={{ position: 'absolute', left: '50%', top: -11, transform: 'translateX(-50%)', padding: '3px 8px', borderRadius: 10, background: MARK, color: '#F6F2E8', font: `600 9px/1.2 ${SANS}`, letterSpacing: '.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,.2)' }}>Staff pick</span>}
               </div>
             ))}
