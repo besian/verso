@@ -325,7 +325,8 @@ export default class App extends Component<object, State> {
       return this.setState({ acct: null, follows: [], saved: [], blocked: [], followFeed: [], followPeople: [], books: [localBook()], active: 0, images: [], p: 0, authReady: true, admin: false, plus: undefined, bill: null });
     }
     try {
-      const a = acct || await api.ensureProfile(u);
+      // A brand-new Google account: welcomed like one made with an email address (see the join form).
+      const { created, ...a }: Account & { created?: boolean } = acct || await api.ensureProfile(u);
       const [docs, follows, saved, blocked] = await Promise.all([api.userBooks(u.uid), api.following(u.uid), api.savedBooks(u.uid).catch(() => []), api.blockedUsers(u.uid).catch(() => [])]);
       let books = docs.map(d => api.toBook(d, u.uid));
       // Books saved before visibility existed are re-saved once so they get the field (and stay in Explore).
@@ -340,7 +341,8 @@ export default class App extends Component<object, State> {
         () => { if (fresh || legacy) this.persist(books); this.backfillThumbs(); this.restoreUnsaved(u.uid, docs); this.loadFollowFeed(); api.mirrorFollows(u.uid, follows).catch(e => console.warn('follower backfill', e));
           api.isAdmin(u.uid).then(admin => this.setState({ admin }, () => { if (admin && this.state.mode === 'admin') this.loadReports(); }));
           if (this.pendingCheckout) this.confirmPlus(this.pendingCheckout);
-          this.startTrial(u.uid); });
+          this.startTrial(u.uid);
+          if (created) { this.setState({ su: null, welcome: true }); this.openProfile(null, true); } });
     } catch (e) {
       console.error(e);
       this.setState({ authReady: true });
@@ -502,6 +504,7 @@ export default class App extends Component<object, State> {
     }
   }
   componentDidUpdate(_: object, prev: State) {
+    if (prev.welcome && !this.state.welcome && this.trialUntil) this.trialNote(this.trialUntil);
     // Animation frames change only where the book is; the full render after them catches up on the rest.
     if (this.inFrame) return;
     const s = this.state;
@@ -634,9 +637,16 @@ export default class App extends Component<object, State> {
     try {
       const r = await api.startTrial(); try { localStorage.setItem(key, '1'); } catch { /* storage unavailable */ }
       if (!r.ok || !r.until) return;
-      this.ask({ title: 'Plus is on, free for 14 days', yes: 'Start drawing', notice: true, run: () => {},
-        text: `Everything in Fletora Plus until ${fmtLong(r.until)}: unlimited sketchbooks, 300 pages each, PDFs, stats, link-only sketchbooks and more. No card needed. Afterwards you’re back on the free plan, and nothing you’ve made is deleted.` });
+      this.trialNote(r.until);
     } catch (e) { console.warn('trial', e); }
+  }
+  /** Says Plus is on; after the welcome, if that's showing (a new Google account gets both at once). */
+  trialUntil = 0;
+  trialNote(until: number) {
+    if (this.state.welcome) { this.trialUntil = until; return; }
+    this.trialUntil = 0;
+    this.ask({ title: 'Plus is on, free for 14 days', yes: 'Start drawing', notice: true, run: () => {},
+        text: `Everything in Fletora Plus until ${fmtLong(until)}: unlimited sketchbooks, 300 pages each, PDFs, stats, link-only sketchbooks and more. No card needed. Afterwards you’re back on the free plan, and nothing you’ve made is deleted.` });
   }
   setMature(on: boolean, then?: () => void) { store.saveMature(on); api.setShowMature(on); this.setState({ showMature: on, ...(on ? {} : { matureOnly: false }) }, () => { this.loadCommunity(); then?.(); }); }
   pendingCheckout: string | null = null;

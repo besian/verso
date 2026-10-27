@@ -211,7 +211,8 @@ async function writeProfile(uid: string, p: PublicProfile, prevHandle: string | 
 }
 
 /** Loads the signed-in user's profile, creating one from their email if it's missing. */
-export async function ensureProfile(u: AuthUser): Promise<Account> {
+/** The account's profile, made the first time someone signs in with Google (`created` then says so). */
+export async function ensureProfile(u: AuthUser): Promise<Account & { created?: boolean }> {
   const p = await getProfile(u.uid);
   if (p) return { ...p, uid: u.uid, email: u.email };
   // A Google account brings its name; otherwise the name comes from the email address.
@@ -220,7 +221,7 @@ export async function ensureProfile(u: AuthUser): Promise<Account> {
   if (!(await handleFree(handle, u.uid))) handle = (handle.slice(0, 20) + Math.floor(1000 + Math.random() * 9000)).slice(0, 24);
   const np: PublicProfile = { name: named || local.charAt(0).toUpperCase() + local.slice(1), handle, bio: '', loc: '', web: '', accent: '#C9C3B4', av: null, joined: Date.now() };
   await writeProfile(u.uid, np, null);
-  return { ...np, uid: u.uid, email: u.email };
+  return { ...np, uid: u.uid, email: u.email, created: true };
 }
 
 const slugHandle = (v: string) => v.toLowerCase().replace(/[^a-z0-9._]+/g, '').slice(0, 24);
