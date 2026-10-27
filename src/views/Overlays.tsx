@@ -1062,17 +1062,18 @@ function MobileEditor({ v }: { v: V }) {
   const bar: CSSProperties = { background: 'none', border: 'none', padding: '8px 0', color: INK, font: `500 15px ${SANS}`, cursor: 'pointer' };
   const outline: CSSProperties = { flex: 1, height: 42, borderRadius: 2, border: '1.5px solid rgba(var(--ink-rgb),.5)', background: 'none', color: INK, font: `500 14px ${SANS}`, cursor: 'pointer' };
   const [wheel, setWheel] = useState(false);
+  const full = draw && v.edFull;
   const hint = pick ? 'Choose how to fill this page' : draw ? '' : write ? (v.selText ? 'Type below · drag the text to move it' : 'Tap the page where you want text') : adjust ? 'Whites cleans up the grey of a photographed page' : 'Drag to move · pinch to zoom · twist to rotate';
   return (
-    <div style={{ position: 'absolute', inset: 0, background: PAPER, zIndex: 20, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', padding: '0 16px', paddingBottom: 'calc(16px + env(safe-area-inset-bottom))', overflow: 'hidden' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8, padding: '12px 0 8px' }}>
+    <div style={{ position: 'absolute', inset: 0, background: PAPER, zIndex: 20, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', padding: full ? '0 8px' : '0 16px', paddingTop: full ? 'calc(8px + env(safe-area-inset-top))' : undefined, paddingBottom: `calc(${full ? 8 : 16}px + env(safe-area-inset-bottom))`, overflow: 'hidden' }}>
+      {!full && <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8, padding: '12px 0 8px' }}>
         <button onClick={v.cancelEdit} style={{ ...bar, justifySelf: 'start', color: 'rgba(var(--ink-rgb),.75)' }}>Cancel</button>
         <div style={{ textAlign: 'center' }}>
           <div style={{ font: `400 22px/1.1 ${SERIF}` }}>{v.edAvatar && v.edMode === 'fit' ? 'Your photo' : TITLES[v.edMode]}</div>
           <div style={{ fontSize: 12, color: 'rgba(var(--ink-rgb),.65)' }}>{v.edTitle}</div>
         </div>
         {v.applyLbl === 'Add to sketchbook' && !v.edOne ? <button onClick={v.skipEdit} style={{ ...bar, justifySelf: 'end', color: 'rgba(var(--ink-rgb),.75)' }}>Skip</button> : <span />}
-      </div>
+      </div>}
       {/* The page gets whatever room is left here (measured: see frame() in App). */}
       <div ref={v.edAreaRef} style={{ position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
         <EditFrame v={v} radius="2px 8px 8px 2px" shadow="0 12px 30px rgba(10,10,30,.25)" />
@@ -1091,11 +1092,12 @@ function MobileEditor({ v }: { v: V }) {
           </div>
         )}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: draw ? 10 : 12, paddingTop: 10 }}>
+      {full ? <FullBar v={v} setWheel={setWheel} /> : <div style={{ display: 'flex', flexDirection: 'column', gap: draw ? 10 : 12, paddingTop: 10 }}>
         {draw ? (
           <div style={{ display: 'flex', gap: 6 }}>
             <div style={{ flex: 1, minWidth: 0 }}><ModeSwitch v={v} height={32} /></div>
             <PageButtons v={v} />
+            <button onClick={v.toggleFull} title="Full page" aria-label="Full page: hide the tools" style={{ height: 40, minWidth: 40, padding: 0, border: '1px solid rgba(var(--ink-rgb),.2)', background: 'none', color: INK, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg></button>
           </div>
         ) : <ModeSwitch v={v} height={34} />}
         {pick ? <PickMode v={v} mob /> : (draw || write) && v.edPhotoSel ? <PhotoTools v={v} outline={outline} mob /> : draw ? <><DrawBar v={v} wheel={wheel} setWheel={setWheel} />{v.placedPhotos.length > 0 && <PhotoTools v={v} outline={outline} mob />}</> : write ? <><WriteTools v={v} outline={outline} mob />{!v.selText && <PhotoTools v={v} outline={outline} mob />}</> : <>
@@ -1117,6 +1119,38 @@ function MobileEditor({ v }: { v: V }) {
         {!adjust && <AutoNote v={v} />}
         </>}
         {!pick && <button onClick={v.applyEdit} style={{ height: draw ? 46 : 52, borderRadius: 2, border: 'none', background: INK, color: PAPER, font: `500 16px ${SANS}`, cursor: 'pointer' }}>{v.applyLbl}</button>}
+      </div>}
+    </div>
+  );
+}
+
+/** Phones, full page: the page as big as the screen allows, with the tools reached for most in one slim bar:
+ *  the brush (tap for the others, photos and layers), the colour, undo and redo, size, and the way back. */
+function FullBar({ v, setWheel }: { v: V; setWheel: (f: (w: boolean) => boolean) => void }) {
+  const [brushes, setBrushes] = useState(false);
+  const icon = (d: string) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
+  const btn = (on: boolean, off?: boolean): CSSProperties => ({ width: 38, height: 38, flexShrink: 0, padding: 0, border: 'none', borderRadius: 10, background: on ? INK : 'none', color: on ? PAPER : INK, opacity: off ? 0.35 : 1, cursor: off ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' });
+  const narrow: CSSProperties = { width: 'min(38px, calc((100vw - 40px) / 10))' };
+  const tool = DRAW_TOOLS.find(([k]) => k === v.penTool)?.[1] || '';
+  const card: CSSProperties = { display: 'flex', alignItems: 'center', gap: 2, padding: 3, background: PAPER, border: '1px solid rgba(var(--ink-rgb),.15)', borderRadius: 13, boxShadow: '0 6px 20px rgba(20,20,30,.12)' };
+  return (
+    <div style={{ position: 'relative', flexShrink: 0, paddingTop: 8 }}>
+      {brushes && (
+        <div role="toolbar" aria-label="Brushes" style={{ ...card, position: 'absolute', left: 0, right: 0, bottom: 'calc(100% + 6px)', justifyContent: 'space-between', zIndex: 2 }}>
+          {DRAW_TOOLS.map(([k, l]) => <button key={k} onClick={() => { v.setTool(k); setBrushes(false); }} title={l} aria-label={l} aria-pressed={v.penTool === k} style={{ ...btn(v.penTool === k), ...narrow }}>{icon(BRUSH_ICONS[k])}</button>)}
+          <button onClick={() => { setBrushes(false); v.addPhoto(); }} title="Add a photo" aria-label="Add a photo" style={{ ...btn(false), ...narrow }}>{icon('M4 6.5h16v12H4zM4 15l4.5-4.5 4 4 2.5-2.5L20 17M15.5 9.5h.01')}</button>
+          <button onClick={() => { setBrushes(false); v.toggleLayers(); }} title="Layers" aria-label="Layers" aria-pressed={v.layersOpen} style={{ ...btn(v.layersOpen), ...narrow }}>{icon('M12 4l8.5 4.5L12 13 3.5 8.5zM3.5 12.5L12 17l8.5-4.5M3.5 16.5L12 21l8.5-4.5')}</button>
+        </div>
+      )}
+      <div style={card}>
+        <button onClick={() => setBrushes(b => !b)} aria-expanded={brushes} title={`${tool}: tap for more brushes`} aria-label={`Brush: ${tool}. More brushes`} style={btn(true)}>{icon(BRUSH_ICONS[v.penTool])}</button>
+        <button onClick={() => { setBrushes(false); setWheel(w => !w); }} disabled={v.penNoColor} title="Colour" aria-label="Colour" style={btn(false, v.penNoColor)}>
+          <span style={{ width: 24, height: 24, borderRadius: '50%', background: v.penNoColor ? 'transparent' : v.penColor, border: '1px solid rgba(34,35,32,.3)' }} />
+        </button>
+        <button onClick={v.undoMark} disabled={!v.hasMarks} title="Undo" aria-label="Undo" style={btn(false, !v.hasMarks)}>{icon('M9 5L4 10l5 5M4 10h10a5 5 0 0 1 0 10h-3')}</button>
+        <button onClick={v.redoMark} disabled={!v.hasRedo} title="Redo" aria-label="Redo" style={btn(false, !v.hasRedo)}>{icon('M15 5l5 5-5 5M20 10H10a5 5 0 0 0 0 10h3')}</button>
+        <input type="range" min={1} max={40} step={1} value={v.penSize} onChange={v.onPenSize} aria-label={v.penTool === 'eraser' ? 'Eraser size' : 'Size'} aria-valuetext={String(v.penSize)} style={{ flex: 1, minWidth: 0, margin: '0 6px', accentColor: INK, height: 30 }} />
+        <button onClick={v.toggleFull} title="Show all tools" aria-label="Show all tools" style={btn(false)}>{icon('M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5')}</button>
       </div>
     </div>
   );

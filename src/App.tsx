@@ -79,6 +79,8 @@ interface EditState {
   painted?: number; eyedrop?: boolean;
   /** Draw mode: the page turned on screen by this many quarter turns, to draw sideways (it's saved upright). */
   view?: number;
+  /** Phones, Draw: the page as big as the screen allows, with only a slim bar of tools (see FullBar). */
+  full?: boolean;
   /** Draw mode: zoomed in on the page (k times, moved by x, y in frame pixels); layers panel open. */
   zm?: { k: number; x: number; y: number } | null; layersOpen?: boolean;
 }
@@ -1342,7 +1344,8 @@ export default class App extends Component<object, State> {
     if (vw < 640) {
       const e = this.state.edit, box = this.state.edArea, room = box ? box.h - (e?.mode === 'draw' ? 4 : 28) : vh * 0.45;
       const maxH = e?.mode === 'write' && e.pad ? room * 0.55 : room;
-      let fw = Math.min(vw - 32, box?.w || vw), fh = fw / a; if (fh > maxH) { fh = maxH; fw = fh * a; }
+      const side = e?.mode === 'draw' && e.full ? 16 : 32;
+      let fw = Math.min(vw - side, box?.w || vw), fh = fw / a; if (fh > maxH) { fh = maxH; fw = fh * a; }
       return { fw: Math.max(1, Math.round(fw)), fh: Math.max(1, Math.round(fh)) };
     }
     // Larger screens: the page as big as the screen allows beside the controls (a profile photo stays modest).
@@ -2666,6 +2669,7 @@ export default class App extends Component<object, State> {
       toggleDrawSpread: () => this.setSpread(!ed.spread),
       undoMark: () => { p?.undo(); bump(); }, clearMarks: () => { p?.clear(); bump(); },
       hasRedo: !!p?.canRedo, redoMark: () => { p?.redo(); bump(); },
+      edFull: !!ed.full && ed.mode === 'draw' && this.state.vw < 640, toggleFull: () => this.setEd({ full: !ed.full, layersOpen: false }),
       // Zoom while drawing (on the frame; see pagePoint).
       edZoomT: ed.mode === 'draw' && ed.zm ? `translate(${ed.zm.x}px, ${ed.zm.y}px) scale(${ed.zm.k})` : '', edZoomPct: `${Math.round((ed.mode === 'draw' && ed.zm ? ed.zm.k : 1) * 100)}%`,
       edZoomed: ed.mode === 'draw' && !!ed.zm, zoomInDraw: () => this.zoomAt(1.5), zoomOutDraw: () => this.zoomAt(1 / 1.5), zoomResetDraw: () => this.setEd({ zm: null }),
