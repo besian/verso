@@ -228,6 +228,20 @@ export class Painter {
     ctx.restore();
   }
 
+  /** What's on show right now, including a pen stroke still being drawn (for recording a replay). */
+  drawLive(ctx: CanvasRenderingContext2D, x: number, y: number, W: number, H: number) {
+    this.flush(); ctx.save(); ctx.imageSmoothingQuality = 'high';
+    this.layers.forEach((l, i) => {
+      if (!l.visible) return;
+      ctx.globalAlpha = l.opacity; ctx.drawImage(l.view, x, y, W, H);
+      if (i === this.active && this.last) {
+        ctx.globalAlpha = Number(this.buf.style.opacity || 1); ctx.globalCompositeOperation = this.buf.style.mixBlendMode === 'multiply' ? 'multiply' : 'source-over';
+        ctx.drawImage(this.buf, x, y, W, H); ctx.globalCompositeOperation = 'source-over';
+      }
+    });
+    ctx.restore();
+  }
+
   // ---------- drafts ----------
   snapshot(withPixels = true): Snapshot {
     return { w: this.W, h: this.H, active: this.active, ops: this.ops.slice(), layers: this.layers.map(l => ({ name: l.name, visible: l.visible, opacity: l.opacity, ...(withPixels ? { px: l.L.slice() } : {}) })) };

@@ -39,6 +39,7 @@ const Legal = lazy(() => import('./views/Pages').then(m => ({ default: m.Legal }
 const NotFound = lazy(() => import('./views/Pages').then(m => ({ default: m.NotFound })));
 const Messages = lazy(() => import('./views/Messages').then(m => ({ default: m.Messages })));
 const ReplayPlayer = lazy(() => import('./views/Replay').then(m => ({ default: m.ReplayPlayer })));
+const TimelapseModal = lazy(() => import('./views/Timelapse').then(m => ({ default: m.TimelapseModal })));
 import { shareImage, sharePicture } from './shareImage';
 import { ArchiveModal, AskModal, CardModal, ConsentBar, CollectionModal, UnsavedBar, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
 
@@ -91,6 +92,8 @@ interface State {
   analytics?: 'yes' | 'no' | null;
   /** The moderator dashboard's numbers. */
   adStats?: api.SiteStats;
+  /** The timelapse video being made or made (see timelapse.ts). */
+  tl?: { phase: 'making' | 'done' | 'error'; progress: number; title: string; link: string; drawn?: number; pages?: number; url?: string; file?: File } | null;
   /** This week's prompt; promptJoin: the next new sketchbook is for it; prDraft: the moderators' form. */
   prompt?: api.Prompt | null; promptJoin?: boolean; prDraft?: { title: string; note: string; tag: string };
   /** Books whose last save failed (shown with Try again). */
@@ -795,7 +798,7 @@ export default class App extends Component<object, State> {
   }
   /** Saves a book: a copy is kept in the browser first and dropped once the server has it all, so a failed
    *  upload or a closed tab can't lose new pages (offered back on the next visit, see restoreUnsaved). */
-  announce = new Set<string>();
+  announce = new Set<string>(); tlAbort?: AbortController; tlCanvas?: HTMLCanvasElement;
   syncNow(id: string) {
     const uid = this.state.acct?.uid, b = this.findBook(id);
     if (uid && b) saveBookDraft(uid, id, b);
@@ -1576,8 +1579,39 @@ export default class App extends Component<object, State> {
         } };
       })(),
       rpState: s.replay || null, rpClose: () => this.setState({ replay: null }),
+      // The whole sketchbook as a short vertical video: drawn pages replay their strokes (see timelapse.ts).
+      bkTimelapse: async () => {
+        const tlm = await import('./timelapse');
+        if (!tlm.videoType()) return this.toast('This browser can’t make videos. Try Chrome or Safari.');
+        const fill = (s.books[s.active] as Book | undefined)?.fillers || {}, list = imgs.filter(u => u && !(o ? false : fill[u])).slice(0, 20);
+        if (!list.length) return this.toast('Add some pages first.');
+        const handle = o?.handle || mb?.owner?.handle || s.acct?.handle || '', artist = o ? o.artist : mb?.owner?.name || s.acct?.name || '';
+        const link = `${location.origin}${o?.arch ? `/archive/${book.id}` : `/@${handle}/${book.id}`}`;
+        const ac = new AbortController(); this.tlAbort?.abort(); this.tlAbort = ac;
+        const name = `${book.name.replace(/[^\w\- ]+/g, '').trim() || 'fletora'} - timelapse`;
+        this.setState({ more: null, tl: { phase: 'making', progress: 0, title: book.name, link } });
+        const urls: string[] = [];
+        try {
+          const pages = await Promise.all(list.map(async u => {
+            const key = api.pageKey(u), [blob, replay] = await Promise.all([api.pageBlob(this.blobUrl(u)), isData(u) ? null : api.hasReplay(book.id, key).then(y => y ? api.replayData(book.id, key) : null).catch(() => null)]);
+            const img = URL.createObjectURL(blob); urls.push(img); return { img, replay };
+          }));
+          if (ac.signal.aborted) return;
+          const canvas = this.tlCanvas || (this.tlCanvas = document.createElement('canvas'));
+          this.setState(st => st.tl ? { tl: { ...st.tl, drawn: pages.filter(p => p.replay).length, pages: pages.length } } : null);
+          let shown = 0;
+          // The end card shows a short address (the artist's page); the share text carries the full link.
+          const v = await tlm.makeTimelapse({ canvas, pages, aspect: this.aspect(), title: book.name, artist, link: o?.arch ? `${location.host}/archive` : `${location.host}/@${handle}`, signal: ac.signal,
+            onProgress: f => { if (f - shown >= 0.02 || f === 1) { shown = f; this.setState(st => st.tl ? { tl: { ...st.tl, progress: f } } : null); } } });
+          this.setState(st => st.tl ? { tl: { ...st.tl, phase: 'done', progress: 1, url: URL.createObjectURL(v.blob), file: new File([v.blob], `${name}.${v.ext}`, { type: v.blob.type }) } } : null);
+        } catch (e) {
+          if ((e as Error).name === 'AbortError') return;
+          console.error('timelapse', e); this.setState(st => st.tl ? { tl: { ...st.tl, phase: 'error' } } : null);
+        } finally { urls.forEach(u => URL.revokeObjectURL(u)); }
+      },
       // A picture of the pages on show, framed for Instagram and the like.
       bkShareImage: async () => {
+        this.setState({ more: null });
         const shown = this.shownPages(); if (!shown.length) return this.toast('Turn to a page to share it as a picture.');
         const handle = o?.handle || mb?.owner?.handle || s.acct?.handle || '', artist = o ? o.artist : mb?.owner?.name || s.acct?.name || '';
         const link = `${location.origin}${o?.arch ? `/archive/${book.id}` : `/@${handle}/${book.id}`}`;
@@ -1988,6 +2022,18 @@ export default class App extends Component<object, State> {
       pfCancel: () => this.setState({ draft: null, dErr: '' }), pfClose: (e: MouseEvent) => { if (e.target === e.currentTarget) this.setState({ draft: null }); },
       signOut: () => this.ask({ title: 'Sign out?', text: 'You can sign back in any time with your email and password.', yes: 'Sign out', run: async () => { await api.signOut(); this.setState({ draft: null }); this.goMode('home'); } }),
       // Analytics consent: a small bar until they choose, and a setting under Your data.
+      // The timelapse video: shown drawing while it records, then to watch, share or save.
+      tlState: s.tl || null,
+      tlMount: (el: HTMLDivElement | null) => { const c = this.tlCanvas; if (el && c && c.parentElement !== el) { Object.assign(c.style, { width: '100%', height: '100%', display: 'block' }); el.append(c); } },
+      tlCancel: () => { this.tlAbort?.abort(); this.setState({ tl: null }); },
+      tlClose: () => { if (s.tl?.url) URL.revokeObjectURL(s.tl.url); this.setState({ tl: null }); },
+      tlShare: async () => {
+        const f = s.tl?.file; if (!f) return;
+        const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+        if (nav.canShare?.({ files: [f] })) { try { await nav.share({ files: [f], title: s.tl!.title, text: `${s.tl!.title} ${s.tl!.link}` }); return; } catch (e) { if ((e as Error).name === 'AbortError') return; } }
+        const a = document.createElement('a'); a.href = s.tl!.url!; a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); this.toast('Video saved: post it anywhere.');
+      },
+      tlCanShare: typeof navigator !== 'undefined' && !!(navigator as Navigator & { canShare?: unknown }).canShare && /Mobi|Android|iPhone|iPad/.test(navigator.userAgent),
       // Saves that failed: a bar until they go through.
       usOn: !!s.unsaved?.length && !s.embed, usText: (() => { const n = (s.unsaved || []).map(id => this.findBook(id)?.name).filter(Boolean); return n.length === 1 ? `“${n[0]}” isn’t saved yet.` : `${n.length} sketchbooks aren’t saved yet.`; })(),
       usBusy: (s.unsaved || []).some(id => (this.busy.get(id) || 0) > 0),
@@ -3020,6 +3066,7 @@ export default class App extends Component<object, State> {
           {v.isAdminPage && <Admin v={v} />}
           {v.isMessages && <Messages v={v} />}
           {v.rpState && <ReplayPlayer v={v} />}
+          {v.tlState && <TimelapseModal v={v} />}
         </Suspense>
         {v.cmOn && v.cmOpen && (v.isMine || v.isOther) && !v.editing && !v.managing && <CommentsPanel v={v} />}
         {v.reportOpen && <ReportModal v={v} />}

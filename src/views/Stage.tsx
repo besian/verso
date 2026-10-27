@@ -224,6 +224,7 @@ const Title = memo(function Title({ v }: { v: V }) {
             <MoreMenu open={v.bkMoreOpen} onToggle={v.bkMore} items={[
               ...(v.bkArch?.url ? [{ label: `View at the source ↗`, onClick: () => window.open(v.bkArch.url, '_blank', 'noopener') }] : []),
               ...(v.cmOn ? [{ label: 'Share page as a picture', onClick: v.bkShareImage }] : []),
+              ...(v.cmOn ? [{ label: 'Make a timelapse video', onClick: v.bkTimelapse }] : []),
               ...(v.isOther || v.bkCanShare ? [{ label: 'Embed on a website', onClick: v.bkEmbed }] : []),
               { label: v.sndOn ? 'Turn page sounds off' : 'Turn page sounds on', onClick: v.toggleSound },
               ...(v.bkIsAdmin ? [{ label: v.bkArchLbl, onClick: v.bkArchEdit }] : []),
