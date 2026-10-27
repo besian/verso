@@ -124,7 +124,7 @@ interface State {
   acErr?: string; acInfo?: string; acBusy?: string; verified?: boolean;
   ac?: { email?: string; pwEmail?: string; pwOld?: string; pwNew?: string; delHandle?: string; pwDel?: string };
   community?: OtherBook[]; people?: Person[];
-  saved?: Saved[]; blocked?: string[]; followFeed?: OtherBook[]; exFeedWho?: string; followPeople?: Person[]; pfTab?: 'books' | 'saved' | 'following';
+  saved?: Saved[]; blocked?: string[]; followFeed?: OtherBook[]; followPeople?: Person[]; pfTab?: 'books' | 'saved' | 'following';
   toast?: string; more?: 'book' | 'profile' | 'chat' | null;
   counts?: Record<string, number>; liked?: Record<string, boolean>; notifs?: Notif[]; notifOpen?: boolean;
   reportFor?: { kind: 'book' | 'user' | 'message' | 'comment'; targetId: string; ownerId: string; label: string; quote?: string } | null; reportReason?: string; reportNote?: string; reportBusy?: boolean; reportErr?: string;
@@ -1677,34 +1677,29 @@ export default class App extends Component<object, State> {
   }
   /** Explore's Following tab: each followed artist's recently updated sketchbooks, newest first, with their latest pages. */
   feedVals(): V {
-    const s = this.state, on = !!s.acct && s.exTab === 'following', mob = s.vw < 640;
+    const s = this.state, on = !!s.acct && s.exTab === 'following';
     const setTab = (t: 'all' | 'following') => { this.setState({ exTab: t }); if (t === 'following' && !s.followFeed) this.loadFollowFeed(); };
     const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); return m < 60 ? 'just now' : m < 1440 ? Math.round(m / 60) + 'h ago' : m < 10080 ? Math.round(m / 1440) + 'd ago' : new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); };
-    const all = this.community((s.followFeed || []).filter(b => b.images.length > 0)).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 40);
-    // The sidebar: each artist with something new, latest first; picking one shows just theirs.
-    const groups = new Map<string, { uid: string; artist: string; handle: string; at: number; n: number; b: OtherBook }>();
-    for (const b of all) { const k = b.ownerId || b.artist, g = groups.get(k); if (g) g.n++; else groups.set(k, { uid: k, artist: b.artist, handle: b.handle || '', at: b.updatedAt || 0, n: 1, b }); }
-    const who = s.exFeedWho && groups.has(s.exFeedWho) ? s.exFeedWho : '', feed = who ? all.filter(b => (b.ownerId || b.artist) === who) : all;
-    const openAt = (b: OtherBook, i: number) => { this.openOtherBook(b, 'explore'); setTimeout(() => { if (this.state.mode === 'other' && this.state.other?.id === b.id) this.goToPage(i); }, 80); };
-    const h = mob ? 120 : 170;
+    const feed = this.community((s.followFeed || []).filter(b => b.images.length > 0)).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 40);
     return {
       exTabs: !!s.acct, exFollowing: on, exTabAll: () => setTab('all'), exTabFollowing: () => setTab('following'),
       exFeedLoading: on && !s.followFeed, exFeedNoFollows: on && !(s.follows || []).length,
-      exFeedCount: (s.follows || []).length,
-      exFeedPeople: [...groups.values()].map(g => ({ key: g.uid, name: g.artist, handle: g.handle ? '@' + g.handle : '', init: ini(g.artist), when: ago(g.at), books: g.n,
-        av: (() => { const a = g.b.ownerId ? this.avatarOf(g.b.ownerId) : null; return a ? avatarBg(a) : ''; })(), on: who === g.uid,
-        pick: () => this.setState({ exFeedWho: who === g.uid ? '' : g.uid }), openProfile: () => this.openProfile(this.whoOf(g.b)) })),
-      exFeedWho: who ? groups.get(who)!.artist : '', exFeedAll: () => this.setState({ exFeedWho: '' }),
-      exFeed: on ? feed.map(b => {
-        const shp = this.shapeOf(b), n = b.images.length, from = Math.max(0, n - (mob ? 4 : 6));
-        return {
-          fresh: Date.now() - (b.updatedAt || 0) < 86_400_000, ar: shp.a,
-          key: b.id, artist: b.artist, handle: b.handle ? '@' + b.handle : '', init: ini(b.artist), av: (() => { const a = b.ownerId ? this.avatarOf(b.ownerId) : null; return a ? avatarBg(a) : ''; })(), name: b.name, when: ago(b.updatedAt || 0), mature: !!b.mature,
-          meta: `${n} ${n === 1 ? 'page' : 'pages'}${(b.mediums || []).length ? ' · ' + (b.mediums || []).join(', ') : ''}`,
-          open: () => this.openOtherBook(b, 'explore'), openArtist: () => this.openProfile(this.whoOf(b)),
-          pages: b.images.slice(from).map((u, k) => ({ key: from + k, num: String(from + k + 1), bg: `url("${this.blobUrl(this.thumbOf(b, u))}") center/cover no-repeat #f3efe6`, w: Math.round(h * shp.a), h, open: () => openAt(b, from + k) })).reverse(),
-        };
-      }) : [],
+      // The grid (like Explore): each followed artist's sketchbooks, newest first, with what's new since you last
+      // opened it on this device (+N pages), or New if it changed in the last three days and you haven't opened it.
+      exFollowList: on ? (() => {
+        let seen: Record<string, number> = {}; try { seen = JSON.parse(localStorage.getItem('fl-seen') || '{}'); } catch { /* none kept */ }
+        return feed.map(b => {
+          const n = b.images.length, was = seen[b.id], add = was != null ? n - was : 0;
+          return {
+            key: b.id, name: b.name, artist: b.artist, verified: this.isTeam(b.ownerId), mature: !!b.mature, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg,
+            badge: add > 0 ? `+${add} ${add === 1 ? 'page' : 'pages'}` : was == null && Date.now() - (b.updatedAt || 0) < 3 * 86_400_000 ? 'New' : '',
+            when: ago(b.updatedAt || 0), count: `${n} ${n === 1 ? 'page' : 'pages'}`,
+            ar: String(this.shapeOf(b).a), wp: String(GRID_WIDTH[b.shape] || 78),
+            open: () => { try { localStorage.setItem('fl-seen', JSON.stringify({ ...seen, [b.id]: n })); } catch { /* fine */ } this.openOtherBook(b, 'explore'); },
+            openArtist: (e: MouseEvent) => { e.stopPropagation(); this.openProfile(this.whoOf(b)); },
+          };
+        });
+      })() : [],
     };
   }
   /** Explore's Content filter. Showing Mature work needs a signed-in adult, as in Account settings. */
