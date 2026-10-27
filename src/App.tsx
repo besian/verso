@@ -42,7 +42,7 @@ const ReplayPlayer = lazy(() => import('./views/Replay').then(m => ({ default: m
 const Welcome = lazy(() => import('./views/Welcome').then(m => ({ default: m.Welcome })));
 const TimelapseModal = lazy(() => import('./views/Timelapse').then(m => ({ default: m.TimelapseModal })));
 import { shareImage, sharePicture } from './shareImage';
-import { ArchiveModal, AskModal, CardModal, ConsentBar, CollectionModal, UnsavedBar, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Tip, Toast } from './views/Overlays';
+import { ArchiveModal, AskModal, CardModal, ConsentBar, CollectionModal, UnsavedBar, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Tip, Toast, TourVideo } from './views/Overlays';
 
 /** Colours for text: ink, graphite, the accent red, blue, green and paper white. */
 const TEXT_COLORS: [string, string][] = [['#222320', 'Ink'], ['#6b6a64', 'Graphite'], ['#ad493a', 'Red'], ['#2f4a7a', 'Blue'], ['#3f7a56', 'Green'], ['#f3efe6', 'White']];
@@ -175,7 +175,7 @@ interface State {
   pick?: OtherBook | null;
   /** /auth/action: a link from one of our emails (confirm email, reset password, email change). */
   act?: { mode: string; code: string; next: string; step: 'checking' | 'form' | 'working' | 'done' | 'error'; email: string; pw: string; err: string };
-  tagDraft?: string; soundOn?: boolean; dark?: boolean; welcome?: boolean;
+  tagDraft?: string; soundOn?: boolean; dark?: boolean; welcome?: boolean; tour?: boolean;
   /** Shared sketchbooks: invitations waiting for an answer, and the invite form on the Pages screen. */
   invites?: BookDoc[]; shDraft?: string; shBusy?: boolean; shErr?: string;
   /** Edit screen: which tab, and the page whose details sheet is open. */
@@ -283,6 +283,7 @@ export default class App extends Component<object, State> {
     const s = this.state;
     if (e.key === 'Escape' && s.ask) return this.setState({ ask: null });
     if (e.key === 'Escape' && s.draft) return this.setState({ draft: null });
+    if (e.key === 'Escape' && s.tour) return this.setState({ tour: false });
     if (e.key === 'Escape' && s.welcome) return this.setState({ welcome: false });
     if (e.key === 'Escape' && s.mode === 'auth') return this.closeAuth();
     if (e.key !== 'Escape' && (!['mine', 'other'].includes(s.mode || 'home') || s.draft)) return;
@@ -614,7 +615,7 @@ export default class App extends Component<object, State> {
   /** The tip for what's on screen, if it hasn't been seen: one at a time, never over a dialog. */
   tipNow(): string | null {
     const s = this.state, ed = s.edit, mode = s.mode || 'home', o = s.other as OtherBook | null;
-    if (s.welcome || s.embed || s.replay || s.managing || s.toast || s.more || s.ask || s.cmOpen) return null;
+    if (s.welcome || s.tour || s.embed || s.replay || s.managing || s.toast || s.more || s.ask || s.cmOpen) return null;
     const pick = (k: string | null) => (k && !this.tipsSeen.has(k) ? k : null);
     if (ed) return pick(ed.mode === 'draw' ? 'draw' : null); // Text explains itself in its panel
     if ((mode === 'other' || mode === 'mine') && s.images.length && !s.switching) {
@@ -1970,6 +1971,7 @@ export default class App extends Component<object, State> {
       },
       plSummary: s.plusPlan === 'month' ? `Fletora Plus · ${PRICE.month} a month` : `Fletora Plus · ${PRICE.year} a year`,
       // First visit after joining: a short guide to how fletora works.
+      tourOpen: !!s.tour, openTour: () => this.setState({ tour: true, more: null }), closeTour: () => this.setState({ tour: false }),
       welcomeOpen: !!s.welcome && !!a, welcomeName: (a?.name || '').split(' ')[0],
       welcomeStart: () => { this.setState({ welcome: false }); this.goMode('mine'); this.setState({ managing: true }); },
       welcomeLater: () => { this.setState({ welcome: false }); this.goMode('explore'); },
@@ -3142,6 +3144,7 @@ export default class App extends Component<object, State> {
         {v.arOpen && <ArchiveModal v={v} />}
         {v.toastMsg && <Toast msg={v.toastMsg} />}
         {v.tipMsg && <Tip v={v} />}
+        {v.tourOpen && <TourVideo onClose={v.closeTour} />}
         {v.isAuth && <AuthPage v={v} />}
         {v.pfEditing && <EditProfile v={v} />}
         {v.welcomeOpen && <Suspense fallback={null}><Welcome v={v} /></Suspense>}

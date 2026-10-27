@@ -133,7 +133,7 @@ export function Welcome({ v }: { v: V }) {
           <span style={label(undefined, 11)}>{i + 1} of {SLIDES.length}</span>
           <h1 style={{ margin: 0, font: `400 ${mob ? 44 : 72}px/.98 ${SERIF}`, letterSpacing: '-.02em' }}>{s.title}</h1>
           <p style={{ margin: 0, fontSize: mob ? 15 : 17, lineHeight: 1.55, color: MUTED }}>{s.body}</p>
-          {!mob && v.welcomeVideo && i === 0 && <a href={v.welcomeVideo} target="_blank" rel="noopener" style={{ font: `500 14px ${SANS}`, color: MARK, textDecoration: 'none', marginTop: 4 }}>▶ Watch the 40-second tour</a>}
+          {i === 0 && <button onClick={v.openTour} className={hover('opacity:.75')} style={{ alignSelf: 'flex-start', padding: 0, border: 'none', background: 'none', font: `500 14px ${SANS}`, color: MARK, cursor: 'pointer', marginTop: mob ? 0 : 4 }}>▶ Watch the 40-second tour</button>}
         </div>
       </div>
       <div style={{ flexShrink: 0, display: 'flex', flexDirection: mob && last ? 'column' : 'row', alignItems: mob && last ? 'stretch' : 'center', justifyContent: 'space-between', gap: 14, paddingTop: mob ? 14 : 20 }}>

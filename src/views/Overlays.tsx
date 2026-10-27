@@ -1435,6 +1435,19 @@ export function EmbedModal({ v }: { v: V }) {
 }
 
 /** Brief confirmation at the bottom of the screen. */
+/** The 40-second tour of fletora (public/welcome/tour.mp4), played here rather than in a new tab. */
+export function TourVideo({ onClose }: { onClose: () => void }) {
+  return (
+    <div role="dialog" aria-modal="true" aria-label="A tour of fletora" onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(20,20,24,.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <button onClick={onClose} aria-label="Close" className={hover('opacity:.75')} style={{ position: 'absolute', top: 12, right: 16, border: 'none', background: 'none', color: '#f6f2ea', fontSize: 30, cursor: 'pointer' }}>×</button>
+      <video poster="/welcome/tour.jpg" controls autoPlay muted playsInline style={{ width: 'min(1100px, 100%)', maxHeight: 'calc(100% - 80px)', aspectRatio: '16 / 9', background: '#000', borderRadius: 4, boxShadow: '0 30px 80px rgba(0,0,0,.4)' }}>
+        <source src="/welcome/tour.mp4" type="video/mp4" /><source src="/welcome/tour.webm" type="video/webm" />
+      </video>
+    </div>
+  );
+}
+
 /** A one-time tip: what to try here, until Got it. In the editor it sits out of the way of the page and tools. */
 export function Tip({ v }: { v: V }) {
   return (

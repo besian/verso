@@ -77,6 +77,7 @@ export function HomeScreen({ v }: { v: V }) {
           {signedOut
             ? <button onClick={v.goExplore} className={hoverLine} style={underlineBtn(15)}>Explore sketchbooks ↗</button>
             : <button onClick={v.startOwn} className={hoverLine} style={underlineBtn(15)}>Start your own →</button>}
+          {signedOut && <button onClick={v.openTour} className={hoverLine} style={underlineBtn(15)}>▶ Watch the tour</button>}
         </div>
         {v.promoPlus && !signedOut && <button onClick={v.openPlusPage} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', font: `500 13px ${SANS}`, color: MUTED }}><span style={{ ...label(MARK, 10), marginRight: 8 }}>Plus</span>{v.promoLine} <span style={{ color: INK, borderBottom: `1px solid ${INK}` }}>See what’s included</span></button>}
       </section>
@@ -742,6 +743,7 @@ export function Settings({ v }: { v: V }) {
         <SettingsSection title="Getting started" note="A short sketchbook about what you can do on fletora, with a painting you can watch being made.">
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
             <button onClick={v.openGuide} style={formBtn()}>Open the welcome sketchbook</button>
+            <button onClick={v.openTour} style={{ ...formBtn(), background: 'none', color: INK, border: '1px solid rgba(var(--ink-rgb),.25)' }}>▶ Watch the tour</button>
           </div>
         </SettingsSection>
         <SettingsSection title="Weekly email" note="On Mondays: new pages from people you follow, and the likes, comments and followers your work got that week. Only sent when there’s something new.">
