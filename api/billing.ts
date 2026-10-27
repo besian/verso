@@ -180,10 +180,12 @@ export async function POST(req: Request) {
       return json(200, { ok: true });
     }
     if (body.action === 'trial') {
-      // A new account's free trial: 14 days of Plus, no card, once per email address (kept as a hash, so the same
-      // address can't start another by making a new account). Only for accounts made since trials began.
+      // A new account's free trial: 14 days of Plus, no card, once the email address is confirmed, and once per
+      // address (kept as a hash, so the same address can't start another by making a new account). Only for
+      // accounts made since trials began.
       const u = await auth.getUser(uid), made = Date.parse(u.metadata.creationTime || '');
-      if (!email || !made || made < TRIAL_FROM || Date.now() - made > 3 * DAY) return json(200, { ok: false, why: 'not-new' });
+      if (!email || !made || made < TRIAL_FROM) return json(200, { ok: false, why: 'not-new' });
+      if (!u.emailVerified) return json(200, { ok: false, why: 'unverified' });
       const key = db.collection('trials').doc(createHash('sha256').update(email.toLowerCase()).digest('hex')), ref = db.collection('plus').doc(uid);
       const until = await db.runTransaction(async tx => {
         const [t, p] = await Promise.all([tx.get(key), tx.get(ref)]);

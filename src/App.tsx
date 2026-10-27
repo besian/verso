@@ -351,7 +351,7 @@ export default class App extends Component<object, State> {
   /** The saved sign-in doesn't learn about a confirmed email until it's reloaded, so check quietly. */
   checkVerified = () => {
     if (!this.state.acct || this.state.verified === true) return;
-    api.refreshVerified().then(ok => { if (ok) this.setState({ verified: true }); }).catch(() => {});
+    api.refreshVerified().then(ok => { if (ok) this.setState({ verified: true }, () => this.state.acct && this.startTrial(this.state.acct.uid)); }).catch(() => {});
   };
   onFocus = () => { if (document.visibilityState === 'visible') this.checkVerified(); };
   loadCommunity(more = false) {
@@ -627,9 +627,9 @@ export default class App extends Component<object, State> {
   seeTip(k: string) { this.tipsSeen.add(k); try { localStorage.setItem('fl-tips', JSON.stringify([...this.tipsSeen])); } catch { /* fine */ } this.forceUpdate(); }
   guideSeen = (() => { try { return !!localStorage.getItem('fl-guide'); } catch { return false; } })();
   viewed = new Set<string>();
-  /** A new account's free 14-day trial of Plus: asked for once (the server decides), then welcomed. */
+  /** A new account's free 14-day trial of Plus, once its email is confirmed: asked for once (the server decides), then welcomed. */
   async startTrial(uid: string) {
-    if (!api.isNewAccount() || this.state.plus) return;
+    if (this.state.verified !== true || this.state.plus) return;
     const key = 'sb-trial-' + uid; try { if (localStorage.getItem(key)) return; } catch { /* storage unavailable */ }
     try {
       const r = await api.startTrial(); try { localStorage.setItem(key, '1'); } catch { /* storage unavailable */ }
@@ -2188,7 +2188,7 @@ export default class App extends Component<object, State> {
         return `Sent to ${a?.email}. It can take a minute or two, and may land in spam.`;
       }),
       vfCooldown: (s.vfUntil || 0) > Date.now(), vfMsg: s.acInfo || '', vfErr: s.acErr || '',
-      checkVerified: () => run('verify', async () => { const ok = await api.refreshVerified(); this.setState({ verified: ok }); return ok ? 'Thanks, your email is confirmed.' : 'Not confirmed yet. Open the link in the email we sent, then try again.'; }),
+      checkVerified: () => run('verify', async () => { const ok = await api.refreshVerified(); this.setState({ verified: ok }, () => { if (ok && this.state.acct) this.startTrial(this.state.acct.uid); }); return ok ? 'Thanks, your email is confirmed.' : 'Not confirmed yet. Open the link in the email we sent, then try again.'; }),
       changeEmail: (e?: { preventDefault(): void }) => { e?.preventDefault(); const next = (f.email || '').trim();
         if (!/\S+@\S+\.\S+/.test(next)) return this.setState({ acErr: 'Enter the new email address.' });
         run('email', async () => { await api.changeEmail(f.pwEmail || '', next); this.setState(st => ({ ac: { ...st.ac, email: '', pwEmail: '' } })); return `We sent a link to ${next}. Your email changes once you click it.`; }); },

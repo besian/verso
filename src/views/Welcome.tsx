@@ -1,7 +1,7 @@
 // The welcome, right after joining: four short slides, each showing the thing it's about (a page being
 // straightened, the welcome painting being made, a sketchbook leafing itself, the ways to share), then the
 // ways in: add your first pages, leaf through the welcome sketchbook, or look around.
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { V } from '../App';
 import { GUIDE_BOOK, GUIDE_REPLAY_PAGE } from '../data';
@@ -95,12 +95,36 @@ function ShareDemo({ h }: { h: number }) {
   );
 }
 
-const SLIDES: { title: ReactNode; body: string; demo: (h: number) => ReactNode }[] = [
-  { title: <>Bind your <em style={{ color: MARK }}>pages.</em></>, body: 'Photograph the pages of a real sketchbook. fletora finds each page, straightens it and binds them in order. Or start with a blank page.', demo: h => <BindDemo h={h} /> },
-  { title: <>Draw and <em style={{ color: MARK }}>paint.</em></>, body: 'Pens, pencils, watercolour, oils, a brush and layers, on any page. Every stroke is recorded, so people can watch your page being made.', demo: h => <DrawDemo h={h} /> },
-  { title: <>Leaf <em style={{ color: MARK }}>through.</em></>, body: 'Sketchbooks turn page by page, like the real thing. Add captions, dates and a few words with Text.', demo: h => <LeafDemo h={h} /> },
-  { title: <>Share it, <em style={{ color: MARK }}>or don’t.</em></>, body: 'You choose who sees each sketchbook, and can change it any time. Make pictures of your pages sized for Instagram and stories.', demo: h => <ShareDemo h={h} /> },
+// The journey, in the order people go through it: make a sketchbook, work in it, look through it, show it.
+const SLIDES: { step: string; kicker: string; title: ReactNode; body: string; demo: (h: number) => ReactNode }[] = [
+  { step: 'Bind', kicker: 'Step 1 · Start a sketchbook', title: <>Bind your <em style={{ color: MARK }}>pages.</em></>,
+    body: 'Press Add pages and photograph the pages of a real sketchbook, or pick them from your camera roll. fletora straightens each one and binds them in order. No sketchbook to hand? Start with a blank page.', demo: h => <BindDemo h={h} /> },
+  { step: 'Draw', kicker: 'Step 2 · Work on a page', title: <>Draw and <em style={{ color: MARK }}>paint.</em></>,
+    body: 'Open any page and press Draw: pens, pencils, watercolour, oils, a brush and layers. Every stroke is recorded, so people can watch your page being made.', demo: h => <DrawDemo h={h} /> },
+  { step: 'Leaf through', kicker: 'Step 3 · Look through it', title: <>Leaf <em style={{ color: MARK }}>through.</em></>,
+    body: 'Your sketchbook turns page by page, like the real thing. Give a page a caption and a date, or type onto it with Text.', demo: h => <LeafDemo h={h} /> },
+  { step: 'Share', kicker: 'Step 4 · Show people', title: <>Share it, <em style={{ color: MARK }}>or don’t.</em></>,
+    body: 'Choose who sees each sketchbook: everyone in Explore, only people with the link, or just you. Change it any time, and make pictures of your pages for Instagram.', demo: h => <ShareDemo h={h} /> },
 ];
+
+/** Where you are in the journey: the four steps in a line, the ones you've seen ticked. */
+function StepRail({ at, go, mob }: { at: number; go: (k: number) => void; mob: boolean }) {
+  return (
+    <div role="tablist" aria-label="Steps" style={{ display: 'flex', alignItems: 'center', gap: mob ? 6 : 10, minWidth: 0 }}>
+      {SLIDES.map((sl, k) => (
+        <Fragment key={sl.step}>
+          {k > 0 && <span aria-hidden="true" style={{ width: mob ? 10 : 28, height: 1, background: k <= at ? INK : 'rgba(var(--ink-rgb),.2)', flexShrink: 1, transition: 'background .3s' }} />}
+          <button role="tab" aria-selected={k === at} onClick={() => go(k)} className={hover(`color:${INK}`)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 0, border: 'none', background: 'none', cursor: 'pointer', color: k <= at ? INK : MUTED, font: `${k === at ? 600 : 500} ${mob ? 12 : 13}px ${SANS}`, whiteSpace: 'nowrap', transition: 'color .3s' }}>
+            <span style={{ width: mob ? 18 : 22, height: mob ? 18 : 22, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', font: `600 ${mob ? 10 : 11}px ${SANS}`,
+              background: k < at ? INK : k === at ? MARK : 'none', color: k <= at ? PAPER : MUTED, border: k > at ? '1px solid rgba(var(--ink-rgb),.3)' : 'none', transition: 'background .3s' }}>{k < at ? '✓' : k + 1}</span>
+            {(!mob || k === at) && sl.step}
+          </button>
+        </Fragment>
+      ))}
+    </div>
+  );
+}
 
 /** Shown once, right after joining. */
 export function Welcome({ v }: { v: V }) {
@@ -124,22 +148,21 @@ export function Welcome({ v }: { v: V }) {
       style={{ position: 'absolute', inset: 0, zIndex: 25, background: PAPER, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', padding: mob ? '16px 16px calc(16px + env(safe-area-inset-bottom))' : '28px 48px 36px', overflow: 'hidden' }}>
       <style>{CSS}</style>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-        <span style={label(MARK, 11)}>Welcome, {v.welcomeName || 'artist'}</span>
+        {mob ? <StepRail at={i} go={go} mob /> : <span style={label(MARK, 11)}>Welcome, {v.welcomeName || 'artist'}</span>}
+        {!mob && <StepRail at={i} go={go} mob={false} />}
         <button onClick={v.welcomeLater} className={hover(`color:${MARK}`)} style={{ border: 'none', background: 'none', color: MUTED, font: `500 14px ${SANS}`, cursor: 'pointer', padding: 6 }}>Skip</button>
       </div>
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: mob ? 'column' : 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: mob ? 22 : 64 }}>
         <div key={'d' + i} style={{ flexShrink: 0, display: 'flex', justifyContent: 'center', animation: REDUCE ? undefined : 'wl-in .4s ease' }}>{s.demo(h)}</div>
         <div key={'t' + i} style={{ display: 'flex', flexDirection: 'column', gap: mob ? 10 : 16, maxWidth: mob ? undefined : 420, width: mob ? '100%' : undefined }}>
-          <span style={label(undefined, 11)}>{i + 1} of {SLIDES.length}</span>
+          <span style={label(MARK, 11)}>{s.kicker}</span>
           <h1 style={{ margin: 0, font: `400 ${mob ? 44 : 72}px/.98 ${SERIF}`, letterSpacing: '-.02em' }}>{s.title}</h1>
           <p style={{ margin: 0, fontSize: mob ? 15 : 17, lineHeight: 1.55, color: MUTED }}>{s.body}</p>
           {i === 0 && <button onClick={v.openTour} className={hover('opacity:.75')} style={{ alignSelf: 'flex-start', padding: 0, border: 'none', background: 'none', font: `500 14px ${SANS}`, color: MARK, cursor: 'pointer', marginTop: mob ? 0 : 4 }}>▶ Watch the 40-second tour</button>}
         </div>
       </div>
-      <div style={{ flexShrink: 0, display: 'flex', flexDirection: mob && last ? 'column' : 'row', alignItems: mob && last ? 'stretch' : 'center', justifyContent: 'space-between', gap: 14, paddingTop: mob ? 14 : 20 }}>
-        <div role="tablist" aria-label="Slides" style={{ display: 'flex', gap: 8, justifyContent: 'center', order: mob && last ? 2 : 0 }}>
-          {SLIDES.map((_, k) => <button key={k} role="tab" aria-selected={k === i} aria-label={`Slide ${k + 1}`} onClick={() => go(k)} style={{ width: k === i ? 22 : 8, height: 8, padding: 0, border: 'none', borderRadius: 4, background: k === i ? INK : 'rgba(var(--ink-rgb),.2)', cursor: 'pointer', transition: 'width .25s' }} />)}
-        </div>
+      <div style={{ flexShrink: 0, display: 'flex', flexDirection: mob && last ? 'column' : 'row', alignItems: mob && last ? 'stretch' : 'center', justifyContent: mob && !last ? 'flex-end' : 'space-between', gap: 14, paddingTop: mob ? 14 : 20 }}>
+        {!mob && (last ? <span style={{ fontSize: 14, color: MUTED }}>That’s the tour. Where would you like to start?</span> : <span />)}
         {last
           ? <div style={{ display: 'flex', flexDirection: mob ? 'column' : 'row', gap: mob ? 10 : 20, alignItems: mob ? 'stretch' : 'center' }}>
               <button onClick={v.welcomeLater} className={hover(`color:${MARK};border-color:${MARK}`)} style={{ ...link, alignSelf: mob ? 'center' : undefined, order: mob ? 3 : 0 }}>Look around</button>
@@ -148,7 +171,7 @@ export function Welcome({ v }: { v: V }) {
             </div>
           : <div style={{ display: 'flex', gap: 12 }}>
               {i > 0 && <button onClick={() => go(i - 1)} className={hover(`border-color:${INK}`)} style={ghost}>Back</button>}
-              <button onClick={() => go(i + 1)} autoFocus className={hover(`background:${MARK}`)} style={btn}>Next</button>
+              <button onClick={() => go(i + 1)} autoFocus className={hover(`background:${MARK}`)} style={btn}>{`Next: ${SLIDES[i + 1]?.step || ''}`}</button>
             </div>}
       </div>
     </div>

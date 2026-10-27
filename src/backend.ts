@@ -876,7 +876,6 @@ export const giftPlus = (target: string, months: number) => billing<{ ok: boolea
 /** Starts a new account's free 14-day trial of Plus (the server checks it's new and hasn't had one). */
 export const startTrial = () => billing<{ ok: boolean; until?: number }>('trial');
 /** Whether the signed-in account was made in the last three days (only those can start a trial). */
-export const isNewAccount = () => { const t = Date.parse(auth?.currentUser?.metadata.creationTime || ''); return !!t && Date.now() - t < 3 * 86_400_000; };
 export const ungiftPlus = (target: string) => billing<{ ok: boolean; emailed?: boolean }>('gift', { target, remove: true });
 
 /** Where a view came from, for the owner's stats. */

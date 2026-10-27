@@ -149,7 +149,7 @@ function Terms() {
       <Sec title="Fletora Plus">
         <P>Plus is an optional subscription that adds features to your account, at {PRICE.month} a month or {PRICE.year} a year. It’s sold to you by Stripe as merchant of record: Stripe takes the payment, charges any VAT or sales tax that applies, and sends your receipts, and its terms apply to the purchase.</P>
         <Ul items={[
-          'New accounts get Plus free for 14 days, with no card needed. We email you two days before it ends; afterwards your account goes back to the free plan (see below) unless you choose a plan. One free trial per person and email address.',
+          'New accounts get Plus free for 14 days once they confirm their email address, with no card needed. We email you two days before it ends; afterwards your account goes back to the free plan (see below) unless you choose a plan. One free trial per person and email address.',
           'Plus renews automatically at the end of each month or year until you cancel. Cancel anytime from Account settings → Plan; you keep Plus until the end of the period you’ve paid for and aren’t charged again.',
           <>If you’re in the UK or EU, you can cancel within 14 days of first subscribing for a refund, less a fair amount for the days you’ve already had Plus. To ask, <Contact />.</>,
           'If a payment fails, Plus stays on for a few days while it’s retried, then ends.',
@@ -233,7 +233,7 @@ const PLUS_ROWS: [string, string, string][] = [
   ['The Plus mark', '—', '✓'],
 ];
 const PLUS_FAQ: [string, string][] = [
-  ['How does the free trial work?', 'New accounts get Plus free for 14 days, with no card needed. We email you two days before it ends. If you don’t choose a plan, your account simply goes back to the free plan.'],
+  ['How does the free trial work?', 'New accounts get Plus free for 14 days once they confirm their email address, with no card needed. We email you two days before it ends. If you don’t choose a plan, your account simply goes back to the free plan.'],
   ['What happens when Plus ends?', `Nothing you’ve made is deleted. Link-only sketchbooks become private, stats and your pinned sketchbook are hidden, and the free limits apply to anything new (${BOOKS_FREE} sketchbooks, ${PAGES_FREE} pages each).`],
   ['Can I cancel?', 'Anytime, in Account settings → Plan. You keep Plus until the end of the month or year you’ve paid for, and you’re not charged again.'],
   ['Who takes the payment?', 'Stripe, as merchant of record: it takes the payment, charges any VAT that applies and sends your receipts. We never see your card number.'],

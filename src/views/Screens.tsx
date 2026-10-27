@@ -661,7 +661,7 @@ function GoogleButton({ v }: { v: V }) {
 function VerifyBanner({ v }: { v: V }) {
   return (
     <div role="status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px 18px', flexWrap: 'wrap', padding: '9px 14px', background: 'rgba(173,73,58,.07)', borderLeft: `2px solid ${MARK}`, fontSize: 13, lineHeight: 1.45, color: INK }}>
-      <span><b style={{ fontWeight: 600 }}>Confirm your email</b> <span style={{ color: MUTED }}>· {v.vfErr || v.vfMsg || `we sent a link to ${v.acEmail}. Check spam too.`}</span></span>
+      <span><b style={{ fontWeight: 600 }}>Confirm your email</b> <span style={{ color: MUTED }}>· {v.vfErr || v.vfMsg || `we sent a link to ${v.acEmail}. Confirm it to start your 14 days of Plus, free. Check spam too.`}</span></span>
       <span style={{ display: 'flex', gap: 16 }}>
         <button onClick={v.resendVerify} disabled={v.acBusy === 'verify' || v.vfCooldown} className={'tap ' + hoverLine} style={{ ...underlineBtn(13), opacity: v.vfCooldown ? 0.45 : 1 }}>{v.vfCooldown ? 'Sent' : 'Resend'}</button>
         <button onClick={v.checkVerified} disabled={v.acBusy === 'verify'} className={'tap ' + hoverLine} style={underlineBtn(13)}>I’ve confirmed</button>
