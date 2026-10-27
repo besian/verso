@@ -25,8 +25,8 @@ export const deleteDraft = (key: string) => tx('readwrite', s => s.delete(key)).
 
 // Sketchbooks whose latest changes haven't reached the server yet (book:<uid>:<id>), kept until a save goes
 // through, so a failed upload or a closed tab doesn't lose new pages. Same database, keyed apart from drawings.
-export interface BookDraft<B> { book: B; at: number }
+export interface BookDraft<B> { book: B; at: number; replays?: [string, { data: string; n: number }][] }
 const bookKey = (uid: string, id: string) => `book:${uid}:${id}`;
-export const saveBookDraft = <B>(uid: string, id: string, book: B) => tx('readwrite', s => s.put({ book, at: Date.now() }, bookKey(uid, id))).catch(() => {});
+export const saveBookDraft = <B>(uid: string, id: string, book: B, replays: BookDraft<B>['replays'] = []) => tx('readwrite', s => s.put({ book, at: Date.now(), replays }, bookKey(uid, id))).catch(() => {});
 export const deleteBookDraft = (uid: string, id: string) => tx('readwrite', s => s.delete(bookKey(uid, id))).catch(() => {});
 export const bookDrafts = <B>(uid: string) => tx<BookDraft<B>[]>('readonly', s => s.getAll(IDBKeyRange.bound(`book:${uid}:`, `book:${uid}:￿`))).catch(() => [] as BookDraft<B>[]);

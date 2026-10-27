@@ -801,7 +801,8 @@ export default class App extends Component<object, State> {
   announce = new Set<string>(); tlAbort?: AbortController; tlCanvas?: HTMLCanvasElement;
   syncNow(id: string) {
     const uid = this.state.acct?.uid, b = this.findBook(id);
-    if (uid && b) saveBookDraft(uid, id, b);
+    // Replays of pages drawn here wait for the save too, so they're kept with it.
+    if (uid && b) saveBookDraft(uid, id, b, b.images.flatMap(u => { const r = this.pendingReplays.get(u); return r ? [[u, r] as [string, { data: string; n: number }]] : []; }));
     this.enqueue(id, async () => {
       try { await this.syncBook(id); }
       catch (e) { this.announce.delete(id); this.setState(s => ({ unsaved: [...new Set([...(s.unsaved || []), id])] })); throw e; }
@@ -820,7 +821,7 @@ export default class App extends Component<object, State> {
       if ((server != null && server >= d.at) || this.state.acct?.uid !== uid) { if (server != null && server >= d.at) deleteBookDraft(uid, id); continue; }
       const when = new Date(d.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
       await new Promise<void>(done => this.ask({ title: 'Unsaved changes', text: `Changes to “${d.book.name}” from ${when} didn’t finish saving. Put them back and save them now?`, yes: 'Restore and save', no: 'Discard',
-        run: () => { this.setState(s => { const has = s.books.some(b => b.id === id), books = has ? s.books.map(b => b.id === id ? { ...b, ...d.book } : b) : [...s.books, d.book], mine = s.books[s.active]?.id === id;
+        run: () => { (d.replays || []).forEach(([u, r]) => this.pendingReplays.set(u, r)); this.setState(s => { const has = s.books.some(b => b.id === id), books = has ? s.books.map(b => b.id === id ? { ...b, ...d.book } : b) : [...s.books, d.book], mine = s.books[s.active]?.id === id;
           return { books, images: mine ? d.book.images : s.images }; }, () => { this.dirty.add(id); this.syncNow(id); this.dirty.delete(id); done(); }); },
         onNo: () => { deleteBookDraft(uid, id); done(); } }));
     }
