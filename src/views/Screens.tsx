@@ -28,6 +28,36 @@ function Kicker() {
 
 /** Home page for everyone, sized to the window so it never scrolls: headline and actions,
  *  then a shelf of community sketchbooks along the bottom. */
+/** The home shelf's open book: a spread that turns its own pages, slowly, so the first thing visitors see is a
+ *  sketchbook being leafed through. Still (an open spread) for people who prefer reduced motion. */
+function TurningBook({ pages, board }: { pages: string[]; board: string }) {
+  const [i, setI] = useState(0), [turning, setTurning] = useState(false), n = pages.length;
+  const reduce = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  useEffect(() => {
+    if (reduce || n < 3) return;
+    let t2: ReturnType<typeof setTimeout>;
+    const t = setInterval(() => { setTurning(true); t2 = setTimeout(() => { setTurning(false); setI(k => (k + 2 + 1 < n ? k + 2 : 0)); }, 950); }, 3200);
+    return () => { clearInterval(t); clearTimeout(t2); };
+  }, [n, reduce]);
+  const pg = (k: number) => pages[k % n], face: CSSProperties = { position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' } as CSSProperties;
+  const half = (side: 'l' | 'r'): CSSProperties => ({ position: 'absolute', top: 0, bottom: 0, width: '50%', [side === 'l' ? 'left' : 'right']: 0, borderRadius: side === 'l' ? '6px 1px 1px 6px' : '1px 6px 6px 1px', overflow: 'hidden' });
+  // The fold: a soft shadow down the middle of each page.
+  const shade = (side: 'l' | 'r') => <span style={{ position: 'absolute', inset: 0, background: `linear-gradient(${side === 'l' ? 'to left' : 'to right'}, rgba(0,0,0,.16), rgba(0,0,0,0) 22%)`, pointerEvents: 'none' }} />;
+  return (
+    <div aria-label="An open sketchbook, turning its pages" style={{ position: 'absolute', inset: 0, perspective: 2400 }}>
+      {/* The covers behind the pages. */}
+      <div style={{ position: 'absolute', inset: '-4px -6px', background: board, borderRadius: 8, boxShadow: '0 18px 40px rgba(20,20,30,.25)' }} />
+      <div style={{ ...half('l'), background: pg(i) }}>{shade('l')}</div>
+      <div style={{ ...half('r'), background: pg(i + (turning ? 3 : 1)) }}>{shade('r')}</div>
+      {/* The leaf being turned: this right page on its front, the next left page on its back. */}
+      <div style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: '50%', transformOrigin: '0 50%', transformStyle: 'preserve-3d', transform: `rotateY(${turning ? -180 : 0}deg)`, transition: turning ? 'transform .95s cubic-bezier(.45,.05,.3,1)' : 'none', zIndex: 2 }}>
+        <div style={{ ...face, borderRadius: '1px 6px 6px 1px', overflow: 'hidden', background: pg(i + 1) }}>{shade('r')}</div>
+        <div style={{ ...face, transform: 'rotateY(180deg)', borderRadius: '6px 1px 1px 6px', overflow: 'hidden', background: pg(i + 2) }}>{shade('l')}</div>
+      </div>
+    </div>
+  );
+}
+
 export function HomeScreen({ v }: { v: V }) {
   const mob = v.hmMob, signedOut = v.isLanding;
   return (
@@ -58,8 +88,8 @@ export function HomeScreen({ v }: { v: V }) {
               <div onClick={signedOut ? v.openMe : v.startOwn} className={hover(`border-color:${MARK};color:${MARK}`)} style={{ width: Math.round(v.hmShelfH * 0.72), height: v.hmShelfH, boxSizing: 'border-box', border: '2px dashed rgba(var(--ink-rgb),.35)', borderBottom: 'none', borderRadius: '2px 8px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 12, cursor: 'pointer', color: 'rgba(var(--ink-rgb),.7)', font: `400 ${mob ? 17 : 20}px/1.1 ${SERIF}` }}>Your sketchbook<br />goes here</div>
             )}
             {v.hmShelf.map((sh: V) => (
-              <div key={sh.key} onClick={sh.open} title={sh.title} className={hover('transform:translateY(-12px)')} style={{ position: 'relative', flexShrink: 0, width: sh.w, height: sh.h, transform: `rotate(${sh.rot}deg)`, transformOrigin: '50% 100%', cursor: 'pointer', transition: 'transform .5s cubic-bezier(.2,.8,.2,1)' }}>
-                <ClosedBook size="sm" bg={sh.bg} board={sh.color} label={sh.showLabel ? sh.name : null} labelStyle={{ padding: '6px 8px', font: `400 ${sh.fs}px/1.1 ${SERIF}` }} />
+              <div key={sh.key} onClick={sh.open} title={sh.title} className={hover('transform:translateY(-12px)')} style={{ position: 'relative', flexShrink: 0, width: sh.w, height: sh.h, transform: `rotate(${sh.demo ? 0 : sh.rot}deg)`, transformOrigin: '50% 100%', cursor: 'pointer', transition: 'transform .5s cubic-bezier(.2,.8,.2,1)' }}>
+                {sh.demo ? <TurningBook pages={sh.demo} board={sh.color} /> : <ClosedBook size="sm" bg={sh.bg} board={sh.color} label={sh.showLabel ? sh.name : null} labelStyle={{ padding: '6px 8px', font: `400 ${sh.fs}px/1.1 ${SERIF}` }} />}
                 {sh.isPick && <span style={{ position: 'absolute', left: '50%', top: -11, transform: 'translateX(-50%)', padding: '3px 8px', borderRadius: 10, background: MARK, color: '#F6F2E8', font: `600 9px/1.2 ${SANS}`, letterSpacing: '.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,.2)' }}>Staff pick</span>}
               </div>
             ))}
@@ -819,6 +849,7 @@ function LegalLinks({ v, align = 'center' }: { v: V; align?: CSSProperties['just
       <button onClick={v.openPrivacy} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>Privacy</button>
       <button onClick={v.openTerms} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>Terms</button>
       <button onClick={v.openContact} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>Contact</button>
+      <button onClick={v.openFeedback} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>Send feedback</button>
     </div>
   );
 }

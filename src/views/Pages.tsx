@@ -13,7 +13,7 @@ const hoverLine = hover(`color:${MARK};border-color:${MARK}`);
 const underline = (fs = 14): CSSProperties => ({ padding: '4px 0', border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', color: INK, font: `500 ${fs}px ${SANS}`, cursor: 'pointer' });
 const contact = import.meta.env.VITE_CONTACT_EMAIL || 'hello@fletora.studio';
 /** What a message on the Contact page is about; keys must match KINDS in api/contact.ts. */
-export const CONTACT_KINDS = [['help', 'A question or help'], ['complaint', 'A complaint about Fletora'], ['appeal', 'Appeal a moderation decision'], ['bug', 'A problem with the site'],
+export const CONTACT_KINDS = [['feedback', 'Feedback or an idea'], ['help', 'A question or help'], ['complaint', 'A complaint about Fletora'], ['appeal', 'Appeal a moderation decision'], ['bug', 'A problem with the site'],
   ['report', 'Reporting content or a person'], ['privacy', 'A privacy or data request'], ['billing', 'Plus and billing'], ['other', 'Something else']] as const;
 const UPDATED = '26 October 2026';
 

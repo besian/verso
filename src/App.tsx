@@ -448,6 +448,8 @@ export default class App extends Component<object, State> {
   }
   notFound(nf: string) { cancelAnimationFrame(this.raf); this.target = 0; this.setState(s => ({ mode: 'notfound', nf, other: null, images: s.books[s.active].images, p: 0, focus: false, fz: 0, managing: false })); }
   openLegal(legal: 'privacy' | 'terms' | 'contact' | 'plus') { cancelAnimationFrame(this.raf); this.setState({ mode: 'legal', legal, other: null, focus: false, fz: 0, managing: false, draft: null }); }
+  /** The contact form, set to feedback. */
+  openFeedback() { const s = this.state; this.setState({ ct: { kind: 'feedback', email: s.ct?.email || s.acct?.email || '', text: s.ct?.text || '', link: '', hp: '' } }); this.openLegal('contact'); }
   openAdmin() { cancelAnimationFrame(this.raf); this.setState({ mode: 'admin', other: null, focus: false, fz: 0, managing: false, draft: null }); if (this.state.admin) this.loadReports(); }
   collections(): string[] { return [...new Set([...(this.state.saved || []).map(x => x.col || '').filter(Boolean), ...(this.state.newCols || [])])].sort((a, b) => a.localeCompare(b)); }
   moveSaved(id: string, col: string) {
@@ -1711,7 +1713,9 @@ export default class App extends Component<object, State> {
     const list = [...(pick ? [pick] : []), ...[...feed, ...rest.filter(b => b.ownerId !== me), ...rest.filter(b => !!me && b.ownerId === me)].filter(b => b.id !== pick?.id)];
     // One screen: the shelf takes what height is left after the headline block, and its books
     // shrink further if they'd be wider than the page.
-    const sel = list.slice(0, 3), gap = mob ? 14 : 28, shapes = sel.map(b => this.shapeOf(b)), sumW = shapes.reduce((t, sh) => t + sh.s * sh.a, 0);
+    // The middle book is shown open, turning its pages by itself (the shelf's first book with a few pages to show).
+    const picked = list.slice(0, 3), demo = picked.find(b => !b.mature && b.images.length >= 3);
+    const sel = demo && picked.length >= 2 ? [picked.filter(b => b !== demo)[0], demo, ...picked.filter(b => b !== demo).slice(1)] : picked, gap = mob ? 14 : 28, shapes = sel.map(b => this.shapeOf(b)), sumW = sel.reduce((t, b, k) => t + shapes[k].s * shapes[k].a * (b === demo ? 2 : 1), 0);
     const avail = (Math.min(vw, 1680) - 2 * (mob ? 16 : 40) - 24 - gap * Math.max(0, sel.length - 1)) * 0.9; // room for the tilt and back boards
     const maxH = mob ? Math.max(100, Math.min(190, vh * 0.23)) : Math.max(120, Math.min(300, vh * 0.31));
     const base = sumW ? Math.min(maxH, avail / sumW) : maxH;
@@ -1719,7 +1723,7 @@ export default class App extends Component<object, State> {
       hmFollowing: feed.length > 0, hmMixed: feed.length > 0 && feed.length < sel.length, hmMob: mob, hmPadX: mob ? 16 : 40, hmPadT: mob ? 70 : 84, hmEmpty: !!this.state.community && !list.length, hmShelfGap: gap, hmShelfH: Math.round(base),
       hmShelf: sel.map((b, i) => {
         const hh = Math.round(base * shapes[i].s);
-        return { key: b.id, isPick: b.id === pick?.id, name: b.name, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, title: b.name + ' — ' + b.artist, h: hh, w: Math.round(hh * shapes[i].a), fs: Math.max(11, Math.round(hh / 17)), rot: [-1.5, 0, 1.5][i] || 0, open: () => this.openOtherBook(b) };
+        return { key: b.id, isPick: b.id === pick?.id, demo: b === demo ? b.images.slice(0, 12).map(u => `url("${this.blobUrl(this.thumbOf(b, u))}") center/cover no-repeat #f3efe6`) : null, name: b.name, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, title: b.name + ' — ' + b.artist, h: hh, w: Math.round(hh * shapes[i].a * (b === demo ? 2 : 1)), fs: Math.max(11, Math.round(hh / 17)), rot: [-1.5, 0, 1.5][i] || 0, open: () => this.openOtherBook(b) };
       }),
       hmPick: pick ? { name: pick.name, artist: pick.artist, open: () => this.openOtherBook(pick) } : null,
       hmPrompt: currentPrompt().word, hmPromptOpen: () => this.openLabel('t:' + currentPrompt().tag),
@@ -1941,7 +1945,7 @@ export default class App extends Component<object, State> {
       inInstalled: installer.installed(), inCanPrompt: installer.canPrompt(), inIOS: installer.isIOS(),
       inInstall: () => installer.install().then(ok => ok && this.toast('fletora is on your home screen')),
       isDark: !!s.dark, setTheme: (t: 'light' | 'dark') => { themeMode.setTheme(t); this.setState({ dark: t === 'dark' }); },
-      openPrivacy: () => this.openLegal('privacy'), openTerms: () => this.openLegal('terms'), openContact: () => this.openLegal('contact'), openPlusPage: () => this.openLegal('plus'),
+      openPrivacy: () => this.openLegal('privacy'), openTerms: () => this.openLegal('terms'), openContact: () => this.openLegal('contact'), openFeedback: () => this.openFeedback(), openPlusPage: () => this.openLegal('plus'),
       // Plus and its free trial, shown around the site to people who don't have Plus.
       promoPlus: !s.plus, promoTrial: !s.acct, promoLine: !s.acct ? 'Join free and get 14 days of Fletora Plus, no card needed.' : 'More room, PDFs and stats with Fletora Plus.',
       // This week's prompt, while it runs.
@@ -2327,6 +2331,7 @@ export default class App extends Component<object, State> {
     const s = this.state, c = s.ct || { kind: 'help', email: s.acct?.email || '', text: '', link: '', hp: '' };
     const set = (k: 'kind' | 'email' | 'text' | 'link' | 'hp') => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => { const val = e.target.value; this.setState(st => ({ ct: { ...(st.ct || c), [k]: val, err: '' } })); };
     const HINTS: Record<string, string> = {
+      feedback: 'What you like, what’s confusing, or what you’d add. Every message is read.',
       complaint: 'What happened, and what you’d like us to do about it.', appeal: 'Which sketchbook or account, what we did, and why you think it was wrong.',
       bug: 'What you were doing, what went wrong, and your device and browser.', report: 'What’s wrong with it. For the fastest response, use Report on the page itself.',
       privacy: 'What you’d like: a copy of your data, a correction, deletion, or something else.', billing: 'What you need help with. Don’t send card details.',

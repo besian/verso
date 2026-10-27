@@ -13,7 +13,7 @@ const TO = process.env.CONTACT_EMAIL || 'hello@fletora.studio';
 const GAP_MS = 2 * 60_000; // one message per address (and per connection) every two minutes
 // Must match CONTACT_KINDS in src/views/Pages.tsx.
 const KINDS: Record<string, string> = {
-  help: 'A question or help', complaint: 'A complaint', appeal: 'Appeal a moderation decision', bug: 'A problem with the site',
+  feedback: 'Feedback or an idea', help: 'A question or help', complaint: 'A complaint', appeal: 'Appeal a moderation decision', bug: 'A problem with the site',
   report: 'Reporting content or a person', privacy: 'A privacy or data request', billing: 'Plus and billing', other: 'Something else',
 };
 const json = (status: number, body: object) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
