@@ -34,9 +34,12 @@ export function HomeScreen({ v }: { v: V }) {
     <div style={{ ...screen('hidden'), display: 'flex', flexDirection: 'column', boxSizing: 'border-box', padding: `${v.hmPadT}px ${v.hmPadX}px ${mob ? 16 : 22}px` }}>
       {/* Spare height is shared between the headline block and the shelf, each centred in its half. */}
       <section style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: mob ? 18 : 'clamp(14px, 2.6vh, 26px)' }}>
-        <Kicker />
+        {!signedOut && <Kicker />}
         <h1 style={{ margin: 0, maxWidth: 1100, font: `400 ${mob ? 'clamp(40px, 12vw, 56px)' : 'clamp(48px, min(8.5vw, 12vh), 132px)'}/.92 ${SERIF}`, letterSpacing: '-.03em', textWrap: 'balance' } as CSSProperties}>Every great idea starts in <InkWord /></h1>
-        {!mob && <p style={{ margin: 0, maxWidth: 480, fontSize: 'clamp(15px, 2vh, 18px)', lineHeight: 1.5, color: MUTED, textWrap: 'pretty' } as CSSProperties}>A home for sketchbooks, unfinished thoughts, and the creative process. Share your pages. Discover someone else’s world.</p>}
+        {/* Signed out: just the idea in a line, the two ways in, then the shelf (Sign in and Join are in the header). */}
+        {signedOut
+          ? <p style={{ margin: 0, maxWidth: 520, fontSize: mob ? 16 : 'clamp(16px, 2.1vh, 19px)', lineHeight: 1.5, color: MUTED, textWrap: 'balance' } as CSSProperties}>Share your sketchbooks, page by page, and leaf through everyone else’s.</p>
+          : !mob && <p style={{ margin: 0, maxWidth: 480, fontSize: 'clamp(15px, 2vh, 18px)', lineHeight: 1.5, color: MUTED, textWrap: 'pretty' } as CSSProperties}>A home for sketchbooks, unfinished thoughts, and the creative process. Share your pages. Discover someone else’s world.</p>}
         <div style={{ display: 'flex', flexDirection: mob ? 'column' : 'row', gap: mob ? 14 : 28, alignItems: 'center', justifyContent: 'center', marginTop: mob ? 4 : 2, width: mob ? '100%' : undefined }}>
           {signedOut
             ? <button onClick={v.openMe} className={hoverMark} style={{ ...primaryBtn(mob ? 48 : 50, 15, 28), width: mob ? '100%' : undefined, maxWidth: 320 }}>Start your own sketchbook</button>
@@ -45,9 +48,8 @@ export function HomeScreen({ v }: { v: V }) {
             ? <button onClick={v.goExplore} className={hoverLine} style={underlineBtn(15)}>Explore sketchbooks ↗</button>
             : <button onClick={v.startOwn} className={hoverLine} style={underlineBtn(15)}>Start your own →</button>}
         </div>
-        {v.promoPlus && <button onClick={v.openPlusPage} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', font: `500 13px ${SANS}`, color: MUTED }}><span style={{ ...label(MARK, 10), marginRight: 8 }}>Plus</span>{v.promoLine} <span style={{ color: INK, borderBottom: `1px solid ${INK}` }}>See what’s included</span></button>}
-        {signedOut && <div style={{ fontSize: 13, color: STONE }}>Already a member? <button onClick={v.openSignin} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${STONE}`, background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Sign in</button></div>}
-        {v.hmPick && (
+        {v.promoPlus && !signedOut && <button onClick={v.openPlusPage} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', font: `500 13px ${SANS}`, color: MUTED }}><span style={{ ...label(MARK, 10), marginRight: 8 }}>Plus</span>{v.promoLine} <span style={{ color: INK, borderBottom: `1px solid ${INK}` }}>See what’s included</span></button>}
+        {v.hmPick && !signedOut && (
           <button onClick={v.hmPick.open} className={hover(`border-color:${MARK}`)} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, maxWidth: '100%', padding: '7px 14px', border: '1px solid rgba(var(--ink-rgb),.2)', borderRadius: 20, background: 'none', color: INK, cursor: 'pointer', font: `500 13px ${SANS}` }}>
             <span style={label(MARK, 10)}>Staff pick</span>
             <span style={{ font: `italic 400 17px/1 ${SERIF}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{v.hmPick.name}</span>
@@ -56,7 +58,8 @@ export function HomeScreen({ v }: { v: V }) {
         )}
       </section>
       <section style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10, paddingTop: mob ? 0 : 28 }}>
-        <div style={{ overflow: 'hidden', paddingTop: 16 }}>
+        {/* Room above the books for one lifted on hover with its Staff pick tag. */}
+        <div style={{ overflow: 'hidden', paddingTop: 34 }}>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: v.hmShelfGap, boxSizing: 'border-box', padding: `0 12px ${v.hmMob ? 12 : 16}px`, borderBottom: `1px solid ${INK}` }}>
             {!v.hmShelf.length && (
               <div onClick={signedOut ? v.openMe : v.startOwn} className={hover(`border-color:${MARK};color:${MARK}`)} style={{ width: Math.round(v.hmShelfH * 0.72), height: v.hmShelfH, boxSizing: 'border-box', border: '2px dashed rgba(var(--ink-rgb),.35)', borderBottom: 'none', borderRadius: '2px 8px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 12, cursor: 'pointer', color: 'rgba(var(--ink-rgb),.7)', font: `400 ${mob ? 17 : 20}px/1.1 ${SERIF}` }}>Your sketchbook<br />goes here</div>
@@ -70,7 +73,7 @@ export function HomeScreen({ v }: { v: V }) {
           </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, ...label() }}>
-          <span>{v.hmMixed ? (mob ? 'Artists you follow & more' : 'New from artists you follow and the community') : v.hmFollowing ? (mob ? 'From artists you follow' : 'New from artists you follow') : v.hmShelf.length ? (mob ? 'From the community' : 'From the community — open any book to leaf through it') : 'The shelf is empty — yours could be first'}</span>
+          <span>{v.hmMixed ? (mob ? 'Artists you follow & more' : 'New from artists you follow and the community') : v.hmFollowing ? (mob ? 'From artists you follow' : 'New from artists you follow') : v.hmShelf.length ? (mob || signedOut ? 'From the community' : 'From the community — open any book to leaf through it') : 'The shelf is empty — yours could be first'}</span>
           {v.hmShelf.length > 0 && <button onClick={v.goExplore} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap', ...label(INK) }}>View all →</button>}
         </div>
         <LegalLinks v={v} />
