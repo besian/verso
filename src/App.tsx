@@ -105,7 +105,7 @@ interface State {
   /** Explore's Content filter set to Mature only (with Mature work shown). */
   matureOnly?: boolean;
   /** Watching a page's stroke replay: the page, its finished picture, and the strokes once loaded. */
-  replay?: { title: string; img: string; data: string | null; err?: string } | null;
+  replay?: { title: string; img: string; data: string | null; err?: string; at?: number } | null;
   /** Comments on the open sketchbook (kept live), and the comments panel: open, showing every page, the draft, and which page it's for. */
   comments?: { bookId: string; list: api.Comment[] } | null; cmReply?: string | null; cmOpen?: boolean; cmAll?: boolean; cmDraft?: string; cmBusy?: boolean; cmErr?: string; cmFor?: number | null;
   /** Making a PDF of the open sketchbook: how far along ('3/40'). */
@@ -1577,23 +1577,24 @@ export default class App extends Component<object, State> {
         const at = this.replayHere(); if (at == null) return { rpAt: null };
         const u = imgs[at];
         return { rpAt: at, rpLbl: `Watch page ${at + 1} being drawn`, rpOpen: () => {
-          this.setState({ replay: { title: `${book.name} · page ${at + 1}`, img: this.blobUrl(u), data: null } });
+          this.setState({ replay: { title: `${book.name} · page ${at + 1}`, img: this.blobUrl(u), data: null, at } });
           api.replayData(book.id, api.pageKey(u)).then(d => this.setState(st => st.replay ? { replay: { ...st.replay, data: d, err: d ? '' : 'This replay isn’t available.' } } : null))
             .catch(() => this.setState(st => st.replay ? { replay: { ...st.replay, err: 'Couldn’t load the replay.' } } : null));
         } };
       })(),
       rpState: s.replay || null, rpClose: () => this.setState({ replay: null }),
       // The whole sketchbook as a short vertical video: drawn pages replay their strokes (see timelapse.ts).
-      bkTimelapse: async () => {
+      // `only`: one page (the replay being watched), as its own video.
+      bkTimelapse: async (only?: number) => {
         const tlm = await import('./timelapse');
         if (!tlm.videoType()) return this.toast('This browser can’t make videos. Try Chrome or Safari.');
-        const fill = (s.books[s.active] as Book | undefined)?.fillers || {}, list = imgs.filter(u => u && !(o ? false : fill[u])).slice(0, 20);
+        const fill = (s.books[s.active] as Book | undefined)?.fillers || {}, list = only != null ? [imgs[only]].filter(Boolean) : imgs.filter(u => u && !(o ? false : fill[u])).slice(0, 20);
         if (!list.length) return this.toast('Add some pages first.');
         const handle = o?.handle || mb?.owner?.handle || s.acct?.handle || '', artist = o ? o.artist : mb?.owner?.name || s.acct?.name || '';
         const link = `${location.origin}${o?.arch ? `/archive/${book.id}` : `/@${handle}/${book.id}`}`;
         const ac = new AbortController(); this.tlAbort?.abort(); this.tlAbort = ac;
-        const name = `${book.name.replace(/[^\w\- ]+/g, '').trim() || 'fletora'} - timelapse`;
-        this.setState({ more: null, tl: { phase: 'making', progress: 0, title: book.name, link } });
+        const name = `${book.name.replace(/[^\w\- ]+/g, '').trim() || 'fletora'} - ${only != null ? `page ${only + 1} replay` : 'timelapse'}`;
+        this.setState({ more: null, replay: null, tl: { phase: 'making', progress: 0, title: only != null ? `${book.name} · page ${only + 1}` : book.name, link } });
         const urls: string[] = [];
         try {
           const pages = await Promise.all(list.map(async u => {
