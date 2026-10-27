@@ -97,7 +97,7 @@ interface State {
   /** This week's prompt; promptJoin: the next new sketchbook is for it; prDraft: the moderators' form. */
   prompt?: api.Prompt | null; promptJoin?: boolean; prDraft?: { title: string; note: string; tag: string };
   /** Books whose last save failed (shown with Try again). */
-  unsaved?: string[];
+  unsaved?: string[]; unsavedWhy?: Record<string, string>;
   /** The weekly email (Settings; opt-in, kept in emailPrefs). */
   weekly?: boolean;
   /** Shows Mature sketchbooks (Settings; signed in and 18 or over). */
@@ -832,7 +832,10 @@ export default class App extends Component<object, State> {
       // Said out loud: a save that silently fails loses the sketchbook on the next visit.
       const code = String((e as { code?: string })?.code || '');
       const name = this.findBook(id)?.name || 'your sketchbook';
-      this.toast(code.startsWith('image/') ? api.errMsg(e) : code === 'permission-denied' ? `Couldn’t save “${name}”: it was refused. Try again, or contact us if it keeps happening.` : `Couldn’t save “${name}”. Check your connection and try again.`);
+      // The reason, short, so a failure we can't see here can be reported and fixed.
+      const why = (code || `${(e as Error)?.name || 'Error'}: ${(e as Error)?.message || e}`).slice(0, 80);
+      this.setState(st => ({ unsavedWhy: { ...st.unsavedWhy, [id]: why } }));
+      this.toast(code.startsWith('image/') ? api.errMsg(e) : code === 'permission-denied' ? `Couldn’t save “${name}”: it was refused. Try again, or contact us if it keeps happening.` : `Couldn’t save “${name}”. Check your connection and try again. (${why})`);
     })
       .finally(() => this.busy.set(id, (this.busy.get(id) || 1) - 1));
     this.syncQ.set(id, next);
@@ -2036,6 +2039,7 @@ export default class App extends Component<object, State> {
       tlCanShare: typeof navigator !== 'undefined' && !!(navigator as Navigator & { canShare?: unknown }).canShare && /Mobi|Android|iPhone|iPad/.test(navigator.userAgent),
       // Saves that failed: a bar until they go through.
       usOn: !!s.unsaved?.length && !s.embed, usText: (() => { const n = (s.unsaved || []).map(id => this.findBook(id)?.name).filter(Boolean); return n.length === 1 ? `“${n[0]}” isn’t saved yet.` : `${n.length} sketchbooks aren’t saved yet.`; })(),
+      usWhy: (s.unsaved || []).map(id => s.unsavedWhy?.[id]).filter(Boolean)[0] || '',
       usBusy: (s.unsaved || []).some(id => (this.busy.get(id) || 0) > 0),
       usRetry: () => { (s.unsaved || []).forEach(id => this.findBook(id) ? this.syncNow(id) : this.setState(st => ({ unsaved: (st.unsaved || []).filter(x => x !== id) }))); this.forceUpdate(); },
       anOffered: api.analyticsOffered, anOn: s.analytics === 'yes', anAsk: api.analyticsOffered && !s.analytics && !s.embed,

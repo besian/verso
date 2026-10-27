@@ -543,7 +543,7 @@ export function UnsavedBar({ v }: { v: V }) {
   return (
     <div role="alert" style={{ position: 'absolute', left: 12, right: 12, top: 'calc(env(safe-area-inset-top) + 72px)', zIndex: 31, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
       <div style={{ pointerEvents: 'auto', maxWidth: 560, width: '100%', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: '8px 14px', flexWrap: 'wrap', padding: '10px 12px 10px 14px', background: PAPER, border: `1px solid ${MARK}`, borderLeftWidth: 3, boxShadow: '0 12px 30px rgba(10,10,30,.16)', fontSize: 13.5, lineHeight: 1.45 }}>
-        <span style={{ flex: '1 1 240px' }}><b style={{ fontWeight: 600 }}>{v.usText}</b> Your changes are kept on this device until it works.</span>
+        <span style={{ flex: '1 1 240px' }}><b style={{ fontWeight: 600 }}>{v.usText}</b> Your changes are kept on this device until it works.{v.usWhy && <span style={{ display: 'block', fontSize: 12, color: 'rgba(var(--ink-rgb),.6)', marginTop: 2, overflowWrap: 'anywhere' }}>Reason: {v.usWhy}</span>}</span>
         <button onClick={v.usRetry} disabled={v.usBusy} style={{ height: 34, padding: '0 16px', border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 13px ${SANS}`, cursor: v.usBusy ? 'progress' : 'pointer', opacity: v.usBusy ? 0.6 : 1 }}>{v.usBusy ? 'Saving…' : 'Try again'}</button>
       </div>
     </div>
