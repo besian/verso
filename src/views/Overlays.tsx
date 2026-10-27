@@ -1435,7 +1435,7 @@ export function EmbedModal({ v }: { v: V }) {
 }
 
 /** Brief confirmation at the bottom of the screen. */
-/** The 40-second tour of fletora (public/welcome/tour.mp4), played here rather than in a new tab. */
+/** The 1-minute tour of fletora (public/welcome/tour.mp4), played here rather than in a new tab. */
 export function TourVideo({ onClose }: { onClose: () => void }) {
   return (
     <div role="dialog" aria-modal="true" aria-label="A tour of fletora" onClick={e => { if (e.target === e.currentTarget) onClose(); }}
