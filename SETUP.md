@@ -181,6 +181,7 @@ sketchbooks private. Paid Plus is left to the Stripe webhook.
 - Explore's Following tab lists the followed artists' recently updated sketchbooks (no extra data or indexes).
 - Replies carry `replyTo` (the comment answered, one level deep) and send its author a `reply_<id>` notification; `@handle` in a comment sends that person a `mention_<id>` notification. The rules check both against the comment itself.
 - The weekly email is opt-in (Settings → Weekly email, stored in `emailPrefs/{uid}`). The daily cron sends it on Mondays to people with something new, with a signed one-click unsubscribe link (`/api/cron?unsub=…`, signed with `CRON_SECRET`). To send one now for testing: `curl -H "Authorization: Bearer $CRON_SECRET" "https://fletora.studio/api/cron?weekly=now"`.
+- Weekly prompts: moderators set one on /admin (prompt, a line about it, tag). It's stored in `prompts/current`, shown on Explore for 7 days with its entries (public sketchbooks with that tag) and Join in (a new sketchbook named and tagged for it), and leads the weekly email (which then goes to subscribers even in a quiet week). Publish the rules after pulling this.
 - The moderator dashboard (top of /admin) counts on the server. "Comments in the last 7 days" needs the `comments.at` collection-group index: in the console add a single-field exemption for `comments` → `at` with *Collection group* ascending (and keep the Collection ones on). Until then that tile shows —.
 
 ## Stroke replays

@@ -236,6 +236,20 @@ export function Explore({ v }: { v: V }) {
               : v.exNoneLbl}
           </div>
         )}
+        {/* This week's prompt: what to draw, its entries (the sketchbooks with its tag), and joining in. */}
+        {v.prOn && (
+          <section aria-label="This week’s prompt" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px 28px', flexWrap: 'wrap', padding: v.notMob ? '22px 24px' : '18px 16px', border: `1px solid ${INK}` }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, flex: '1 1 320px' }}>
+              <span style={{ display: 'flex', gap: 10, flexWrap: 'wrap', ...label(MARK, 10) }}><span>This week’s prompt</span><span style={{ color: MUTED }}>{v.prTag} · {v.prUntil}</span></span>
+              <span style={{ ...serif(v.notMob ? 38 : 30, 1.05, '-.01em') }}>{v.prTitle}</span>
+              {v.prNote && <span style={{ fontSize: 14, lineHeight: 1.5, color: MUTED, maxWidth: 640 }}>{v.prNote}</span>}
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={v.prSee} aria-pressed={v.prShowing} className={hover(`border-color:${INK}`)} style={{ height: 42, padding: '0 18px', border: `1px solid ${v.prShowing ? INK : 'rgba(var(--ink-rgb),.3)'}`, borderRadius: 2, background: v.prShowing ? 'rgba(var(--ink-rgb),.06)' : 'none', color: INK, font: `500 14px ${SANS}`, cursor: 'pointer' }}>{v.prShowing ? 'Show everything' : 'See entries'}</button>
+              <button onClick={v.prJoin} className={hover(`background:${INK}`)} style={{ height: 42, padding: '0 20px', border: 'none', borderRadius: 2, background: MARK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer' }}>Join in</button>
+            </div>
+          </section>
+        )}
         {/* Fletora Plus, for people without it; it can be closed (it stays away for a month). */}
         {v.exPromo && (
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px 24px', flexWrap: 'wrap', padding: '16px 48px 16px 20px', background: 'rgba(173,73,58,.07)', borderLeft: `2px solid ${MARK}` }}>

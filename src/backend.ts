@@ -950,6 +950,20 @@ export async function setPick(by: string, bookId: string | null) {
   if (bookId) await setDoc(r, { bookId, by, at: Date.now() }); else await deleteDoc(r);
 }
 
+/** This week's prompt (prompts/current): set by moderators, shown on Explore until it ends; entries are
+ *  sketchbooks with its tag. */
+export interface Prompt { title: string; note: string; tag: string; starts: number; ends: number }
+export async function getPrompt(): Promise<Prompt | null> {
+  if (!db) return null;
+  try { const s = await getDoc(doc(db, 'prompts', 'current')); return s.exists() && s.data().title ? s.data() as Prompt : null; } catch { return null; }
+}
+export async function setPrompt(by: string, p: { title: string; note: string; tag: string } | null) {
+  const r = doc(need().db, 'prompts', 'current');
+  if (!p) return deleteDoc(r);
+  const starts = Date.now();
+  await setDoc(r, { title: p.title.slice(0, 80), note: p.note.slice(0, 240), tag: p.tag, starts, ends: starts + 7 * 86_400_000, by, at: starts });
+}
+
 /** Hides a sketchbook from everyone but its owner, or restores it. */
 export async function setHidden(bookId: string, on: boolean) { await updateDoc(doc(need().db, 'books', bookId), { hidden: on, isPublic: !on, ...(on ? { linkOnly: false } : {}) }); }
 /** Suspends an artist (their public sketchbooks are hidden) or lifts it (books hidden by moderators come back). */

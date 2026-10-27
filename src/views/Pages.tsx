@@ -464,6 +464,25 @@ export function Admin({ v }: { v: V }) {
           </div>
         ) : <span style={{ fontSize: 14, lineHeight: 1.5, color: MUTED }}>None yet. Open any public sketchbook and choose <b style={{ color: INK, fontWeight: 600 }}>Make staff pick</b> from its ⋯ menu.</span>}
       </section>
+      <section style={card}>
+        <span style={label(MUTED, 10)}>This week’s prompt</span>
+        {v.adPrompt.live && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ ...serif(22, 1.1) }}>{v.adPrompt.live.title}</div>
+              <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>{v.adPrompt.live.tag} · {v.adPrompt.live.until}</div>
+            </div>
+            <button onClick={v.adPrompt.live.end} style={smallBtn(true)}>End</button>
+          </div>
+        )}
+        <form onSubmit={v.adPrompt.go} style={{ display: 'flex', flexDirection: 'column', gap: 10, ...(v.adPrompt.live ? { paddingTop: 12, borderTop: '1px solid rgba(var(--ink-rgb),.1)' } : {}) }}>
+          <TextField label={v.adPrompt.live ? 'Next prompt (replaces it)' : 'Prompt'} value={v.adPrompt.title} onChange={v.adPrompt.onTitle} placeholder="Draw your window" />
+          <TextField label="A line about it (optional)" value={v.adPrompt.note} onChange={v.adPrompt.onNote} placeholder="The view, the frame, the light at 4pm" />
+          <TextField label="Tag" value={v.adPrompt.tag} onChange={v.adPrompt.onTag} placeholder="window" />
+          <button type="submit" disabled={!v.adPrompt.canSet} style={{ ...smallBtn(false, false), height: 38, alignSelf: 'flex-start', opacity: v.adPrompt.canSet ? 1 : 0.45 }}>Run it for a week</button>
+          <span style={{ fontSize: 12.5, lineHeight: 1.45, color: MUTED }}>Shown on Explore for 7 days and in the weekly email. Entries are sketchbooks with its tag.</span>
+        </form>
+      </section>
       {v.adStats?.newest.length > 0 && (
         <section style={card}>
           <span style={label(MUTED, 10)}>Newest members</span>

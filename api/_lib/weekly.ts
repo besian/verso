@@ -50,8 +50,19 @@ export async function weekFor(db: Firestore, uid: string, since: number, origin:
 
 const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 
-export function weeklyEmail(name: string, w: Week, origin: string, unsub: string) {
+export interface WeekPrompt { title: string; note: string; tag: string }
+export const emptyWeek = (): Week => ({ updated: [], likes: 0, followers: 0, comments: 0, mentions: 0, quotes: [] });
+
+export function weeklyEmail(name: string, w: Week, origin: string, unsub: string, prompt?: WeekPrompt | null) {
   const first = name.trim().split(/\s+/)[0] || 'there', rows: string[] = [row.text(`Hi ${esc(first)}, here’s your week on fletora.`)];
+  // This week's prompt first: it's what there is to do this week.
+  if (prompt) {
+    const url = `${origin}/explore?tag=${encodeURIComponent(prompt.tag)}`;
+    rows.push(row.label('This week’s prompt'));
+    rows.push(`<tr><td style="padding-bottom:${prompt.note ? 6 : 14}px"><a href="${url}" style="font:400 30px/1.15 ${SERIF};color:${INK};text-decoration:none">${esc(prompt.title)}</a></td></tr>`);
+    if (prompt.note) rows.push(row.small(esc(prompt.note), 14));
+    rows.push(`<tr><td style="padding-bottom:26px"><a href="${url}" style="font:500 14px/1 ${SANS};color:${INK}">See entries and join in →</a></td></tr>`);
+  }
   if (w.updated.length) {
     rows.push(row.label('New from people you follow'));
     rows.push(`<tr><td style="padding-bottom:22px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${w.updated.map(u =>
@@ -68,9 +79,10 @@ export function weeklyEmail(name: string, w: Week, origin: string, unsub: string
   }
   rows.push(row.button(origin, 'Open fletora'));
   rows.push(row.small(`You’re getting this because you turned on the weekly email in Settings. <a href="${unsub}" style="color:${MUTED}">Unsubscribe</a>.`, 0));
-  const subject = w.updated.length ? `New pages from ${w.updated[0].artist}${w.updated.length > 1 ? ' and others' : ''}` : `Your week on fletora: ${bits.join(', ')}`;
+  const subject = !w.updated.length && prompt && !(w.likes || w.followers || w.comments || w.mentions) ? `This week on fletora: ${prompt.title}` : w.updated.length ? `New pages from ${w.updated[0].artist}${w.updated.length > 1 ? ' and others' : ''}` : `Your week on fletora: ${bits.join(', ')}`;
   const html = emailPage({ title: subject, origin, heading: 'Your week on <em>fletora</em>', rows });
   const text = [`Hi ${first}, here’s your week on fletora.`,
+    ...(prompt ? ['', `This week’s prompt: ${prompt.title}${prompt.note ? ' (' + prompt.note + ')' : ''}`, `${origin}/explore?tag=${encodeURIComponent(prompt.tag)}`] : []),
     ...(w.updated.length ? ['', 'New from people you follow:', ...w.updated.map(u => `- ${u.name} by ${u.artist}: ${u.url}`)] : []),
     ...(bits.length ? ['', `On your work: ${bits.join(', ')}`, ...w.quotes.map(q => `- "${q.text}" (${q.from} on ${q.book})`)] : []),
     '', origin, '', `Unsubscribe: ${unsub}`].join('\n');
@@ -81,15 +93,18 @@ export function weeklyEmail(name: string, w: Week, origin: string, unsub: string
 export async function sendWeekly(db: Firestore, auth: { getUser(uid: string): Promise<{ email?: string }> }, o: { now: number; origin: string; from: string; force?: boolean }) {
   if (!process.env.RESEND_API_KEY || (!o.force && new Date(o.now).getUTCDay() !== 1)) return 0;
   const on = await db.collection('emailPrefs').where('weekly', '==', true).get();
+  // The week's prompt, if one is running: in every email, and reason enough to send one.
+  const pd = (await db.collection('prompts').doc('current').get().catch(() => null))?.data();
+  const prompt: WeekPrompt | null = pd?.title && (pd.ends || 0) > o.now ? { title: String(pd.title), note: String(pd.note || ''), tag: String(pd.tag || '') } : null;
   let sent = 0;
   for (const d of on.docs) {
     const last = d.get('lastWeekly') || 0; if (!o.force && o.now - last < WEEK - 86_400_000) continue;
     try {
       const u = await auth.getUser(d.id).catch(() => null); if (!u?.email) continue;
-      const w = await weekFor(db, d.id, Math.max(last, o.now - WEEK), o.origin);
+      const w = await weekFor(db, d.id, Math.max(last, o.now - WEEK), o.origin) || (prompt ? emptyWeek() : null);
       if (w) {
         const name = ((await db.collection('users').doc(d.id).get()).get('name') as string) || '', unsub = unsubUrl(o.origin, d.id);
-        const m = weeklyEmail(name, w, o.origin, unsub);
+        const m = weeklyEmail(name, w, o.origin, unsub, prompt);
         const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'content-type': 'application/json' },
           body: JSON.stringify({ from: o.from, to: [u.email], subject: m.subject, html: m.html, text: m.text, headers: { 'List-Unsubscribe': `<${unsub}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } }) });
         if (!r.ok) { console.error('resend weekly', r.status, await r.text()); continue; }

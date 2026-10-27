@@ -91,6 +91,8 @@ interface State {
   analytics?: 'yes' | 'no' | null;
   /** The moderator dashboard's numbers. */
   adStats?: api.SiteStats;
+  /** This week's prompt; promptJoin: the next new sketchbook is for it; prDraft: the moderators' form. */
+  prompt?: api.Prompt | null; promptJoin?: boolean; prDraft?: { title: string; note: string; tag: string };
   /** Books whose last save failed (shown with Try again). */
   unsaved?: string[];
   /** The weekly email (Settings; opt-in, kept in emailPrefs). */
@@ -294,7 +296,7 @@ export default class App extends Component<object, State> {
     this.unAuth = api.watchAuth(u => { if (!this.signingUp) this.loadUser(u); });
     this.loadCommunity();
     api.bannedUsers().then(banned => this.setState({ banned }));
-    this.loadPick(); this.loadArchive(); api.teamIds().then(team => this.setState({ team }));
+    this.loadPick(); this.loadArchive(); api.getPrompt().then(prompt => this.setState({ prompt })); api.teamIds().then(team => this.setState({ team }));
   }
   /** Loads (or clears) everything that belongs to the signed-in user. */
   async loadUser(u: AuthUser | null, acct?: Account) {
@@ -988,8 +990,10 @@ export default class App extends Component<object, State> {
   }
   newBook(shape: ShapeKey) {
     const books = this.state.books, n = books.length;
-    const nb = [...books, { id: this.state.acct ? api.newBookId() : 'local-' + Date.now(), name: `sketchbook ${n + 1}`, color: PALETTE[n % PALETTE.length], images: [], shape, createdAt: Date.now() }];
-    cancelAnimationFrame(this.raf); this.target = 0; this.setState({ books: nb, active: n, images: [], p: 0, managing: true, newPick: false }); this.persist(nb);
+    // Joining the week's prompt: the new sketchbook is named for it and carries its tag.
+    const pr = this.state.promptJoin ? this.state.prompt : null;
+    const nb = [...books, { id: this.state.acct ? api.newBookId() : 'local-' + Date.now(), name: pr ? pr.title : `sketchbook ${n + 1}`, color: PALETTE[n % PALETTE.length], images: [], shape, createdAt: Date.now(), ...(pr ? { tags: [pr.tag] } : {}) }];
+    cancelAnimationFrame(this.raf); this.target = 0; this.setState({ books: nb, active: n, images: [], p: 0, managing: true, newPick: false, promptJoin: false }); this.persist(nb);
   }
   /** Plus: the open sketchbook as a PDF download (made in the browser, see pdf.ts). */
   async downloadPdf() {
@@ -1904,6 +1908,12 @@ export default class App extends Component<object, State> {
       openPrivacy: () => this.openLegal('privacy'), openTerms: () => this.openLegal('terms'), openContact: () => this.openLegal('contact'), openPlusPage: () => this.openLegal('plus'),
       // Plus and its free trial, shown around the site to people who don't have Plus.
       promoPlus: !s.plus, promoTrial: !s.acct, promoLine: !s.acct ? 'Join free and get 14 days of Fletora Plus, no card needed.' : 'More room, PDFs and stats with Fletora Plus.',
+      // This week's prompt, while it runs.
+      prOn: !!s.prompt && s.prompt.ends > Date.now(), prTitle: s.prompt?.title || '', prNote: s.prompt?.note || '', prTag: s.prompt ? '#' + s.prompt.tag : '',
+      prUntil: s.prompt ? 'until ' + new Date(s.prompt.ends).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' }) : '',
+      prShowing: !!s.prompt && s.exLabel === 't:' + s.prompt.tag,
+      prSee: () => { if (s.prompt) this.setLabel(s.exLabel === 't:' + s.prompt.tag ? '' : 't:' + s.prompt.tag); },
+      prJoin: () => { if (!s.acct) return this.openJoin(); this.setState({ promptJoin: true }); this.openNewPick(); },
       exPromo: !s.plus && !s.exPromoHidden,
       hidePromo: () => { try { localStorage.setItem('sb-promo-hidden', String(Date.now())); } catch { /* storage unavailable */ } this.setState({ exPromoHidden: true }); },
       navPlusLine: s.mode === 'legal' && s.legal === 'plus' ? INK : 'transparent', navPlusFg: s.mode === 'legal' && s.legal === 'plus' ? INK : STONE,
@@ -2314,6 +2324,19 @@ export default class App extends Component<object, State> {
             { key: 'weekly', label: 'Weekly email', value: f(st.weekly), note: 'people subscribed' },
           ],
           newest: st.newest.map(p => ({ key: p.uid, name: p.name || p.handle, handle: '@' + p.handle, when: p.joined ? new Date(p.joined).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '', open: () => this.openProfile({ uid: p.uid, name: p.name, handle: p.handle }) })),
+        };
+      })(),
+      // This week's prompt: the moderators' form.
+      adPrompt: (() => {
+        const live = s.prompt && s.prompt.ends > Date.now() ? s.prompt : null, d = s.prDraft || { title: '', note: '', tag: '' };
+        const set = (k: 'title' | 'note' | 'tag') => (e: ChangeEvent<HTMLInputElement>) => { const val = e.target.value; this.setState(st => ({ prDraft: { ...(st.prDraft || { title: '', note: '', tag: '' }), [k]: val } })); };
+        const save = (p: { title: string; note: string; tag: string } | null) => { const a = s.acct; if (!a) return;
+          api.setPrompt(a.uid, p).then(() => api.getPrompt()).then(prompt => { this.setState({ prompt, prDraft: undefined }); this.toast(p ? 'Prompt set for this week' : 'Prompt ended'); }, e => { console.error(e); this.toast('Couldn’t change the prompt'); }); };
+        return {
+          live: live ? { title: live.title, tag: '#' + live.tag, until: 'until ' + new Date(live.ends).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }), end: () => save(null) } : null,
+          title: d.title, note: d.note, tag: d.tag, onTitle: set('title'), onNote: set('note'), onTag: set('tag'),
+          canSet: !!d.title.trim() && !!tagSlug(d.tag || d.title),
+          go: (e?: { preventDefault(): void }) => { e?.preventDefault(); const tag = tagSlug(d.tag || d.title); if (!d.title.trim() || !tag) return; save({ title: d.title.trim(), note: d.note.trim(), tag }); },
         };
       })(),
       adPick: s.pick ? { name: s.pick.name, artist: s.pick.artist, open: () => this.openOtherBook(s.pick!), remove: () => this.togglePick(s.pick!) } : null,
