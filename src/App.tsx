@@ -1,7 +1,7 @@
 import { Component, Suspense, createRef, lazy } from 'react';
 import { flushSync } from 'react-dom';
 import type { ChangeEvent, DragEvent, MouseEvent, PointerEvent, ReactNode, WheelEvent } from 'react';
-import { CONFIG, GRID_WIDTH, MAX_MEDIUMS, MAX_TAGS, MEDIUMS, PALETTE, SHAPES, mediumKey, tagSlug } from './data';
+import { CONFIG, GUIDE_BOOK, GRID_WIDTH, MAX_MEDIUMS, MAX_TAGS, MEDIUMS, PALETTE, SHAPES, mediumKey, tagSlug } from './data';
 import type { Account, ArchiveEntry, Book, OtherBook, PageNote, Shape, ShapeKey } from './data';
 import * as api from './backend';
 import type { AuthUser, Billing, BillingDetails, BookDoc, Chat, Msg, Notif, Person, Report, Saved, Stats, ViewSource } from './backend';
@@ -39,9 +39,10 @@ const Legal = lazy(() => import('./views/Pages').then(m => ({ default: m.Legal }
 const NotFound = lazy(() => import('./views/Pages').then(m => ({ default: m.NotFound })));
 const Messages = lazy(() => import('./views/Messages').then(m => ({ default: m.Messages })));
 const ReplayPlayer = lazy(() => import('./views/Replay').then(m => ({ default: m.ReplayPlayer })));
+const Welcome = lazy(() => import('./views/Welcome').then(m => ({ default: m.Welcome })));
 const TimelapseModal = lazy(() => import('./views/Timelapse').then(m => ({ default: m.TimelapseModal })));
 import { shareImage, sharePicture } from './shareImage';
-import { ArchiveModal, AskModal, CardModal, ConsentBar, CollectionModal, UnsavedBar, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
+import { ArchiveModal, AskModal, CardModal, ConsentBar, CollectionModal, UnsavedBar, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast } from './views/Overlays';
 
 /** Colours for text: ink, graphite, the accent red, blue, green and paper white. */
 const TEXT_COLORS: [string, string][] = [['#222320', 'Ink'], ['#6b6a64', 'Graphite'], ['#ad493a', 'Red'], ['#2f4a7a', 'Blue'], ['#3f7a56', 'Green'], ['#f3efe6', 'White']];
@@ -528,7 +529,7 @@ export default class App extends Component<object, State> {
   syncWatches() {
     const s = this.state, me = s.acct?.uid, o = s.other as OtherBook | null, mb = s.books[s.active];
     const want = new Map<string, () => () => void>();
-    const bookId = s.mode === 'other' ? o?.id : s.mode === 'mine' && mb && !mb.id.startsWith('local') ? mb.id : undefined;
+    const bookId = s.mode === 'other' ? (o?.guide ? undefined : o?.id) : s.mode === 'mine' && mb && !mb.id.startsWith('local') ? mb.id : undefined;
     if (bookId) want.set('bc:' + bookId, () => api.watch(['bookCounts', bookId], d => this.setState(st => ({ counts: { ...st.counts, ['b:' + bookId]: Math.max(0, d?.likes || 0) } }))));
     if (bookId) want.set('cm:' + bookId, () => api.watchComments(bookId, list => this.setState({ comments: { bookId, list } })));
     if (bookId && me && s.mode === 'other') want.set(`lk:${bookId}:${me}`, () => api.watch(['books', bookId, 'likes', me], d => this.setState(st => ({ liked: { ...st.liked, [bookId]: !!d } }))));
@@ -592,12 +593,15 @@ export default class App extends Component<object, State> {
         ? this.ask({ title: 'Mature sketchbook', text: 'This sketchbook has drawings with nudity. Only open it if you’re 18 or over. You can change this any time in Account settings.', yes: 'I’m 18 or over, show it', run: () => this.setMature(true, () => this.openOtherBook(b, from)) })
         : this.ask({ title: 'Mature sketchbook', text: 'This sketchbook has drawings with nudity. Sign in to choose whether to see Mature work.', yes: 'Sign in', run: () => this.openAuth('signin') });
     }
-    if (b.ownerId !== s.acct?.uid && !this.viewed.has(b.id)) {
+    if (!b.guide && b.ownerId !== s.acct?.uid && !this.viewed.has(b.id)) {
       this.viewed.add(b.id);
       api.countView(b.id, from || (this.applying ? 'link' : s.mode === 'explore' ? 'explore' : s.mode === 'profile' ? 'profile' : s.mode === 'home' ? 'home' : 'link'));
     }
     this.setState({ mode: 'other', other: b, images: b.images, p: 0, focus: false, fz: 0 });
   }
+  /** The welcome sketchbook: a read-only guide to the site. */
+  openGuide = () => { this.guideSeen = true; try { localStorage.setItem('fl-guide', '1'); } catch { /* fine */ } this.setState({ welcome: false, more: null }); this.openOtherBook(GUIDE_BOOK); };
+  guideSeen = (() => { try { return !!localStorage.getItem('fl-guide'); } catch { return false; } })();
   viewed = new Set<string>();
   /** A new account's free 14-day trial of Plus: asked for once (the server decides), then welcomed. */
   async startTrial(uid: string) {
@@ -653,7 +657,7 @@ export default class App extends Component<object, State> {
       case 'admin': return '/admin';
       case 'notfound': case 'action': return here;
       case 'mine': { const b = s.books[s.active]; return s.acct && b && !b.id.startsWith('local') ? '/sketchbooks/' + b.id : '/sketchbooks'; }
-      case 'other': { const o = s.other as OtherBook | null; if (s.embed && o) return '/embed/' + o.id; if (o?.arch) return '/archive/' + o.id; return o?.handle ? `/@${o.handle}/${o.id}` : here; }
+      case 'other': { const o = s.other as OtherBook | null; if (s.embed && o) return '/embed/' + o.id; if (o?.arch) return '/archive/' + o.id; if (o?.guide) return '/guide'; return o?.handle ? `/@${o.handle}/${o.id}` : here; }
       case 'profile': {
         if (!s.profileOf) return s.acct ? '/@' + s.acct.handle : '/';
         const h = (s.pf?.uid === s.profileOf.uid && s.pf?.profile?.handle) || s.profileOf.handle;
@@ -696,6 +700,7 @@ export default class App extends Component<object, State> {
         if (!hit) return this.notFound('sketchbook');
         return this.openOtherBook({ ...toOther(hit.d, 0), artist: hit.e.artist, arch: hit.e });
       }
+      if (a === 'guide') return this.openOtherBook(GUIDE_BOOK);
       if (a === 'admin') return s.acct ? this.openAdmin() : this.openAuth('signin');
       if (a === 'signin' || a === 'join' || a === 'reset') { if (s.acct) return this.goMode('mine'); this.openAuth(a === 'join' ? 'join' : 'signin'); if (a === 'reset') this.setState({ suMode: 'reset' }); return; }
       if (a === 'settings') {
@@ -1537,7 +1542,12 @@ export default class App extends Component<object, State> {
       replies: replies.map(r => this.commentItem(r, book, keyAt, twoPages, when)),
     };
   }
+  /** Comments (none on the welcome sketchbook, whose replay still plays) and the replay player. */
   commentVals(): V {
+    const v = this.bookTalkVals(), o = this.state.mode === 'other' ? this.state.other as OtherBook | null : null;
+    return o?.guide ? { ...v, cmOn: false, bkCanVideo: false } : v;
+  }
+  bookTalkVals(): V {
     const s = this.state, mode = s.mode || 'home', o = s.other as OtherBook | null, mb = s.books[s.active];
     const book = mode === 'other' && o && !o.arch ? { id: o.id, ownerId: o.ownerId || '', name: o.name } : mode === 'mine' && mb && !mb.id.startsWith('local') ? { id: mb.id, ownerId: mb.owner?.uid || s.acct?.uid || '', name: mb.name } : null;
     if (!book) return { cmOn: false };
@@ -2913,7 +2923,7 @@ export default class App extends Component<object, State> {
       tbNew: () => { if (mode !== 'mine') this.goMode('mine'); this.openNewPick(); },
       swipeHint: IS_TOUCH && !s.hintDone && store.loadHints() < 3 && (mode === 'mine' || mode === 'other') && !s.focus && (images.length > 0 || !!other) && !s.switching,
       navMineLbl: m ? 'Yours' : 'Your sketchbooks', mNavGap: m ? 14 : 40, notMob: !m, mPad: m ? 14 : 24, mTop: m ? 14 : 20, mGap: m ? 14 : 24,
-      newLbl: m ? '+ New' : '+ New sketchbook', mTitleTop: m ? 72 : 76, mTitleSize: m ? 32 : 46, mBottom: m ? 16 : 36, mModalPad: m ? 18 : 28, mOptMin: m ? 92 : 120, mOptH: m ? 130 : 170,
+      newLbl: m ? '+ New' : '+ New sketchbook', openGuide: this.openGuide, guideHint: mode === 'mine' && !this.guideSeen && books.length <= 1, mTitleTop: m ? 72 : 76, mTitleSize: m ? 32 : 46, mBottom: m ? 16 : 36, mModalPad: m ? 18 : 28, mOptMin: m ? 92 : 120, mOptH: m ? 130 : 170,
       newPick: !!s.newPick, closePick: (e: MouseEvent) => { if (e.target === e.currentTarget) this.setState({ newPick: false }); }, cancelPick: () => this.setState({ newPick: false }),
       createBook: () => { if (s.mode === 'profile') this.setState({ mode: 'mine', profileOf: null }); this.newBook(s.pickShape || 'portrait'); }, pgAspect: String(this.aspect()),
       shapeOpts: (Object.entries(SHAPES) as [ShapeKey, Shape][]).map(([k, v]) => {
@@ -2929,12 +2939,12 @@ export default class App extends Component<object, State> {
       ...(() => {
         const o = other as OtherBook | null, mineB = books[active];
         return {
-          bkVerified: !!o && !o.arch && this.isTeam(o.ownerId),
+          bkVerified: !!o && !o.arch && this.isTeam(o.ownerId), bkGuide: !!o?.guide,
           bkSaved: this.isSaved(o?.id), bkSave: () => o && this.toggleSave(o),
           bkLiked: !!(o && s.liked?.[o.id]), bkLike: () => o && this.toggleLike(o),
           bkLikes: (() => { const id = o?.id || (mineB && !mineB.id.startsWith('local') ? mineB.id : ''); return id ? s.counts?.['b:' + id] || 0 : 0; })(),
           bkShare: () => o ? this.share(o.arch ? `/archive/${o.id}` : `/@${o.handle}/${o.id}`, `${o.name} by ${o.artist}`) : s.acct && mineB && this.share(`/@${mineB.owner?.handle || s.acct.handle}/${mineB.id}`, `${mineB.name} by ${mineB.owner?.name || s.acct.name}`),
-          bkCanShare: !!o || (!!s.acct && (mineB?.isPublic !== false || !!mineB?.linkOnly) && !mineB?.id.startsWith('local')),
+          bkCanShare: (!!o && !o.guide) || (!!s.acct && (mineB?.isPublic !== false || !!mineB?.linkOnly) && !mineB?.id.startsWith('local')),
           bkMoreOpen: s.more === 'book', bkMore: () => this.setState(st => ({ more: st.more === 'book' ? null : 'book' })),
           bkArch: o?.arch ? { years: o.arch.years, source: o.arch.source, url: o.arch.url, note: o.arch.note } : (() => { const e = mineB && (s.archive || []).find(b => b.id === mineB.id)?.arch; return s.mode === 'mine' && e ? { years: e.years, source: e.source, url: e.url, note: e.note, own: true } : null; })(),
           bkArchLbl: (s.archive || []).some(b => b.id === (o?.id || mineB?.id)) ? 'Edit archive details…' : 'Add to the archive…',
@@ -3109,7 +3119,7 @@ export default class App extends Component<object, State> {
         {v.toastMsg && <Toast msg={v.toastMsg} />}
         {v.isAuth && <AuthPage v={v} />}
         {v.pfEditing && <EditProfile v={v} />}
-        {v.welcomeOpen && <Welcome v={v} />}
+        {v.welcomeOpen && <Suspense fallback={null}><Welcome v={v} /></Suspense>}
         <input ref={this.avRef} type="file" accept="image/*" onChange={v.onAvFile} style={{ display: 'none' }} />
         {v.newPick && <NewBookPicker v={v} />}
         {v.managing && <Manager v={v} />}

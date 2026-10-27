@@ -1368,41 +1368,6 @@ export function ReportModal({ v }: { v: V }) {
   );
 }
 
-const WELCOME_STEPS: [string, string][] = [
-  ['Your first sketchbook is ready', 'It’s waiting under Your sketchbooks. Make more any time with + New, in five shapes from pocket to panorama.'],
-  ['Add your pages', 'Photos or scans of your drawings, finished or not. Fit each one to the page, then drag to reorder.'],
-  ['Write in the margins', 'Give a page a caption and a date, and tag the sketchbook with its mediums so people can find it.'],
-  ['Share it, or don’t', 'Public sketchbooks appear in Explore and on your profile. Private ones are only for you. Invite one friend to draw in a sketchbook with you.'],
-];
-
-/** Shown once, right after joining. */
-export function Welcome({ v }: { v: V }) {
-  return (
-    <div role="dialog" aria-modal="true" aria-label="Welcome to fletora" style={{ position: 'absolute', inset: 0, zIndex: 25, background: PAPER, overflowY: 'auto' }}>
-      <div style={{ ...pagePad(!v.notMob), maxWidth: 1100, display: 'flex', flexDirection: 'column', gap: v.notMob ? 40 : 28 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <span style={{ font: `500 11px ${SANS}`, letterSpacing: '.14em', textTransform: 'uppercase', color: MARK }}>Welcome to fletora.</span>
-          <h1 style={{ margin: 0, font: `400 ${v.notMob ? 88 : 52}px/.95 ${SERIF}`, letterSpacing: '-.025em' }}>Hello, {v.welcomeName}. <em style={{ color: MARK }}>Start anywhere.</em></h1>
-          <p style={{ margin: 0, maxWidth: 520, fontSize: 17, lineHeight: 1.55, color: MUTED }}>fletora is a home for sketchbooks: the unfinished pages, studies and false starts as much as the finished work. Here’s how it works.</p>
-        </div>
-        <ol style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,190px),1fr))', gap: v.notMob ? 28 : 20 }}>
-          {WELCOME_STEPS.map(([t, d], i) => (
-            <li key={t} style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 14, borderTop: `1px solid ${INK}` }}>
-              <span style={{ font: `400 34px/1 ${SERIF}`, color: MARK }}>{String(i + 1).padStart(2, '0')}</span>
-              <span style={{ font: `400 24px/1.15 ${SERIF}` }}>{t}</span>
-              <span style={{ fontSize: 14, lineHeight: 1.55, color: MUTED }}>{d}</span>
-            </li>
-          ))}
-        </ol>
-        <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap', flexDirection: v.notMob ? 'row' : 'column' }}>
-          <button onClick={v.welcomeStart} autoFocus={v.notMob} className={hover(`background:${MARK}`)} style={{ height: 50, padding: '0 28px', border: 'none', background: INK, color: PAPER, font: `500 15px ${SANS}`, cursor: 'pointer', width: v.notMob ? undefined : '100%' }}>Add my first pages</button>
-          <button onClick={v.welcomeLater} className={hover(`color:${MARK};border-color:${MARK}`)} style={{ padding: '4px 0', border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', color: INK, font: `500 15px ${SANS}`, cursor: 'pointer' }}>Look around first ↗</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /** Name a new collection (and optionally move a saved sketchbook into it). */
 /** Moderators: put one of your sketchbooks in From the archive, credited to the historical artist and its source. */
 export function ArchiveModal({ v }: { v: V }) {

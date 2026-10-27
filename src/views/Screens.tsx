@@ -739,6 +739,11 @@ export function Settings({ v }: { v: V }) {
             : v.inIOS ? <span style={{ fontSize: 14, lineHeight: 1.5, color: INK }}>In Safari, tap <b style={{ fontWeight: 600 }}>Share</b> (the square with an arrow), then <b style={{ fontWeight: 600 }}>Add to Home Screen</b>.</span>
             : <span style={{ fontSize: 14, lineHeight: 1.5, color: INK }}>Use your browser’s <b style={{ fontWeight: 600 }}>Install</b> option (in Chrome and Edge, the icon at the end of the address bar). On Android, open the browser menu and choose <b style={{ fontWeight: 600 }}>Install app</b>.</span>}
         </SettingsSection>
+        <SettingsSection title="Getting started" note="A short sketchbook about what you can do on fletora, with a painting you can watch being made.">
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button onClick={v.openGuide} style={formBtn()}>Open the welcome sketchbook</button>
+          </div>
+        </SettingsSection>
         <SettingsSection title="Weekly email" note="On Mondays: new pages from people you follow, and the likes, comments and followers your work got that week. Only sent when there’s something new.">
           <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 14, cursor: 'pointer' }}>
             <input type="checkbox" checked={v.wkOn} onChange={v.wkToggle} style={{ width: 18, height: 18, accentColor: MARK }} />

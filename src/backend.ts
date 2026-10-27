@@ -18,7 +18,7 @@ import {
 import type { DocumentData, QueryConstraint, QueryDocumentSnapshot } from 'firebase/firestore';
 import { connectStorageEmulator, deleteObject, getStorage, listAll, ref, uploadBytes } from 'firebase/storage';
 import type { Account, ArchiveEntry, Book, Member, PageNote, ShapeKey } from './data';
-import { mediumKey } from './data';
+import { GUIDE_ID, GUIDE_REPLAY_PAGE, mediumKey } from './data';
 
 const env = import.meta.env;
 const config = {
@@ -683,10 +683,12 @@ export async function saveReplay(by: string, bookId: string, page: string, data:
 }
 /** Whether a page has a replay (missing or unreadable: no). */
 export async function hasReplay(bookId: string, page: string) {
+  if (bookId === GUIDE_ID) return page === pageKey(GUIDE_REPLAY_PAGE);
   if (!db) return false;
   try { return (await getDoc(doc(db, 'replays', `${bookId}_${page}`))).exists(); } catch { return false; }
 }
 export async function replayData(bookId: string, page: string): Promise<string | null> {
+  if (bookId === GUIDE_ID) return page === pageKey(GUIDE_REPLAY_PAGE) ? (await fetch('/welcome/replay.json')).text() : null;
   const s = await getDoc(doc(need().db, 'replayData', `${bookId}_${page}`));
   return s.exists() ? (s.data().data as string) : null;
 }

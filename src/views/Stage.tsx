@@ -53,6 +53,7 @@ const TopBar = memo(function TopBar({ v }: { v: V }) {
         <Bell v={v} />
       </div>}
       {!v.tabBar && <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {v.guideHint && <button onClick={v.openGuide} className={hover(`color:${MARK}`)} style={{ ...textBtn, color: STONE }}>New here? Take a look</button>}
         {v.isMine && <button onClick={v.newBook} className={hover(`color:${MARK}`)} style={textBtn}>{v.newLbl}</button>}
         {v.ntShow && <MsgBtn v={v} />}
         {v.ntShow && <Bell v={v} />}
@@ -188,8 +189,8 @@ const Title = memo(function Title({ v }: { v: V }) {
       <div data-fade="title" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', minWidth: 0 }}>
         <div style={{ fontSize: v.mTitleSize, fontFamily: SERIF, fontWeight: 400, letterSpacing: '-.01em', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.titleName}</div>
         <div style={label()}>
-          {v.isOther && v.bkArch
-            ? <>by {v.artist}{v.bkArch.years ? ` · ${v.bkArch.years}` : ''} · {v.otherPages} pages</>
+          {v.isOther && (v.bkArch || v.bkGuide)
+            ? <>by {v.artist}{v.bkArch?.years ? ` · ${v.bkArch.years}` : ''} · {v.otherPages} pages</>
             : v.isOther
             ? <>by <button onClick={v.openArtist} title="View profile" className={'tap ' + hover(`color:${MARK};border-color:${MARK}`)} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: INK, cursor: 'pointer' }}>{v.artist}</button>{v.bkVerified && <Verified size={13} />} · {v.otherPages} pages{v.otherMature && ' · Mature'}{v.bkMediums && ` · ${v.bkMediums}`}</>
             : <>{v.bookMeta}{v.bkMediums && ` · ${v.bkMediums}`}</>}
@@ -209,10 +210,10 @@ const Title = memo(function Title({ v }: { v: V }) {
         {(v.isOther || v.isMine) && (
           // Like, save and share as icons side by side; embed, report and the rest under ⋯.
           <div style={{ display: 'flex', gap: v.notMob ? 14 : 18, alignItems: 'center', marginTop: v.notMob ? 2 : 6, ...label(INK, v.notMob ? 10 : 11) }}>
-            {v.bkArch && v.isOther ? null : v.isOther
+            {(v.bkArch || v.bkGuide) && v.isOther ? null : v.isOther
               ? <button onClick={v.bkLike} aria-pressed={v.bkLiked} title={v.bkLiked ? 'Unlike' : 'Like'} aria-label={`${v.bkLiked ? 'Unlike' : 'Like'}, ${v.bkLikes} likes`} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct, color: v.bkLiked ? MARK : INK }}><Icon d={HEART} fill={v.bkLiked} />{v.bkLikes}</button>
               : <span title="Likes" style={iconAct}><Icon d={HEART} />{v.bkLikes}</span>}
-            {v.isOther && <button onClick={v.bkSave} aria-pressed={v.bkSaved} title={v.bkSaved ? 'Saved' : 'Save'} aria-label={v.bkSaved ? 'Saved' : 'Save'} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct, color: v.bkSaved ? MARK : INK }}><Icon d={BOOKMARK} fill={v.bkSaved} /></button>}
+            {v.isOther && !v.bkGuide && <button onClick={v.bkSave} aria-pressed={v.bkSaved} title={v.bkSaved ? 'Saved' : 'Save'} aria-label={v.bkSaved ? 'Saved' : 'Save'} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct, color: v.bkSaved ? MARK : INK }}><Icon d={BOOKMARK} fill={v.bkSaved} /></button>}
             {v.cmOn && <button onClick={v.cmToggle} title="Comments" aria-label={`Comments, ${v.cmCount}`} aria-pressed={v.cmOpen} className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct, color: v.cmOpen ? MARK : INK }}><Icon d={COMMENT_ICON} fill={v.cmOpen} />{v.cmCount}</button>}
             {v.rpAt != null && (
               // A labelled pill, so it reads as "this page can be watched being drawn", not just another icon.
@@ -221,15 +222,15 @@ const Title = memo(function Title({ v }: { v: V }) {
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 3.5v17l15-8.5z" /></svg>Replay
               </button>
             )}
-            {(v.isOther || v.bkCanShare) && <button onClick={v.bkShare} title="Share" aria-label="Share" className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct }}><Icon d={SHARE} /></button>}
+            {((v.isOther && !v.bkGuide) || v.bkCanShare) && <button onClick={v.bkShare} title="Share" aria-label="Share" className={'tap ' + hover(`color:${MARK}`)} style={{ ...actLink, ...iconAct }}><Icon d={SHARE} /></button>}
             <MoreMenu open={v.bkMoreOpen} onToggle={v.bkMore} items={[
               ...(v.bkArch?.url ? [{ label: `View at the source ↗`, onClick: () => window.open(v.bkArch.url, '_blank', 'noopener') }] : []),
               ...(v.cmOn ? [{ label: 'Share page as a picture', onClick: v.bkShareImage }] : []),
               ...(v.cmOn && v.bkCanVideo ? [{ label: 'Make a timelapse video', onClick: v.bkTimelapse }] : []),
-              ...(v.isOther || v.bkCanShare ? [{ label: 'Embed on a website', onClick: v.bkEmbed }] : []),
+              ...((v.isOther && !v.bkGuide) || v.bkCanShare ? [{ label: 'Embed on a website', onClick: v.bkEmbed }] : []),
               { label: v.sndOn ? 'Turn page sounds off' : 'Turn page sounds on', onClick: v.toggleSound },
-              ...(v.bkIsAdmin ? [{ label: v.bkArchLbl, onClick: v.bkArchEdit }] : []),
-              ...(v.isOther ? [...(v.bkIsAdmin ? [{ label: v.bkPickLbl, onClick: v.bkPick }] : []), ...(v.bkArch ? [] : [{ label: 'Report sketchbook', onClick: v.bkReport }, { label: v.bkBlockLbl, onClick: v.bkBlock, danger: true }])] : [])]} />
+              ...(v.bkIsAdmin && !v.bkGuide ? [{ label: v.bkArchLbl, onClick: v.bkArchEdit }] : []),
+              ...(v.isOther && !v.bkGuide ? [...(v.bkIsAdmin ? [{ label: v.bkPickLbl, onClick: v.bkPick }] : []), ...(v.bkArch ? [] : [{ label: 'Report sketchbook', onClick: v.bkReport }, { label: v.bkBlockLbl, onClick: v.bkBlock, danger: true }])] : [])]} />
           </div>
         )}
       </div>

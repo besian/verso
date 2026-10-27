@@ -73,7 +73,16 @@ export interface OtherBook {
   spreads?: Record<string, string>;
   /** Set for sketchbooks in From the archive: the historical artist and where the pages come from. */
   arch?: ArchiveEntry;
+  /** The welcome sketchbook (see GUIDE_BOOK): read only, nothing to like, comment on or report. */
+  guide?: boolean;
 }
+/** The welcome sketchbook: a short guide to fletora, leafed through like any other. Its pages are in
+ *  public/welcome, and page 3 was painted in the editor, so it has a replay (public/welcome/replay.json). */
+export const GUIDE_ID = 'guide', GUIDE_REPLAY_PAGE = '/welcome/page-3.jpg';
+export const GUIDE_BOOK: OtherBook = {
+  id: GUIDE_ID, idx: 0, shape: 'portrait', likes: 0, artist: 'fletora', name: 'Welcome to fletora', color: '#2f4a7a',
+  images: [1, 2, 3, 4, 5, 6, 7, 8].map(n => `/welcome/page-${n}.jpg`), pages: 8, initials: 'f', guide: true,
+};
 /** A historical, public-domain sketchbook featured on Explore (archive/{bookId}). */
 export interface ArchiveEntry { bookId: string; artist: string; years: string; source: string; url: string; note: string; at: number }
 
