@@ -767,7 +767,7 @@ function Layers({ v, inPad }: { v: V; inPad?: boolean }) {
         </svg>
       )}
       {v.edTexts.map((t: V) => (
-        <div key={t.id} data-tid={inPad ? undefined : t.id} style={{ position: 'absolute', left: t.left, top: t.top, width: t.width, font: `${t.fontPx}px/${t.lineH}px ${TEXT_FONT}`, color: TEXT_INK, whiteSpace: 'pre', pointerEvents: v.edWrite && !inPad ? 'auto' : 'none', cursor: 'grab', outline: inPad ? 'none' : t.sel ? `1.5px dashed ${MARK}` : v.edWrite ? '1px dashed rgba(34,35,32,.25)' : 'none', outlineOffset: 4 }}>
+        <div key={t.id} data-tid={inPad ? undefined : t.id} style={{ position: 'absolute', left: t.left, top: t.top, width: t.width, font: t.font, lineHeight: `${t.lineH}px`, color: t.color, textAlign: t.align, whiteSpace: 'pre', pointerEvents: v.edWrite && !inPad ? 'auto' : 'none', cursor: 'grab', outline: inPad ? 'none' : t.sel ? `1.5px dashed ${MARK}` : v.edWrite ? '1px dashed rgba(34,35,32,.25)' : 'none', outlineOffset: 4 }}>
           {t.empty ? <div style={{ height: t.lineH, color: 'rgba(34,35,32,.35)' }}>Type here</div> : t.lines.map((l: string, i: number) => <div key={i} style={{ height: t.lineH }}>{l}</div>)}
         </div>
       ))}
@@ -974,14 +974,30 @@ const PeekBtn = ({ v, style }: { v: V; style: CSSProperties }) => (
   <button onPointerDown={v.peekOn} onPointerUp={v.peekOff} onPointerLeave={v.peekOff} onPointerCancel={v.peekOff} onContextMenu={e => e.preventDefault()} disabled={!v.edAdjusted} style={{ ...style, opacity: v.edAdjusted ? 1 : 0.4, touchAction: 'none', userSelect: 'none' }}>Hold to compare</button>
 );
 
-/** Text mode controls: how to add text, or the selected text to type into, size and remove. */
+/** Text mode controls: how to add text, or the selected text to type into and style (font, size, colour,
+ *  alignment, bold, italic), and remove. Style buttons keep the cursor in the text box. */
 function WriteTools({ v, outline, mob }: { v: V; outline: CSSProperties; mob?: boolean }) {
   const t = v.selText;
+  const keep = (e: { preventDefault(): void }) => e.preventDefault();
+  const sq = (on: boolean): CSSProperties => ({ width: 32, height: 32, flexShrink: 0, padding: 0, borderRadius: 2, border: `1px solid ${on ? INK : 'rgba(var(--ink-rgb),.22)'}`, background: on ? INK : 'none', color: on ? PAPER : INK, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' });
+  const alignIcon = (a: string) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d={a === 'left' ? 'M4 6h16M4 10h10M4 14h16M4 18h10' : a === 'center' ? 'M4 6h16M7 10h10M4 14h16M7 18h10' : 'M4 6h16M10 10h10M4 14h16M10 18h10'} /></svg>;
   if (t) return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: mob ? 10 : 14 }}>
-      <textarea key={t.id} autoFocus value={t.text} onChange={t.onText} rows={mob ? 2 : 4} placeholder="Type here" aria-label="Text" className={focusMark} style={{ ...field, height: 'auto', padding: '10px 12px', resize: 'vertical', font: `400 15px/1.4 ${SANS}` }} />
+      <textarea key={t.id} autoFocus value={t.text} onChange={t.onText} rows={mob ? 2 : 3} placeholder="Type here" aria-label="Text" className={focusMark} style={{ ...field, height: 'auto', padding: '10px 12px', resize: 'vertical', font: `400 15px/1.4 ${SANS}` }} />
+      {/* Fonts, each shown in itself. */}
+      <div role="radiogroup" aria-label="Font" onWheel={wheelSideways} style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none', ...(mob ? {} : { flexWrap: 'wrap' }) } as CSSProperties}>
+        {t.fonts.map((f: V) => <button key={f.key} role="radio" aria-checked={f.on} onMouseDown={keep} onClick={f.pick} style={{ ...chip(f.on), height: 34, font: `400 ${f.key === 'serif' ? 18 : f.key === 'hand' ? 19 : 14}px ${f.css}` }}>{f.label}</button>)}
+      </div>
       <Slider name="Size" lbl={t.sizeLbl} min={20} max={120} step={1} value={t.size} onChange={t.onSize} />
       {!mob && <Slider name="Width" lbl={`${t.width}%`} min={15} max={100} step={1} value={t.width} onChange={t.onWidth} />}
+      <div style={{ display: 'flex', alignItems: 'center', gap: mob ? 4 : 5, flexWrap: 'wrap' }}>
+        {t.aligns.map((a: V) => <button key={a.key} onMouseDown={keep} onClick={a.pick} aria-pressed={a.on} aria-label={`Align ${a.key}`} title={`Align ${a.key}`} style={sq(a.on)}>{alignIcon(a.key)}</button>)}
+        {!mob && <span style={{ width: 4 }} />}
+        <button onMouseDown={keep} onClick={t.toggleBold} aria-pressed={t.bold} aria-label="Bold" title="Bold" style={{ ...sq(t.bold), font: `700 15px ${SANS}` }}>B</button>
+        <button onMouseDown={keep} onClick={t.toggleItalic} aria-pressed={t.italic} aria-label="Italic" title="Italic" style={{ ...sq(t.italic), font: `italic 400 18px ${SERIF}` }}>I</button>
+        {!mob && <span style={{ width: 4 }} />}
+        {t.colors.map((c: V) => <button key={c.key} onMouseDown={keep} onClick={c.pick} aria-pressed={c.on} aria-label={c.name} title={c.name} style={{ width: mob ? 22 : 24, height: mob ? 22 : 24, flexShrink: 0, borderRadius: '50%', padding: 0, cursor: 'pointer', background: c.key, border: '1px solid rgba(34,35,32,.25)', boxShadow: c.on ? `0 0 0 2px ${PAPER}, 0 0 0 3.5px ${INK}` : 'none' }} />)}
+      </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <button onClick={t.remove} style={{ ...outline, color: MARK }}>Remove text</button>
         <button onClick={t.done} style={outline}>Done</button>

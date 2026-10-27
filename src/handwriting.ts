@@ -1,19 +1,35 @@
-// Handwriting → typed text on a page. Strokes and text boxes live in frame fractions (0–1 of the
-// editor frame's width and height), so the preview and the saved 1600px page line up exactly.
+// Text on a page (and, earlier, handwriting turned into text). Strokes and text boxes live in frame fractions (0–1
+// of the editor frame's width and height), so the preview and the saved page line up exactly.
 import { INK_FREE } from './plus';
 
 /** One pen stroke: x0, y0, x1, y1, … as fractions of the frame. */
 export type Stroke = number[];
-/** Typed text placed on the page. x, y, w are fractions of the frame; size is the font size as a fraction of its height. */
-export interface PageText { id: string; x: number; y: number; w: number; size: number; text: string }
+export type TextFont = 'serif' | 'sans' | 'hand' | 'type' | 'marker';
+export type TextAlign = 'left' | 'center' | 'right';
+/** Typed text placed on the page. x, y, w are fractions of the frame; size is the font size as a fraction of its height.
+ *  Style fields are optional: text saved before they existed is Instrument Serif in ink, left-aligned. */
+export interface PageText { id: string; x: number; y: number; w: number; size: number; text: string; font?: TextFont; color?: string; align?: TextAlign; bold?: boolean; italic?: boolean }
 
 export const TEXT_FONT = "'Instrument Serif',serif", TEXT_INK = '#222320', LINE_H = 1.2;
+/** The fonts text can be set in (all served from the site, see public/fonts). */
+export const TEXT_FONTS: { key: TextFont; label: string; css: string }[] = [
+  { key: 'serif', label: 'Serif', css: TEXT_FONT },
+  { key: 'sans', label: 'Sans', css: "'Geist',sans-serif" },
+  { key: 'hand', label: 'Handwritten', css: "'Caveat',cursive" },
+  { key: 'type', label: 'Typewriter', css: "'Courier Prime',monospace" },
+  { key: 'marker', label: 'Marker', css: "'Permanent Marker',cursive" },
+];
+/** The CSS / canvas font for a text box at a size in px. */
+export function fontOf(t: Pick<PageText, 'font' | 'bold' | 'italic'>, px: number) {
+  const css = (TEXT_FONTS.find(f => f.key === t.font) || TEXT_FONTS[0]).css;
+  return `${t.italic ? 'italic ' : ''}${t.bold ? 700 : 400} ${px}px ${css}`;
+}
 
 let measurer: CanvasRenderingContext2D | null = null;
 /** Greedy word wrap, measured with canvas so the preview and the saved page break lines the same way. */
-export function wrapLines(text: string, maxW: number, fontPx: number): string[] {
+export function wrapLines(text: string, maxW: number, font: string): string[] {
   measurer = measurer || document.createElement('canvas').getContext('2d');
-  const ctx = measurer!; ctx.font = `${fontPx}px ${TEXT_FONT}`;
+  const ctx = measurer!; ctx.font = font;
   const out: string[] = [];
   for (const para of text.split('\n')) {
     let line = '';
@@ -26,23 +42,25 @@ export function wrapLines(text: string, maxW: number, fontPx: number): string[] 
   return out;
 }
 
-/** Width of the longest line of text at a font size, in px. */
-export function textWidth(text: string, fontPx: number): number {
+/** Width of the longest line of text in a font, in px. */
+export function textWidth(text: string, font: string): number {
   measurer = measurer || document.createElement('canvas').getContext('2d');
-  const ctx = measurer!; ctx.font = `${fontPx}px ${TEXT_FONT}`;
+  const ctx = measurer!; ctx.font = font;
   return Math.max(0, ...text.split('\n').map(l => ctx.measureText(l).width));
 }
 
-/** Draws the text boxes onto a page canvas of W × H. */
+/** Draws the text boxes onto a page canvas of W × H, each in its own font, colour and alignment. */
 export async function drawTexts(ctx: CanvasRenderingContext2D, texts: PageText[], W: number, H: number) {
   if (!texts.length) return;
-  await document.fonts?.load(`40px ${TEXT_FONT}`).catch(() => {});
-  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = TEXT_INK; ctx.textBaseline = 'top';
+  await Promise.all([...new Set(texts.map(t => fontOf(t, 40)))].map(f => document.fonts?.load(f).catch(() => {})));
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.textBaseline = 'top';
   for (const t of texts) {
-    const px = t.size * H; ctx.font = `${px}px ${TEXT_FONT}`;
+    const px = t.size * H, font = fontOf(t, px), align = t.align || 'left';
+    ctx.font = font; ctx.fillStyle = t.color || TEXT_INK; ctx.textAlign = align;
+    const x = align === 'center' ? (t.x + t.w / 2) * W : align === 'right' ? (t.x + t.w) * W : t.x * W;
     // Same half-leading as CSS line-height, so the saved page matches the preview.
     const lh = px * LINE_H, lead = (lh - px) / 2;
-    wrapLines(t.text, t.w * W, px).forEach((l, i) => ctx.fillText(l, t.x * W, t.y * H + lead + i * lh));
+    wrapLines(t.text, t.w * W, font).forEach((l, i) => ctx.fillText(l, x, t.y * H + lead + i * lh));
   }
   ctx.restore();
 }

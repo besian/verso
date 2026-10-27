@@ -15,8 +15,8 @@ import { currentPrompt } from './prompts';
 import { COVER_INSIDE, pageWear } from './wear';
 import { ADJUSTERS, NO_ADJUST, applyToCanvas, feValues, isAdjusted } from './adjust';
 import type { Adjust } from './adjust';
-import { LINE_H, drawTexts, textWidth, wrapLines } from './handwriting';
-import type { PageText, Stroke } from './handwriting';
+import { LINE_H, TEXT_FONTS, TEXT_INK, drawTexts, fontOf, wrapLines } from './handwriting';
+import type { PageText, Stroke, TextAlign, TextFont } from './handwriting';
 import { RULED, paperUrl } from './paper';
 import { MAX_SOCIALS, PLATFORM, PLATFORMS, cleanHandle, socialLinks } from './socials';
 import { drawMarks, pathD } from './draw';
@@ -43,6 +43,8 @@ const TimelapseModal = lazy(() => import('./views/Timelapse').then(m => ({ defau
 import { shareImage, sharePicture } from './shareImage';
 import { ArchiveModal, AskModal, CardModal, ConsentBar, CollectionModal, UnsavedBar, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast, Welcome } from './views/Overlays';
 
+/** Colours for text: ink, graphite, the accent red, blue, green and paper white. */
+const TEXT_COLORS: [string, string][] = [['#222320', 'Ink'], ['#6b6a64', 'Graphite'], ['#ad493a', 'Red'], ['#2f4a7a', 'Blue'], ['#3f7a56', 'Green'], ['#f3efe6', 'White']];
 export type Mode = 'home' | 'mine' | 'other' | 'explore' | 'profile' | 'auth' | 'settings' | 'legal' | 'admin' | 'notfound' | 'action' | 'messages' | 'billing';
 /** A report with what it points at, for the moderation page. */
 type AdminItem = Report & { targetName: string; ownerName: string; ownerHandle: string; hidden: boolean; banned: boolean; gone: boolean; mature: boolean };
@@ -2447,6 +2449,12 @@ export default class App extends Component<object, State> {
     // and the tap's own focus change is stopped so it doesn't take the cursor back off it.
     e.preventDefault(); flushSync(() => this.addText(x, y)); this.focusText();
   }
+  /** The style the last text was given, for the next one. */
+  textStyle: { font?: TextFont; color?: string; align?: TextAlign; bold?: boolean; italic?: boolean; size?: number } = {};
+  styleText(id: string, patch: Partial<PageText>) {
+    this.setText(id, patch); const t = this.state.edit?.texts.find(q => q.id === id);
+    this.textStyle = { ...this.textStyle, ...patch }; if (t && patch.size == null) this.textStyle.size = t.size;
+  }
   focusText() { (document.querySelector('textarea[aria-label="Text"]') as HTMLTextAreaElement | null)?.focus(); }
   /** Text mode: a text box where the page was tapped (on lined paper, sitting on the nearest line), ready to type
    *  into; empty boxes left behind are cleared away. */
@@ -2455,7 +2463,9 @@ export default class App extends Component<object, State> {
     const lined = ed.paper === 'lined', size = lined ? RULED.step / LINE_H : 0.045;
     if (lined) { const { step, top } = RULED, n = Math.max(0, Math.round((y + step * 0.2 - top) / step)); y = top + n * step - step * 0.8; }
     else y = y - size * LINE_H / 2;
-    const tx = Math.max(0.03, Math.min(0.85, x)), t: PageText = { id: Math.random().toString(36).slice(2, 9), x: tx, y: Math.max(0, Math.min(0.95, y)), w: Math.max(0.12, 0.97 - tx), size, text: '' };
+    const st = this.textStyle, tx = Math.max(0.03, Math.min(0.85, x));
+    const t: PageText = { id: Math.random().toString(36).slice(2, 9), x: tx, y: Math.max(0, Math.min(0.95, y)), w: Math.max(0.12, 0.97 - tx), size: st.size && !lined ? st.size : size, text: '',
+      font: st.font, color: st.color, align: st.align, bold: st.bold, italic: st.italic };
     this.setEd({ texts: [...ed.texts.filter(q => q.text.trim()), t], sel: t.id });
   }
   movePad(x: number, y: number) { const ed = this.state.edit!, b = this.padBox(ed, this.frame()); this.setEd({ box: { x: x - b.w / 2, y: y - b.h / 2 } }); }
@@ -2576,13 +2586,19 @@ export default class App extends Component<object, State> {
       edWrite: ed.mode === 'write', inkBusy: !!ed.inkBusy, inkErr: ed.inkErr || '', hasInk: ed.ink.length > 0, edTextCount: ed.texts.length,
       edInkPaths: ed.ink.map(s => s.reduce((d, n, i) => d + (i % 2 ? `${(n * fr.fh).toFixed(1)} ` : `${i ? 'L' : 'M'}${(n * fr.fw).toFixed(1)} `), '') + (s.length === 2 ? 'l.1 0' : '')),
       edTexts: ed.texts.map(t => ({ id: t.id, empty: !t.text, left: t.x * fr.fw, top: t.y * fr.fh, width: t.w * fr.fw, fontPx: t.size * fr.fh, lineH: t.size * fr.fh * LINE_H, sel: t.id === ed.sel,
-        lines: wrapLines(t.text, t.w * fr.fw, t.size * fr.fh) })),
+        font: fontOf(t, t.size * fr.fh), color: t.color || TEXT_INK, align: t.align || 'left',
+        lines: wrapLines(t.text, t.w * fr.fw, fontOf(t, t.size * fr.fh)) })),
 
       // + Add text: a box under the last one (or near the top).
       addTextBox: () => { flushSync(() => { const last = ed.texts.filter(t => t.text.trim()).sort((a, b) => b.y - a.y)[0]; this.addText(0.06, last ? Math.min(0.9, last.y + last.size * LINE_H * (last.text.split('\n').length + 1.4)) : 0.1); }); this.focusText(); },
       selText: sel ? {
+        // Style: font, colour, alignment, bold and italic, remembered for the next text added.
+        fonts: TEXT_FONTS.map(f => ({ key: f.key, label: f.label, css: f.css, on: (sel.font || 'serif') === f.key, pick: () => this.styleText(sel.id, { font: f.key }) })),
+        colors: TEXT_COLORS.map(([c, name]) => ({ key: c, name, on: (sel.color || TEXT_INK).toLowerCase() === c.toLowerCase(), pick: () => this.styleText(sel.id, { color: c }) })),
+        aligns: (['left', 'center', 'right'] as TextAlign[]).map(a => ({ key: a, on: (sel.align || 'left') === a, pick: () => this.styleText(sel.id, { align: a }) })),
+        bold: !!sel.bold, toggleBold: () => this.styleText(sel.id, { bold: !sel.bold }), italic: !!sel.italic, toggleItalic: () => this.styleText(sel.id, { italic: !sel.italic }),
         id: sel.id, text: sel.text, onText: (e: ChangeEvent<HTMLTextAreaElement>) => this.setText(sel.id, { text: e.target.value }),
-        size: Math.round(sel.size * 1000), sizeLbl: `${Math.round(sel.size * 1000)}`, onSize: (e: ChangeEvent<HTMLInputElement>) => this.setText(sel.id, { size: parseFloat(e.target.value) / 1000 }),
+        size: Math.round(sel.size * 1000), sizeLbl: `${Math.round(sel.size * 1000)}`, onSize: (e: ChangeEvent<HTMLInputElement>) => { const size = parseFloat(e.target.value) / 1000; this.setText(sel.id, { size }); this.textStyle.size = size; },
         width: Math.round(sel.w * 100), onWidth: (e: ChangeEvent<HTMLInputElement>) => this.setText(sel.id, { w: Math.min(1 - sel.x, parseFloat(e.target.value) / 100) }),
         remove: () => this.setEd({ texts: ed.texts.filter(t => t.id !== sel.id), sel: null }), done: () => this.setEd({ sel: null, texts: ed.texts.filter(t => t.text.trim()) }),
       } : null,
