@@ -94,7 +94,7 @@ export function ReplayPlayer({ v }: { v: V }) {
         <span style={{ width: 8 }} />
         {SPEEDS.map(x => <button key={x} onClick={() => setSpeed(x)} aria-pressed={speed === x} style={btn(speed === x)}>{x}×</button>)}
         {/* As a video file (the replay sped up, framed for Instagram and TikTok; see timelapse.ts). */}
-        {rec && r?.at != null && <><span style={{ width: 8 }} /><button onClick={() => v.bkTimelapse(r.all?.length ? r.all : r.at)} style={btn(false)}>↓ Download video</button></>}
+        {rec && r?.at != null && v.bkCanVideo && <><span style={{ width: 8 }} /><button onClick={() => v.bkTimelapse(r.all?.length ? r.all : r.at)} style={btn(false)}>↓ Download video</button></>}
       </div>
     </div>
   );

@@ -963,7 +963,7 @@ export default class App extends Component<object, State> {
     await api.writeBook(this.state.acct || acct, b);
     // Replays of pages drawn here go up once the page is saved (the rules check the book).
     for (const u of b.images) { const rp = this.pendingReplays.get(u); if (!rp) continue; this.pendingReplays.delete(u);
-      api.saveReplay(acct.uid, id, api.pageKey(u), rp.data, rp.n).then(() => this.replayKnown.set(`${id}_${api.pageKey(u)}`, true)).catch(e => console.error('replay', e)); }
+      api.saveReplay(acct.uid, id, api.pageKey(u), rp.data, rp.n).then(() => { this.replayKnown.set(`${id}_${api.pageKey(u)}`, true); this.forceUpdate(); }).catch(e => console.error('replay', e)); }
     const now = bookUrls(b), before = this.synced.get(id) || [];
     api.removeFiles(before.filter(u => !now.includes(u)));
     this.synced.set(id, now);
@@ -1402,7 +1402,8 @@ export default class App extends Component<object, State> {
     for (const i of this.shownPages()) {
       const u = s.images[i]; if (!u || isData(u)) continue;
       const k = `${id}_${api.pageKey(u)}`;
-      if (!this.replayKnown.has(k)) { this.replayKnown.set(k, false); api.hasReplay(id, api.pageKey(u)).then(y => { if (y) { this.replayKnown.set(k, true); this.forceUpdate(); } }); }
+      // A replay still waiting to go up with this page: ask again once it has (see syncBook).
+      if (!this.replayKnown.has(k) && ![...this.pendingReplays.keys()].includes(u)) { this.replayKnown.set(k, false); api.hasReplay(id, api.pageKey(u)).then(y => { if (y) { this.replayKnown.set(k, true); this.forceUpdate(); } }); }
       if (this.replayKnown.get(k)) out.push(i);
     }
     return out;
@@ -1603,9 +1604,11 @@ export default class App extends Component<object, State> {
           rpPages: (s.replay?.all || []).map(i => ({ key: i, label: `Page ${i + 1}`, on: s.replay?.at === i, pick: () => show(i) })) };
       })(),
       rpState: s.replay || null, rpClose: () => this.setState({ replay: null }),
+      bkCanVideo: !!s.acct && book.ownerId === s.acct.uid,
       // The whole sketchbook as a short vertical video: drawn pages replay their strokes (see timelapse.ts).
       // `only`: one page (the replay being watched), as its own video.
       bkTimelapse: async (pick?: number | number[]) => {
+        if (!s.acct || book.ownerId !== s.acct.uid) return; // only the sketchbook's creator makes videos of it
         const only = pick == null ? undefined : Array.isArray(pick) ? pick : [pick];
         const tlm = await import('./timelapse');
         if (!tlm.videoType()) return this.toast('This browser can’t make videos. Try Chrome or Safari.');
