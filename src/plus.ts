@@ -1,5 +1,5 @@
 // Fletora Plus: what the free plan allows, what Plus adds, and its prices. The prices must match the
-// Fletora Plus product in Stripe; the limits are also enforced in firestore.rules and api/handwriting.
+// Fletora Plus product in Stripe; the limits are also enforced in firestore.rules.
 
 export const PRICE = { month: '£7', year: '£60' } as const;
 /** Yearly, as a saving on paying monthly for a year. */
@@ -14,7 +14,6 @@ export const PAGE_H = 1600, PAGE_H_PLUS = 3200;
 export const PERKS: [string, string][] = [
   ['Unlimited sketchbooks', `Free accounts have ${BOOKS_FREE}.`],
   [`Up to ${PAGES_PLUS} pages per sketchbook`, `Instead of ${PAGES_FREE}.`],
-  [`${INK_PLUS} handwriting conversions a month`, `Instead of ${INK_FREE}.`],
   ['Full-resolution pages', 'Photos keep up to twice the detail, for zooming into every line.'],
   ['Download as PDF', 'Any of your sketchbooks as a PDF, to print or send.'],
   ['Up to 5 people per sketchbook', 'Instead of one, to draw together.'],
@@ -28,7 +27,6 @@ export const PERKS: [string, string][] = [
 export const REASONS: Record<string, string> = {
   books: `Free accounts can have ${BOOKS_FREE} sketchbooks.`,
   pages: `Free sketchbooks hold up to ${PAGES_FREE} pages.`,
-  ink: `You’ve used this month’s ${INK_FREE} handwriting conversions.`,
   link: 'Link-only sketchbooks are part of Plus.',
   stats: 'Stats are part of Plus.',
   pin: 'Pinning a sketchbook is part of Plus.',

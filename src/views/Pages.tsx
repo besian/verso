@@ -5,7 +5,7 @@ import { hover } from '../pseudo';
 import { INK, MARK, MUTED, PAPER, SANS, SERIF, label, pagePad, serif } from '../theme';
 import { ADDRESS, SiteFooter } from './Footer';
 import { Notice, TextArea, TextField } from './Overlays';
-import { BOOKS_FREE, INK_FREE, INK_PLUS, PAGES_FREE, PAGES_PLUS, PRICE, YEAR_SAVING } from '../plus';
+import { BOOKS_FREE, PAGES_FREE, PAGES_PLUS, PRICE, YEAR_SAVING } from '../plus';
 
 const screen: CSSProperties = { position: 'absolute', inset: '0 0 var(--tabbar, 0px) 0', zIndex: 4, background: PAPER, overflowX: 'hidden', overflowY: 'auto' };
 const hoverText = hover(`color:${MARK}`);
@@ -74,10 +74,10 @@ function Privacy() {
         <P>To run your account and show your work, and to provide Plus if you subscribe (our agreement with you); to keep fletora. safe, check uploads, prevent spam and act on reports (our legitimate interest in a safe community, and our legal duties under the Online Safety Act); and anonymous analytics to improve the site, only if you’ve agreed to it (your consent, which you can withdraw).</P>
       </Sec>
       <Sec title="Who processes it">
-        <P>Data is stored with Google Firebase (Authentication, Cloud Firestore and Cloud Storage), and the site is served by Vercel. Account emails (confirming your address, resetting your password, the weekly email if you turn it on in Settings) and messages you send with the Contact page’s form are sent through Resend, which receives your email address for that purpose; they reach our inbox on Google Workspace, where we keep messages for as long as we need to deal with them. Every picture you upload is sent to Anthropic’s Claude to be checked before it’s published, and when you use Write to convert handwriting, an image of just that handwriting is sent to Claude to read it; Anthropic doesn’t use either to train its models. When you download a sketchbook as a PDF, the PDF is made in your browser; its page images may pass through our server on Vercel on the way, and aren’t kept there. Payments for Plus are handled by Stripe, which sells the subscription to you as merchant of record and processes your payment details under its own privacy policy. These services may store data outside the UK, including in the United States, under their own terms, privacy policies and data protection safeguards. We don’t sell your data or use it for advertising.</P>
+        <P>Data is stored with Google Firebase (Authentication, Cloud Firestore and Cloud Storage), and the site is served by Vercel. Account emails (confirming your address, resetting your password, the weekly email if you turn it on in Settings) and messages you send with the Contact page’s form are sent through Resend, which receives your email address for that purpose; they reach our inbox on Google Workspace, where we keep messages for as long as we need to deal with them. Every picture you upload is sent to Anthropic’s Claude to be checked before it’s published, Anthropic doesn’t use it to train its models. When you download a sketchbook as a PDF, the PDF is made in your browser; its page images may pass through our server on Vercel on the way, and aren’t kept there. Payments for Plus are handled by Stripe, which sells the subscription to you as merchant of record and processes your payment details under its own privacy policy. These services may store data outside the UK, including in the United States, under their own terms, privacy policies and data protection safeguards. We don’t sell your data or use it for advertising.</P>
       </Sec>
       <Sec title="How long we keep it">
-        <P>For as long as you have an account. When you delete your account, your profile, handle, follows, followers, saved list, blocks, notifications, every sketchbook with its images and stats, your Plus and billing records, and the counts we keep to prevent abuse (new conversations a day, handwriting conversions, upload checks, emails and contact messages sent) are removed straight away, and any subscription is cancelled. You leave sketchbooks others shared with you; pages you added there stay in them. Messages you sent stay in the other person’s conversation. Copies our providers keep for a short time (such as backups) are deleted under their own retention rules.</P>
+        <P>For as long as you have an account. When you delete your account, your profile, handle, follows, followers, saved list, blocks, notifications, every sketchbook with its images and stats, your Plus and billing records, and the counts we keep to prevent abuse (new conversations a day, upload checks, emails and contact messages sent) are removed straight away, and any subscription is cancelled. You leave sketchbooks others shared with you; pages you added there stay in them. Messages you sent stay in the other person’s conversation. Copies our providers keep for a short time (such as backups) are deleted under their own retention rules.</P>
         <P>A picture the upload check holds back is kept privately until a moderator has looked at it, then deleted; a photo the check refuses is deleted straight away. If a picture may show child sexual abuse, we report it to the Internet Watch Foundation or the National Crime Agency and keep it, and the account details that go with it, for as long as they or the law require, even if the account is deleted.</P>
         <P>Reports are kept until a moderator has dealt with them, then deleted; for serious cases we keep a short note of what was reported and what we did, without the content itself. Stripe keeps records of payments for as long as tax law requires.</P>
       </Sec>
@@ -144,7 +144,7 @@ function Terms() {
         <P>Sketchbooks in From the archive are historical works in the public domain, shown with credit to the artist and the museum or library they come from. They’re there for inspiration; the source’s own terms apply to its images.</P>
       </Sec>
       <Sec title="The service">
-        <P>fletora. is provided as is, without warranties. Converting handwriting is automatic and can get words wrong, so check it before saving. We may change or stop features, and we aren’t liable for lost content or indirect losses to the extent the law allows. Keep your own copies of your work.</P>
+        <P>fletora. is provided as is, without warranties. We may change or stop features, and we aren’t liable for lost content or indirect losses to the extent the law allows. Keep your own copies of your work.</P>
       </Sec>
       <Sec title="Fletora Plus">
         <P>Plus is an optional subscription that adds features to your account, at {PRICE.month} a month or {PRICE.year} a year. It’s sold to you by Stripe as merchant of record: Stripe takes the payment, charges any VAT or sales tax that applies, and sends your receipts, and its terms apply to the purchase.</P>
@@ -153,7 +153,7 @@ function Terms() {
           'Plus renews automatically at the end of each month or year until you cancel. Cancel anytime from Account settings → Plan; you keep Plus until the end of the period you’ve paid for and aren’t charged again.',
           <>If you’re in the UK or EU, you can cancel within 14 days of first subscribing for a refund, less a fair amount for the days you’ve already had Plus. To ask, <Contact />.</>,
           'If a payment fails, Plus stays on for a few days while it’s retried, then ends.',
-          `When Plus ends, nothing you’ve made is deleted. Link-only sketchbooks become private, stats and your pinned sketchbook are hidden again, and the free plan’s limits apply to anything new (${BOOKS_FREE} sketchbooks, ${PAGES_FREE} pages each, ${INK_FREE} handwriting conversions a month).`,
+          `When Plus ends, nothing you’ve made is deleted. Link-only sketchbooks become private, stats and your pinned sketchbook are hidden again, and the free plan’s limits apply to anything new (${BOOKS_FREE} sketchbooks, ${PAGES_FREE} pages each).`,
           'If the price changes, we’ll tell you at least 30 days before it applies to you, so you can cancel first.',
           'Deleting your account cancels Plus straight away.',
         ]} />
@@ -224,7 +224,6 @@ function LegalBody({ children }: { children: ReactNode }) {
 const PLUS_ROWS: [string, string, string][] = [
   ['Sketchbooks', String(BOOKS_FREE), 'Unlimited'],
   ['Pages per sketchbook', String(PAGES_FREE), String(PAGES_PLUS)],
-  ['Handwriting to text', `${INK_FREE} a month`, `${INK_PLUS} a month`],
   ['Page quality', 'Standard', 'Full resolution, twice the detail'],
   ['Download as PDF', '—', 'Any sketchbook, laid out to print'],
   ['People per sketchbook', '1 other person', 'Up to 5'],

@@ -15,7 +15,7 @@ import { currentPrompt } from './prompts';
 import { COVER_INSIDE, pageWear } from './wear';
 import { ADJUSTERS, NO_ADJUST, applyToCanvas, feValues, isAdjusted } from './adjust';
 import type { Adjust } from './adjust';
-import { LINE_H, TEXT_INK, drawTexts, inkPng, readInk, textFromInk, textWidth, wrapLines } from './handwriting';
+import { LINE_H, drawTexts, textWidth, wrapLines } from './handwriting';
 import type { PageText, Stroke } from './handwriting';
 import { RULED, paperUrl } from './paper';
 import { MAX_SOCIALS, PLATFORM, PLATFORMS, cleanHandle, socialLinks } from './socials';
@@ -58,7 +58,7 @@ interface EditState {
   scale: number; rot: number; skx: number; sky: number; tx: number; ty: number; nw: number; nh: number;
   /** Brightness, contrast and the rest (see adjust.ts), and which set of controls is showing. */
   adj: Adjust; mode: EdMode;
-  /** Write mode: handwriting not yet converted, the typed text placed on the page, and the one being edited. */
+  /** Text mode: the text placed on the page and the one being edited (`ink`/`pad` are left from handwriting, unused). */
   ink: Stroke[]; texts: PageText[]; sel: string | null; inkBusy?: boolean; inkErr?: string;
   /** Set for a blank page, so typed text can sit on lined paper's rules. */
   paper?: Paper;
@@ -1260,7 +1260,7 @@ export default class App extends Component<object, State> {
   // ---------- fit-your-page editor ----------
   startEdit(queue: string[], replaceIdx: number | null, target?: 'cover' | 'avatar', mode: EdMode = 'fit') {
     this.editSeq++;
-    this.setState({ edit: { queue, i: 0, replaceIdx, target, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, adj: NO_ADJUST, mode, ink: [], texts: [], sel: null, marks: [], pen: this.lastPen, pad: true } });
+    this.setState({ edit: { queue, i: 0, replaceIdx, target, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, adj: NO_ADJUST, mode, ink: [], texts: [], sel: null, marks: [], pen: this.lastPen, pad: false } });
     this.loadEditImg(queue[0]);
   }
   loadEditImg(src: string) {
@@ -1424,10 +1424,6 @@ export default class App extends Component<object, State> {
       run: () => { if (!p.restore(d.snap)) this.toast('That drawing was for a different page shape.'); }, onNo: () => deleteDraft(key) });
   }
   async applyEdit() {
-    // Handwriting not converted yet is converted first, so it isn't lost.
-    // If it can't be read (offline, or the month's conversions are used up), it's kept as handwriting.
-    if (!this.state.edit || this.state.edit.inkBusy) return;
-    if (this.state.edit.ink.length) { await this.convertInk(); await new Promise<void>(r => this.setState({}, r)); }
     const e = this.state.edit, im = this.editImg; if (!e) return;
     if (!im) return this.toast('The page is still loading. Try again in a moment.');
     const { fh } = this.frame(), { bw, bh } = this.baseSize(), avatar = e.target === 'avatar';
@@ -1440,11 +1436,6 @@ export default class App extends Component<object, State> {
     this.livePainter()?.drawOnto(ctx, outW, outH);
     if (this.livePainter()?.painted) deleteDraft(this.draftKey());
     await drawTexts(ctx, e.texts.filter(t => t.text.trim()), outW, outH);
-    if (e.ink.length) {
-      ctx.save(); ctx.strokeStyle = TEXT_INK; ctx.lineWidth = Math.max(2, outH * 0.0035); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      for (const st of e.ink) { ctx.beginPath(); for (let k = 0; k < st.length; k += 2) { const x = st[k] * outW, y = st[k + 1] * outH; if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); } if (st.length === 2) ctx.lineTo(st[0] * outW + 0.1, st[1] * outH); ctx.stroke(); }
-      ctx.restore();
-    }
     const images = [...this.state.images];
     let replay = !e.target ? this.replayOf() : null;
     // Editing a page again keeps its replay: carried over to the new picture, with any new strokes after it.
@@ -1494,31 +1485,6 @@ export default class App extends Component<object, State> {
     this.setState({ edit: { ...e, i, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, ink: [], texts: [], sel: null, inkErr: '', marks: [], box: undefined, spread: false, autoP: null, auto: null } }); this.loadEditImg(e.queue[i]);
   }
 
-  /** Write mode: send the handwriting to be read, and place the words where it was written. */
-  async convertInk() {
-    const e = this.state.edit; if (!e || !e.ink.length || e.inkBusy) return;
-    const { fw, fh } = this.frame(), ink = e.ink;
-    this.setEd({ inkBusy: true, inkErr: '' });
-    try {
-      const text = await readInk(inkPng(ink, fw, fh), await api.idToken()), t = textFromInk(ink, text);
-      // On untouched lined paper, size the text to the ruling and sit it on the nearest line.
-      if (e.paper === 'lined' && e.scale === 1 && !e.tx && !e.ty && !e.rot) {
-        const { step, top } = RULED, n = Math.max(0, Math.round((t.y + step * 0.8 - top) / step));
-        Object.assign(t, { size: step / LINE_H, y: top + n * step - step * 0.8 });
-      }
-      // Wide enough for the words as written (wrapping only at the page edge), then the pad carries on just after them.
-      const natural = textWidth(text, t.size * fh) / fw + 0.01;
-      t.w = Math.min(0.97 - t.x, Math.max(natural, 0.05));
-      const lines = wrapLines(text, t.w * fw, t.size * fh), lastW = textWidth(lines[lines.length - 1], t.size * fh) / fw;
-      const lineStep = t.size * LINE_H, endX = t.x + lastW + 0.03, endY = t.y + (lines.length - 1) * lineStep;
-      const b = this.padBox(e, { fw, fh }), rowY = endY + lineStep * 0.8 - b.h * 0.75;
-      const box = e.pad ? (endX + b.w * 0.5 > 0.97 ? { x: 0.06, y: rowY + (e.paper === 'lined' ? RULED.step : b.h * 0.8) } : { x: endX, y: rowY }) : e.box;
-      this.setState(s => s.edit ? { edit: { ...s.edit, inkBusy: false, ink: s.edit.ink.slice(ink.length), texts: [...s.edit.texts, t], sel: e.pad ? null : t.id, box } } : null);
-    } catch (err) {
-      this.setEd({ inkBusy: false, inkErr: (err as Error).message });
-      if ((err as { code?: string }).code === 'ink-limit') this.openPlus('ink');
-    }
-  }
   setText(id: string, patch: Partial<PageText>) { this.setState(s => s.edit ? { edit: { ...s.edit, texts: s.edit.texts.map(t => t.id === id ? { ...t, ...patch } : t) } } : null); }
 
   // ---------- explore ----------
@@ -2476,10 +2442,21 @@ export default class App extends Component<object, State> {
     else {
       const tid = (e.target as HTMLElement).closest?.('[data-tid]')?.getAttribute('data-tid'), t = tid && ed.texts.find(q => q.id === tid);
       if (t) { this.inkPen = { id: e.pointerId, r, drag: { tid: t.id, px: x, py: y, x: t.x, y: t.y } }; this.setEd({ sel: t.id }); return; }
-      // With the pad on, touching the page moves the pad there instead of writing.
-      if (ed.pad) { this.inkPen = { id: e.pointerId, r }; return this.movePad(x, y); }
     }
-    this.inkPen = { id: e.pointerId, r, pad }; this.setEd({ ink: [...ed.ink, [x, y]], sel: null, inkErr: '' });
+    // Typed straight away: the box is made and the cursor put in it within this tap, so phones open the keyboard,
+    // and the tap's own focus change is stopped so it doesn't take the cursor back off it.
+    e.preventDefault(); flushSync(() => this.addText(x, y)); this.focusText();
+  }
+  focusText() { (document.querySelector('textarea[aria-label="Text"]') as HTMLTextAreaElement | null)?.focus(); }
+  /** Text mode: a text box where the page was tapped (on lined paper, sitting on the nearest line), ready to type
+   *  into; empty boxes left behind are cleared away. */
+  addText(x: number, y: number) {
+    const ed = this.state.edit; if (!ed) return;
+    const lined = ed.paper === 'lined', size = lined ? RULED.step / LINE_H : 0.045;
+    if (lined) { const { step, top } = RULED, n = Math.max(0, Math.round((y + step * 0.2 - top) / step)); y = top + n * step - step * 0.8; }
+    else y = y - size * LINE_H / 2;
+    const tx = Math.max(0.03, Math.min(0.85, x)), t: PageText = { id: Math.random().toString(36).slice(2, 9), x: tx, y: Math.max(0, Math.min(0.95, y)), w: Math.max(0.12, 0.97 - tx), size, text: '' };
+    this.setEd({ texts: [...ed.texts.filter(q => q.text.trim()), t], sel: t.id });
   }
   movePad(x: number, y: number) { const ed = this.state.edit!, b = this.padBox(ed, this.frame()); this.setEd({ box: { x: x - b.w / 2, y: y - b.h / 2 } }); }
   inkMove(e: PointerEvent) {
@@ -2598,14 +2575,16 @@ export default class App extends Component<object, State> {
       ...this.padVals(ed, fr),
       edWrite: ed.mode === 'write', inkBusy: !!ed.inkBusy, inkErr: ed.inkErr || '', hasInk: ed.ink.length > 0, edTextCount: ed.texts.length,
       edInkPaths: ed.ink.map(s => s.reduce((d, n, i) => d + (i % 2 ? `${(n * fr.fh).toFixed(1)} ` : `${i ? 'L' : 'M'}${(n * fr.fw).toFixed(1)} `), '') + (s.length === 2 ? 'l.1 0' : '')),
-      edTexts: ed.texts.map(t => ({ id: t.id, left: t.x * fr.fw, top: t.y * fr.fh, width: t.w * fr.fw, fontPx: t.size * fr.fh, lineH: t.size * fr.fh * LINE_H, sel: t.id === ed.sel,
+      edTexts: ed.texts.map(t => ({ id: t.id, empty: !t.text, left: t.x * fr.fw, top: t.y * fr.fh, width: t.w * fr.fw, fontPx: t.size * fr.fh, lineH: t.size * fr.fh * LINE_H, sel: t.id === ed.sel,
         lines: wrapLines(t.text, t.w * fr.fw, t.size * fr.fh) })),
-      convertInk: () => this.convertInk(), undoInk: () => this.setEd({ ink: ed.ink.slice(0, -1) }), clearInk: () => this.setEd({ ink: [], inkErr: '' }),
+
+      // + Add text: a box under the last one (or near the top).
+      addTextBox: () => { flushSync(() => { const last = ed.texts.filter(t => t.text.trim()).sort((a, b) => b.y - a.y)[0]; this.addText(0.06, last ? Math.min(0.9, last.y + last.size * LINE_H * (last.text.split('\n').length + 1.4)) : 0.1); }); this.focusText(); },
       selText: sel ? {
-        text: sel.text, onText: (e: ChangeEvent<HTMLTextAreaElement>) => this.setText(sel.id, { text: e.target.value }),
+        id: sel.id, text: sel.text, onText: (e: ChangeEvent<HTMLTextAreaElement>) => this.setText(sel.id, { text: e.target.value }),
         size: Math.round(sel.size * 1000), sizeLbl: `${Math.round(sel.size * 1000)}`, onSize: (e: ChangeEvent<HTMLInputElement>) => this.setText(sel.id, { size: parseFloat(e.target.value) / 1000 }),
         width: Math.round(sel.w * 100), onWidth: (e: ChangeEvent<HTMLInputElement>) => this.setText(sel.id, { w: Math.min(1 - sel.x, parseFloat(e.target.value) / 100) }),
-        remove: () => this.setEd({ texts: ed.texts.filter(t => t.id !== sel.id), sel: null }), done: () => this.setEd({ sel: null }),
+        remove: () => this.setEd({ texts: ed.texts.filter(t => t.id !== sel.id), sel: null }), done: () => this.setEd({ sel: null, texts: ed.texts.filter(t => t.text.trim()) }),
       } : null,
     };
   }
@@ -2651,7 +2630,7 @@ export default class App extends Component<object, State> {
       // Straightened and cropped automatically: say so, with the way back (and back again).
       edAuto: !!ed.auto, edAutoOn: !!ed.auto && (['scale', 'rot', 'skx', 'sky', 'tx', 'ty'] as const).every(k => ed[k] === ed.auto![k]),
       autoFit: () => ed.auto && this.setEd({ ...ed.auto }),
-      edMode: ed.mode, setEdMode: (mode: EdMode) => { if (ed.mode === 'write' && mode !== 'write' && ed.ink.length && !ed.inkBusy) this.convertInk(); this.setEd({ mode, sel: null }); if (mode === 'draw') this.checkDraft(); }, edBlank: !!ed.paper,
+      edMode: ed.mode, setEdMode: (mode: EdMode) => { this.setEd({ mode, sel: null, texts: ed.texts.filter(t => t.text.trim() || t.id === ed.sel && mode === 'write') }); if (mode === 'draw') this.checkDraft(); }, edBlank: !!ed.paper,
       ...this.drawVals(ed),
       ...this.writeVals(ed, fr),
       edAdjTool: this.state.edAdjTool || 'white', setEdAdjTool: (t: string) => this.setState({ edAdjTool: t }),

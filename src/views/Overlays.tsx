@@ -458,7 +458,7 @@ function PlusThanks({ v }: { v: V }) {
     <>
       <span style={{ font: `600 11px ${SANS}`, letterSpacing: '.14em', textTransform: 'uppercase', color: MARK }}>Fletora Plus</span>
       <span style={{ ...heading, lineHeight: 1.05 }}>Thank you. Plus is on.</span>
-      <span style={{ fontSize: 15, lineHeight: 1.55 }}>Link-only sketchbooks, stats and pinning are in each sketchbook’s Details, and you have more room for sketchbooks, pages and handwriting. Your receipt is on its way by email, and you can manage Plus in Settings.</span>
+      <span style={{ fontSize: 15, lineHeight: 1.55 }}>Link-only sketchbooks, stats and pinning are in each sketchbook’s Details, and you have more room for sketchbooks and pages. Your receipt is on its way by email, and you can manage Plus in Settings.</span>
       <button onClick={v.plClose} className={hover(`background:${MARK}`)} style={{ height: 48, border: 'none', borderRadius: 2, background: INK, color: PAPER, font: `500 15px ${SANS}`, cursor: 'pointer' }}>Back to my sketchbooks</button>
     </>
   );
@@ -745,7 +745,7 @@ const ED_TOOLS: [string, string, number, number, number, string][] = [
 const ED_ON: Record<string, string> = { scale: 'onScale', rot: 'onRot', skx: 'onSkx', sky: 'onSky' };
 const ADJ_SHORT: Record<string, string> = { bri: 'Light', con: 'Contrast', sat: 'Colour', warm: 'Warmth', white: 'Whites' };
 
-/** Everything on the page: paper and image (with the colour matrix), drawing, typed text, and handwriting still to convert. */
+/** Everything on the page: paper and image (with the colour matrix), drawing and typed text. */
 /** The paint layer's canvases (kept by the Painter, so they live on between renders). */
 function PaintView({ el }: { el: HTMLElement }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -768,7 +768,7 @@ function Layers({ v, inPad }: { v: V; inPad?: boolean }) {
       )}
       {v.edTexts.map((t: V) => (
         <div key={t.id} data-tid={inPad ? undefined : t.id} style={{ position: 'absolute', left: t.left, top: t.top, width: t.width, font: `${t.fontPx}px/${t.lineH}px ${TEXT_FONT}`, color: TEXT_INK, whiteSpace: 'pre', pointerEvents: v.edWrite && !inPad ? 'auto' : 'none', cursor: 'grab', outline: inPad ? 'none' : t.sel ? `1.5px dashed ${MARK}` : v.edWrite ? '1px dashed rgba(34,35,32,.25)' : 'none', outlineOffset: 4 }}>
-          {t.lines.map((l: string, i: number) => <div key={i} style={{ height: t.lineH }}>{l}</div>)}
+          {t.empty ? <div style={{ height: t.lineH, color: 'rgba(34,35,32,.35)' }}>Type here</div> : t.lines.map((l: string, i: number) => <div key={i} style={{ height: t.lineH }}>{l}</div>)}
         </div>
       ))}
       {v.edWrite && (
@@ -810,7 +810,7 @@ function EditFrame({ v, radius, shadow, wheel }: { v: V; radius: string; shadow:
     </div>
   );
   return (
-    <div ref={frameWheel} onPointerDown={v.edDown} onPointerMove={v.edMove} onPointerUp={v.edUp} onPointerCancel={v.edUp} onWheel={wheel && v.edMode === 'fit' ? v.edWheel : undefined} style={{ position: 'relative', width: v.fw, height: v.fh, flexShrink: 0, overflow: 'hidden', borderRadius: radius, boxShadow: shadow, cursor: pen ? 'crosshair' : v.edWrite ? 'pointer' : v.edMode === 'pick' ? 'default' : 'move', touchAction: 'none' }}>
+    <div ref={frameWheel} onPointerDown={v.edDown} onPointerMove={v.edMove} onPointerUp={v.edUp} onPointerCancel={v.edUp} onWheel={wheel && v.edMode === 'fit' ? v.edWheel : undefined} style={{ position: 'relative', width: v.fw, height: v.fh, flexShrink: 0, overflow: 'hidden', borderRadius: radius, boxShadow: shadow, cursor: pen && !v.edWrite ? 'crosshair' : v.edWrite ? 'text' : v.edMode === 'pick' ? 'default' : 'move', touchAction: 'none' }}>
       <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
         <filter id="ed-adjust" colorInterpolationFilters="sRGB"><feColorMatrix type="matrix" values={v.edFx} /></filter>
       </svg>
@@ -856,8 +856,8 @@ function WritePad({ v }: { v: V }) {
   );
 }
 
-const MODE_NAMES: Record<string, string> = { fit: 'Fit', adjust: 'Adjust', draw: 'Draw', write: 'Write' };
-const TITLES: Record<string, string> = { fit: 'Fit your page', adjust: 'Adjust', draw: 'Draw', write: 'Write', pick: 'New page' };
+const MODE_NAMES: Record<string, string> = { fit: 'Fit', adjust: 'Adjust', draw: 'Draw', write: 'Text' };
+const TITLES: Record<string, string> = { fit: 'Fit your page', adjust: 'Adjust', draw: 'Draw', write: 'Text', pick: 'New page' };
 
 function ModeSwitch({ v, height = 36 }: { v: V; height?: number }) {
   if (v.edMode === 'pick') return null;
@@ -876,7 +876,7 @@ function PickMode({ v, mob }: { v: V; mob?: boolean }) {
   const card: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start', textAlign: 'left', padding: mob ? '14px 16px' : '18px 18px', border: '1.5px solid rgba(var(--ink-rgb),.25)', borderRadius: 2, background: 'none', color: INK, cursor: 'pointer' };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {([['draw', 'Draw', 'Pen, pencil, marker, watercolour and oil'], ['write', 'Write', 'Handwriting, turned into typed text']] as const).map(([k, l, d]) => (
+      {([['draw', 'Draw', 'Pen, pencil, marker, watercolour and oil'], ['write', 'Text', 'Type words onto the page']] as const).map(([k, l, d]) => (
         <button key={k} onClick={() => v.setEdMode(k)} className={hover(`border-color:${INK}`)} style={card}>
           <span style={{ font: `400 24px/1.1 ${SERIF}` }}>{l}</span>
           <span style={{ font: `400 13px ${SANS}`, color: 'rgba(var(--ink-rgb),.65)' }}>{d}</span>
@@ -974,12 +974,12 @@ const PeekBtn = ({ v, style }: { v: V; style: CSSProperties }) => (
   <button onPointerDown={v.peekOn} onPointerUp={v.peekOff} onPointerLeave={v.peekOff} onPointerCancel={v.peekOff} onContextMenu={e => e.preventDefault()} disabled={!v.edAdjusted} style={{ ...style, opacity: v.edAdjusted ? 1 : 0.4, touchAction: 'none', userSelect: 'none' }}>Hold to compare</button>
 );
 
-/** Write mode controls: the zoom pad, converting the handwriting, or editing the selected piece of text. */
+/** Text mode controls: how to add text, or the selected text to type into, size and remove. */
 function WriteTools({ v, outline, mob }: { v: V; outline: CSSProperties; mob?: boolean }) {
   const t = v.selText;
   if (t) return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: mob ? 10 : 14 }}>
-      <textarea value={t.text} onChange={t.onText} rows={mob ? 2 : 4} aria-label="Text" className={focusMark} style={{ ...field, height: 'auto', padding: '10px 12px', resize: 'vertical', font: `400 15px/1.4 ${SANS}` }} />
+      <textarea key={t.id} autoFocus value={t.text} onChange={t.onText} rows={mob ? 2 : 4} placeholder="Type here" aria-label="Text" className={focusMark} style={{ ...field, height: 'auto', padding: '10px 12px', resize: 'vertical', font: `400 15px/1.4 ${SANS}` }} />
       <Slider name="Size" lbl={t.sizeLbl} min={20} max={120} step={1} value={t.size} onChange={t.onSize} />
       {!mob && <Slider name="Width" lbl={`${t.width}%`} min={15} max={100} step={1} value={t.width} onChange={t.onWidth} />}
       <div style={{ display: 'flex', gap: 8 }}>
@@ -990,16 +990,8 @@ function WriteTools({ v, outline, mob }: { v: V; outline: CSSProperties; mob?: b
   );
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: mob ? 8 : 14 }}>
-      {!mob && <span style={{ fontSize: 12, lineHeight: 1.45, color: 'rgba(var(--ink-rgb),.6)' }}>{v.edPad ? 'Write big in the pad under the page; it slides along as you go. Tap the page to move the pad, then convert it to typed text.' : 'Write on the page with your finger, a pen or the mouse, then convert it to typed text. Tap text to edit it; drag it to move it.'}</span>}
-      <div style={{ display: 'flex', gap: 8 }}>
-        {v.edPad && <button onClick={v.padSpace} style={outline}>Space →</button>}
-        {v.edPad && <button onClick={v.padNewLine} style={outline}>New line</button>}
-        <button onClick={v.undoInk} disabled={!v.hasInk || v.inkBusy} style={{ ...outline, opacity: v.hasInk ? 1 : 0.4 }}>Undo</button>
-        {!v.edPad && <button onClick={v.clearInk} disabled={!v.hasInk || v.inkBusy} style={{ ...outline, opacity: v.hasInk ? 1 : 0.4 }}>Clear</button>}
-      </div>
-      <button onClick={v.convertInk} disabled={!v.hasInk || v.inkBusy} style={{ ...outline, flex: 'none', height: mob ? 42 : 40, border: 'none', background: v.hasInk ? MARK : 'rgba(var(--ink-rgb),.12)', color: v.hasInk ? PAPER : 'rgba(var(--ink-rgb),.5)' }}>{v.inkBusy ? 'Reading…' : 'Convert to text'}</button>
-      {v.inkErr && <span role="alert" style={{ fontSize: 13, color: MARK }}>{v.inkErr}</span>}
-      <button onClick={v.togglePad} style={{ ...linkBtn('rgba(var(--ink-rgb),.75)'), alignSelf: 'center', fontSize: 13 }}>{v.edPad ? 'Write directly on the page instead' : 'Use the zoom pad'}</button>
+      {!mob && <span style={{ fontSize: 12, lineHeight: 1.45, color: 'rgba(var(--ink-rgb),.6)' }}>Tap the page where you want text, then type. Tap text to change it; drag it to move it.</span>}
+      <button onClick={v.addTextBox} style={{ ...outline, flex: 'none', height: mob ? 42 : 40, border: 'none', background: MARK, color: PAPER }}>+ Add text</button>
     </div>
   );
 }
@@ -1015,7 +1007,7 @@ function MobileEditor({ v }: { v: V }) {
   const bar: CSSProperties = { background: 'none', border: 'none', padding: '8px 0', color: INK, font: `500 15px ${SANS}`, cursor: 'pointer' };
   const outline: CSSProperties = { flex: 1, height: 42, borderRadius: 2, border: '1.5px solid rgba(var(--ink-rgb),.5)', background: 'none', color: INK, font: `500 14px ${SANS}`, cursor: 'pointer' };
   const [wheel, setWheel] = useState(false);
-  const hint = pick ? 'Choose how to fill this page' : draw ? '' : write ? (v.edPad ? 'Write in the pad · tap the page to move it' : 'Write with your finger, then convert · drag text to move it') : adjust ? 'Whites cleans up the grey of a photographed page' : 'Drag to move · pinch to zoom · twist to rotate';
+  const hint = pick ? 'Choose how to fill this page' : draw ? '' : write ? (v.selText ? 'Type below · drag the text to move it' : 'Tap the page where you want text') : adjust ? 'Whites cleans up the grey of a photographed page' : 'Drag to move · pinch to zoom · twist to rotate';
   return (
     <div style={{ position: 'absolute', inset: 0, background: PAPER, zIndex: 20, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', padding: '0 16px', paddingBottom: 'calc(16px + env(safe-area-inset-bottom))', overflow: 'hidden' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8, padding: '12px 0 8px' }}>
@@ -1215,12 +1207,12 @@ function AutoNote({ v }: { v: V }) {
     : <button onClick={v.autoFit} className={hover(`color:${MARK}`)} style={{ ...linkBtn(INK), alignSelf: 'flex-start', fontSize: 13 }}>Straighten and crop automatically</button>;
 }
 
-/** The page editor: Fit (crop, zoom, rotate, skew), Adjust (light and colour), Draw, and Write (handwriting to text). */
+/** The page editor: Fit (crop, zoom, rotate, skew), Adjust (light and colour), Draw, and Text (typed words on the page). */
 export function Editor({ v }: { v: V }) {
   if (v.edMob) return <MobileEditor v={v} />;
   const outline: CSSProperties = { flex: 1, height: 36, borderRadius: 2, border: '1.5px solid rgba(var(--ink-rgb),.5)', background: 'none', color: INK, font: `500 13px ${SANS}`, cursor: 'pointer' };
   const adjust = v.edMode === 'adjust', write = v.edMode === 'write', draw = v.edMode === 'draw', pick = v.edMode === 'pick';
-  const sub = pick ? 'draw or write' : draw ? 'pens, paint and colour' : write ? 'handwriting to text' : adjust ? 'light and colour' : 'drag to move, scroll or pinch to zoom';
+  const sub = pick ? 'draw or add text' : draw ? 'pens, paint and colour' : write ? 'type onto the page' : adjust ? 'light and colour' : 'drag to move, scroll or pinch to zoom';
   return (
     <div style={{ position: 'absolute', inset: 0, background: PAPER, zIndex: 20, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) clamp(340px, 28vw, 440px)', alignItems: 'center', gap: 56, padding: '24px 48px', boxSizing: 'border-box', overflow: 'auto' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, minWidth: 0 }}>

@@ -668,7 +668,7 @@ export function Settings({ v }: { v: V }) {
           </span>
         </div>
         {(v.acErr || v.acInfo) && <Notice err={v.acErr} info={v.acInfo} />}
-        <SettingsSection title="Plan" note={v.acTrial ? 'Everything in Plus, free while the trial lasts. Afterwards you’re back on the free plan, and nothing you’ve made is deleted.' : v.acGift ? 'A gift from Fletora: everything in Plus, free.' : v.acPlus ? 'Your plan, card and receipts are on the billing page.' : 'Plus adds unlimited sketchbooks, link-only sketchbooks, stats, more handwriting and more.'}>
+        <SettingsSection title="Plan" note={v.acTrial ? 'Everything in Plus, free while the trial lasts. Afterwards you’re back on the free plan, and nothing you’ve made is deleted.' : v.acGift ? 'A gift from Fletora: everything in Plus, free.' : v.acPlus ? 'Your plan, card and receipts are on the billing page.' : 'Plus adds unlimited sketchbooks, link-only sketchbooks, stats, PDFs and more.'}>
           <span style={{ fontSize: 14, lineHeight: 1.5, color: v.acPastDue ? MARK : INK }}>{v.acTrial ? v.acTrialLine : v.acGift ? v.acGiftLine : v.acPastDue ? 'Your last payment didn’t go through. Update your card to keep Plus.' : v.acPlan}</span>
           {v.acTrial ? <button onClick={v.keepPlus} style={formBtn()}>Keep Plus</button> : v.acGift ? <button onClick={v.seePlus} className={hoverLine} style={{ ...underlineBtn(14), alignSelf: 'flex-start' }}>What’s included</button>
             : v.acPlus ? <button onClick={v.openBilling} style={formBtn()}>Manage billing</button> : <button onClick={v.seePlus} style={formBtn()}>See Plus</button>}
