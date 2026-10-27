@@ -102,47 +102,87 @@ function ExploreTabs({ v }: { v: V }) {
   return <div role="tablist" aria-label="Explore" style={{ display: 'flex', gap: 24 }}>{tab(!v.exFollowing, 'Everyone', v.exTabAll)}{tab(v.exFollowing, 'Following', v.exTabFollowing)}</div>;
 }
 
-/** The Following tab: one entry per recently updated sketchbook, with its latest pages to tap straight into. */
+/** The Following tab: the artists you follow with something new (a sidebar on wide screens, a row on narrow ones,
+ *  each one a filter), and a card per recently updated sketchbook with its latest pages to tap straight into. */
 function FollowingFeed({ v }: { v: V }) {
-  const mob = !v.notMob;
+  const mob = !v.notMob, wide = (window.innerWidth || 0) >= 1100, ph = mob ? 150 : 210;
+  const av = (p: V, size: number) => <span aria-hidden="true" style={{ width: size, height: size, flexShrink: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.15)', boxSizing: 'border-box', background: p.av || INK, color: PAPER, font: `600 ${Math.round(size / 3)}px ${SANS}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{p.av ? '' : p.init}</span>;
+  const people = v.exFeedPeople as V[];
   return (
     <div style={screen('auto')}>
       <div style={{ minHeight: '100%', boxSizing: 'border-box', padding: `${v.exPadT}px ${v.exPadX}px 28px`, display: 'flex', flexDirection: 'column', gap: v.exGap }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', paddingBottom: 18, borderBottom: `1px solid ${INK}` }}>
-          <h1 style={{ margin: 0, ...serif(v.exH1, .95, '-.02em') }}><em>Following</em></h1>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <h1 style={{ margin: 0, ...serif(v.exH1, .95, '-.02em') }}><em>Following</em></h1>
+            {v.exFeedCount > 0 && <span style={{ fontSize: 14, color: MUTED }}>New pages from the {v.exFeedCount === 1 ? 'artist' : `${v.exFeedCount} artists`} you follow</span>}
+          </div>
           <ExploreTabs v={v} />
         </div>
         {v.exFeedLoading ? <div style={{ padding: '40px 0', textAlign: 'center', color: MUTED, fontSize: 14 }}>Opening sketchbooks…</div>
-          : !v.exFeed.length ? (
+          : !v.exFeed.length && !v.exFeedWho ? (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, textAlign: 'center', padding: '40px 0', color: MUTED, fontSize: 14 }}>
               <span style={serif(34)}>{v.exFeedNoFollows ? <>Follow some <em style={{ color: MARK }}>artists.</em></> : <>Nothing new <em style={{ color: MARK }}>yet.</em></>}</span>
               <span style={{ maxWidth: 380, lineHeight: 1.5 }}>{v.exFeedNoFollows ? 'Follow artists from their profiles, and their newest pages show up here.' : 'When the artists you follow add pages, they show up here.'}</span>
               <button onClick={v.exTabAll} className={hoverLine} style={underlineBtn(14)}>Explore everyone’s sketchbooks ↗</button>
             </div>
-          ) : v.exFeed.map((f: V) => (
-            <article key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: v.exGap, borderBottom: '1px solid rgba(var(--ink-rgb),.15)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                <button onClick={f.openArtist} aria-label={`${f.artist}’s profile`} style={{ width: 38, height: 38, flexShrink: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.15)', boxSizing: 'border-box', padding: 0, background: f.av || INK, color: PAPER, font: `600 12px ${SANS}`, cursor: 'pointer' }}>{f.av ? '' : f.init}</button>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
-                  <span style={{ fontSize: 14, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    <button onClick={f.openArtist} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `600 14px ${SANS}`, cursor: 'pointer' }}>{f.artist}</button>
-                    <span style={{ color: MUTED }}> · {f.when}</span>
-                  </span>
-                  <button onClick={f.open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', textAlign: 'left', color: INK, cursor: 'pointer', ...serif(mob ? 22 : 26, 1.1, 'normal'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{f.name}</button>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: wide ? 'minmax(0, 1fr) 300px' : 'minmax(0, 1fr)', gap: wide ? 48 : 20, alignItems: 'start' }}>
+              {!wide && people.length > 1 && (
+                // Narrow screens: the artists as a row of chips to filter by.
+                <div onWheel={wheelSideways} style={{ display: 'flex', gap: 8, overflowX: 'auto', margin: `0 -${v.exPadX}px`, padding: `0 ${v.exPadX}px 2px`, scrollbarWidth: 'none' } as CSSProperties}>
+                  <button onClick={v.exFeedAll} style={{ ...chipStyle(!v.exFeedWho), display: 'flex', alignItems: 'center' }}>Everyone</button>
+                  {people.map(p => <button key={p.key} onClick={p.pick} aria-pressed={p.on} style={{ ...chipStyle(p.on), display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 4 }}>{av(p, 26)}{p.name}</button>)}
                 </div>
-                {f.mature && <span style={label(MUTED, 10)}>Mature</span>}
-                <span style={{ fontSize: 13, color: MUTED, flexShrink: 0 }}>{!mob && f.meta}</span>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
+                {v.exFeedWho && <div style={{ fontSize: 14, color: MUTED }}>Showing <b style={{ color: INK, fontWeight: 600 }}>{v.exFeedWho}</b> · <button onClick={v.exFeedAll} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', font: `500 14px ${SANS}`, borderBottom: `1px solid ${INK}` }}>show everyone</button></div>}
+                <div style={{ display: 'grid', gridTemplateColumns: mob ? 'minmax(0, 1fr)' : 'repeat(auto-fill, minmax(min(100%, 400px), 1fr))', gap: mob ? 28 : '40px 32px' }}>
+                  {v.exFeed.map((f: V) => (
+                    <article key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+                      {/* The latest pages, newest first: tap one to open the book there. */}
+                      <div onWheel={wheelSideways} style={{ display: 'flex', gap: 8, height: ph, overflowX: mob ? 'auto' : 'hidden', overflowY: 'hidden', padding: '6px 4px 26px', margin: '-6px -4px -22px', scrollbarWidth: 'none' } as CSSProperties}>
+                        {f.pages.map((pg: V, k: number) => (
+                          <button key={pg.key} onClick={pg.open} title={`Page ${pg.num}`} aria-label={`Open page ${pg.num} of ${f.name}`} className={hover('transform:translateY(-4px)')}
+                            style={{ position: 'relative', flexShrink: 0, height: k === 0 ? '100%' : '82%', alignSelf: 'flex-end', aspectRatio: String(f.ar), padding: 0, border: 'none', borderRadius: '2px 6px 6px 2px', background: pg.bg, boxShadow: '0 8px 20px rgba(34,35,32,.14), inset 0 0 0 1px rgba(34,35,32,.08)', cursor: 'pointer', transition: 'transform .3s cubic-bezier(.2,.8,.2,1)' }}>
+                            <span style={{ position: 'absolute', right: 6, bottom: 5, padding: '1px 5px', borderRadius: 3, background: 'rgba(246,242,233,.85)', color: '#3a3830', font: `500 10px ${SANS}` }}>{pg.num}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, minWidth: 0 }}>
+                        <button onClick={f.open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', textAlign: 'left', color: INK, cursor: 'pointer', ...serif(mob ? 24 : 28, 1.1, 'normal'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{f.name}</button>
+                        {f.fresh && <span style={label(MARK, 10)}>New</span>}
+                        {f.mature && <span style={label(MUTED, 10)}>Mature</span>}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, fontSize: 13.5, color: MUTED }}>
+                        <button onClick={f.openArtist} aria-label={`${f.artist}’s profile`} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', display: 'flex' }}>{av(f, 26)}</button>
+                        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                          <button onClick={f.openArtist} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `600 13.5px ${SANS}`, cursor: 'pointer' }}>{f.artist}</button> · {f.when}
+                        </span>
+                        <span style={{ flexShrink: 0 }}>{f.meta}</span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
               </div>
-              <div onWheel={wheelSideways} style={{ display: 'flex', gap: mob ? 8 : 12, overflowX: 'auto', margin: `0 -${v.exPadX}px`, padding: `2px ${v.exPadX}px 6px`, scrollbarWidth: 'none' } as CSSProperties}>
-                {f.pages.map((pg: V) => (
-                  <button key={pg.key} onClick={pg.open} title={`Page ${pg.num}`} aria-label={`Open page ${pg.num} of ${f.name}`} className={hover('transform:translateY(-4px)')}
-                    style={{ position: 'relative', flexShrink: 0, width: pg.w, height: pg.h, padding: 0, border: 'none', borderRadius: '2px 6px 6px 2px', background: pg.bg, boxShadow: '0 8px 20px rgba(34,35,32,.14), inset 0 0 0 1px rgba(34,35,32,.08)', cursor: 'pointer', transition: 'transform .3s cubic-bezier(.2,.8,.2,1)' }}>
-                    <span style={{ position: 'absolute', right: 6, bottom: 5, padding: '1px 5px', borderRadius: 3, background: 'rgba(246,242,233,.85)', color: '#3a3830', font: `500 10px ${SANS}` }}>{pg.num}</span>
-                  </button>
-                ))}
-              </div>
-            </article>
-          ))}
+              {wide && (
+                <aside style={{ position: 'sticky', top: 16, display: 'flex', flexDirection: 'column', gap: 6, padding: '18px 18px 14px', border: '1px solid rgba(var(--ink-rgb),.14)' }}>
+                  <span style={{ ...label(MUTED, 10), marginBottom: 6 }}>With something new</span>
+                  <button onClick={v.exFeedAll} className={hover('background:rgba(var(--ink-rgb),.05)')} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px', margin: '0 -8px', border: 'none', background: !v.exFeedWho ? 'rgba(var(--ink-rgb),.06)' : 'none', color: INK, cursor: 'pointer', font: `500 14px ${SANS}`, textAlign: 'left' }}>Everyone</button>
+                  {people.map(p => (
+                    <button key={p.key} onClick={p.pick} aria-pressed={p.on} className={hover('background:rgba(var(--ink-rgb),.05)')} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px', margin: '0 -8px', border: 'none', background: p.on ? 'rgba(var(--ink-rgb),.06)' : 'none', color: INK, cursor: 'pointer', textAlign: 'left', minWidth: 0 }}>
+                      {av(p, 34)}
+                      <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                        <span style={{ font: `600 14px ${SANS}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                        <span style={{ fontSize: 12.5, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.handle}</span>
+                      </span>
+                      <span style={{ fontSize: 12, color: MUTED, flexShrink: 0, textAlign: 'right' }}>{p.books > 1 ? `${p.books} books · ` : ''}{p.when}</span>
+                    </button>
+                  ))}
+                  <button onClick={v.exTabAll} className={hoverLine} style={{ ...underlineBtn(13), alignSelf: 'flex-start', marginTop: 10 }}>Find more artists in Explore ↗</button>
+                </aside>
+              )}
+            </div>
+          )}
         <SiteFooter v={v} />
       </div>
     </div>
