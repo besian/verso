@@ -17,6 +17,8 @@ import { ADJUSTERS, NO_ADJUST, applyToCanvas, feValues, isAdjusted } from './adj
 import type { Adjust } from './adjust';
 import { LINE_H, TEXT_FONTS, TEXT_INK, drawTexts, fontOf, wrapLines } from './handwriting';
 import type { PageText, Stroke, TextAlign, TextFont } from './handwriting';
+import { drawPhotos, placePhoto, readPhoto } from './photos';
+import type { PagePhoto } from './photos';
 import { RULED, paperUrl } from './paper';
 import { MAX_SOCIALS, PLATFORM, PLATFORMS, cleanHandle, socialLinks } from './socials';
 import { drawMarks, pathD } from './draw';
@@ -63,6 +65,8 @@ interface EditState {
   adj: Adjust; mode: EdMode;
   /** Text mode: the text placed on the page and the one being edited (`ink`/`pad` are left from handwriting, unused). */
   ink: Stroke[]; texts: PageText[]; sel: string | null; inkBusy?: boolean; inkErr?: string;
+  /** Photos placed on the page (Draw and Text), and the one being moved, resized or turned. */
+  photos?: PagePhoto[]; psel?: string | null;
   /** Set for a blank page, so typed text can sit on lined paper's rules. */
   paper?: Paper;
   /** Draw mode: finished strokes and the current tool. Write mode: whether the zoom pad is on, and where it sits on the page. */
@@ -1476,6 +1480,7 @@ export default class App extends Component<object, State> {
     const c = document.createElement('canvas'); c.width = outW; c.height = outH; const ctx = c.getContext('2d')!;
     this.drawPhoto(ctx, outW, outH);
     drawMarks(ctx, e.marks, outW, outH);
+    await drawPhotos(ctx, e.photos || [], outW, outH); // under the drawing and text
     this.livePainter()?.drawOnto(ctx, outW, outH);
     if (this.livePainter()?.painted) deleteDraft(this.draftKey());
     await drawTexts(ctx, e.texts.filter(t => t.text.trim()), outW, outH);
@@ -1525,7 +1530,7 @@ export default class App extends Component<object, State> {
     const e = this.state.edit; if (!e) return; const i = e.i + 1;
     if (i >= e.queue.length || e.replaceIdx != null) { this.setState({ edit: null }); cancelAnimationFrame(this.raf); this.target = Math.round(this.target); this.setState({ p: this.target }); return; }
     // The next image keeps the same adjustments: a batch of scans usually needs the same fix.
-    this.setState({ edit: { ...e, i, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, ink: [], texts: [], sel: null, inkErr: '', marks: [], box: undefined, spread: false, autoP: null, auto: null } }); this.loadEditImg(e.queue[i]);
+    this.setState({ edit: { ...e, i, scale: 1, rot: 0, skx: 0, sky: 0, tx: 0, ty: 0, nw: 0, nh: 0, ink: [], texts: [], sel: null, photos: [], psel: null, inkErr: '', marks: [], box: undefined, spread: false, autoP: null, auto: null } }); this.loadEditImg(e.queue[i]);
   }
 
   setText(id: string, patch: Partial<PageText>) { this.setState(s => s.edit ? { edit: { ...s.edit, texts: s.edit.texts.map(t => t.id === id ? { ...t, ...patch } : t) } } : null); }
@@ -2492,11 +2497,59 @@ export default class App extends Component<object, State> {
     else {
       const tid = (e.target as HTMLElement).closest?.('[data-tid]')?.getAttribute('data-tid'), t = tid && ed.texts.find(q => q.id === tid);
       if (t) { this.inkPen = { id: e.pointerId, r, drag: { tid: t.id, px: x, py: y, x: t.x, y: t.y } }; this.setEd({ sel: t.id }); return; }
+      const ph = this.photoAt(x, y);
+      if (ph) { this.setEd({ psel: ph.id, sel: null, texts: ed.texts.filter(q => q.text.trim()) }); return; }
     }
     // Typed straight away: the box is made and the cursor put in it within this tap, so phones open the keyboard,
     // and the tap's own focus change is stopped so it doesn't take the cursor back off it.
     e.preventDefault(); flushSync(() => this.addText(x, y)); this.focusText();
   }
+  // ---------- photos on the page ----------
+  /** Picks a photo from the device and puts it in the middle of the page, ready to move and size. */
+  pickPhoto = () => {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = async () => {
+      const f = inp.files?.[0]; if (!f) return;
+      try {
+        const { src, a } = await readPhoto(f), ed = this.state.edit; if (!ed) return;
+        const ph = placePhoto(src, a, this.edAspect());
+        this.setEd({ photos: [...(ed.photos || []), ph], psel: ph.id, sel: null, texts: ed.texts.filter(t => t.text.trim()) });
+      } catch { this.toast('Couldn’t open that photo. Try another one.'); }
+    };
+    inp.click();
+  };
+  setPhoto(id: string, patch: Partial<PagePhoto>) { this.setState(s => s.edit ? { edit: { ...s.edit, photos: (s.edit.photos || []).map(p => p.id === id ? { ...p, ...patch } : p) } } : null); }
+  /** The topmost photo under a point on the page (shares of the page), allowing for its turn. */
+  photoAt(x: number, y: number) {
+    const ed = this.state.edit, { fw, fh } = this.frame(); if (!ed) return null;
+    return [...(ed.photos || [])].reverse().find(p => {
+      const dx = (x - p.x) * fw, dy = (y - p.y) * fh, t = -p.rot * Math.PI / 180, w = p.w * fw, h = w * p.a;
+      return Math.abs(dx * Math.cos(t) - dy * Math.sin(t)) <= w / 2 && Math.abs(dx * Math.sin(t) + dy * Math.cos(t)) <= h / 2;
+    }) || null;
+  }
+  photoDrag: { id: string; mode: string; r: DOMRect; px: number; py: number; x: number; y: number; w: number; d0: number; cx: number; cy: number } | null = null;
+  /** On the selected photo: drag it to move it, its corner to resize it, the dot above it to turn it. Off it: done. */
+  photoDown = (e: PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation(); e.preventDefault();
+    const ed = this.state.edit, p = ed?.photos?.find(q => q.id === ed.psel); if (!ed || !p) return;
+    const r = e.currentTarget.getBoundingClientRect(), fx = e.clientX - r.left, fy = e.clientY - r.top;
+    const mode = (e.target as HTMLElement).closest?.('[data-ph]')?.getAttribute('data-ph');
+    if (!mode) { const hit = this.photoAt(fx / r.width, fy / r.height); return this.setEd({ psel: hit ? hit.id : null }); }
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const cx = p.x * r.width, cy = p.y * r.height;
+    this.photoDrag = { id: p.id, mode, r, px: fx, py: fy, x: p.x, y: p.y, w: p.w, d0: Math.hypot(fx - cx, fy - cy) || 1, cx, cy };
+  };
+  photoMove = (e: PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation(); const d = this.photoDrag; if (!d) return;
+    const fx = e.clientX - d.r.left, fy = e.clientY - d.r.top, clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+    if (d.mode === 'move') return this.setPhoto(d.id, { x: clamp(d.x + (fx - d.px) / d.r.width, -0.1, 1.1), y: clamp(d.y + (fy - d.py) / d.r.height, -0.1, 1.1) });
+    if (d.mode === 'size') return this.setPhoto(d.id, { w: clamp(d.w * Math.hypot(fx - d.cx, fy - d.cy) / d.d0, 0.06, 2) });
+    // Turning: follows the pointer round the centre, and settles on straight when close to it.
+    let rot = Math.atan2(fy - d.cy, fx - d.cx) * 180 / Math.PI + 90; rot = ((rot + 540) % 360) - 180;
+    const near = Math.round(rot / 90) * 90; if (Math.abs(rot - near) < 3) rot = near;
+    this.setPhoto(d.id, { rot });
+  };
+  photoUp = (e: PointerEvent<HTMLDivElement>) => { e.stopPropagation(); this.photoDrag = null; };
   /** The style the last text was given, for the next one. */
   textStyle: { font?: TextFont; color?: string; align?: TextAlign; bold?: boolean; italic?: boolean; size?: number } = {};
   styleText(id: string, patch: Partial<PageText>) {
@@ -2631,6 +2684,17 @@ export default class App extends Component<object, State> {
     const sel = ed.texts.find(t => t.id === ed.sel);
     return {
       ...this.padVals(ed, fr),
+      ...((): V => {
+        const list = ed.photos || [], on = list.find(p => p.id === ed.psel);
+        return {
+          edPhotos: list.map(p => { const w = p.w * fr.fw, h = w * p.a; return { id: p.id, src: p.src, left: p.x * fr.fw - w / 2, top: p.y * fr.fh - h / 2, w, h, rot: p.rot, sel: p.id === ed.psel }; }),
+          edPhotoSel: !!on, addPhoto: this.pickPhoto, photoDown: this.photoDown, photoMove: this.photoMove, photoUp: this.photoUp,
+          placedPhotos: list.map((p, i) => ({ key: p.id, src: p.src, label: `Photo ${i + 1}`, on: p.id === ed.psel, pick: () => this.setEd({ psel: p.id, sel: null }) })),
+          photoRemove: () => this.setEd({ photos: list.filter(p => p.id !== ed.psel), psel: null }), photoDone: () => this.setEd({ psel: null }),
+          // Brings the photo forward or back among the photos (all of them stay under the drawing and text).
+          photoFront: () => on && this.setEd({ photos: [...list.filter(p => p !== on), on] }), photoCanFront: !!on && list[list.length - 1] !== on,
+        };
+      })(),
       edWrite: ed.mode === 'write', inkBusy: !!ed.inkBusy, inkErr: ed.inkErr || '', hasInk: ed.ink.length > 0, edTextCount: ed.texts.length,
       edInkPaths: ed.ink.map(s => s.reduce((d, n, i) => d + (i % 2 ? `${(n * fr.fh).toFixed(1)} ` : `${i ? 'L' : 'M'}${(n * fr.fw).toFixed(1)} `), '') + (s.length === 2 ? 'l.1 0' : '')),
       edTexts: ed.texts.map(t => ({ id: t.id, empty: !t.text, left: t.x * fr.fw, top: t.y * fr.fh, width: t.w * fr.fw, fontPx: t.size * fr.fh, lineH: t.size * fr.fh * LINE_H, sel: t.id === ed.sel,
@@ -2694,7 +2758,7 @@ export default class App extends Component<object, State> {
       // Straightened and cropped automatically: say so, with the way back (and back again).
       edAuto: !!ed.auto, edAutoOn: !!ed.auto && (['scale', 'rot', 'skx', 'sky', 'tx', 'ty'] as const).every(k => ed[k] === ed.auto![k]),
       autoFit: () => ed.auto && this.setEd({ ...ed.auto }),
-      edMode: ed.mode, setEdMode: (mode: EdMode) => { this.setEd({ mode, sel: null, texts: ed.texts.filter(t => t.text.trim() || t.id === ed.sel && mode === 'write') }); if (mode === 'draw') this.checkDraft(); }, edBlank: !!ed.paper,
+      edMode: ed.mode, setEdMode: (mode: EdMode) => { this.setEd({ mode, sel: null, psel: null, texts: ed.texts.filter(t => t.text.trim() || t.id === ed.sel && mode === 'write') }); if (mode === 'draw') this.checkDraft(); }, edBlank: !!ed.paper,
       ...this.drawVals(ed),
       ...this.writeVals(ed, fr),
       edAdjTool: this.state.edAdjTool || 'white', setEdAdjTool: (t: string) => this.setState({ edAdjTool: t }),

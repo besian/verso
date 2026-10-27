@@ -760,6 +760,7 @@ function Layers({ v, inPad }: { v: V; inPad?: boolean }) {
       <div style={{ position: 'absolute', inset: 0, background: '#f3efe6', filter: v.edAdjusted && !v.edPeek ? 'url(#ed-adjust)' : undefined, pointerEvents: 'none' }}>
         <div style={{ position: 'absolute', left: '50%', top: '50%', width: v.bw, height: v.bh, transform: `translate(-50%,-50%) ${v.edTransform}`, background: v.edBg }} />
       </div>
+      {v.edPhotos.map((p: V) => <img key={p.id} src={p.src} alt="" draggable={false} style={{ position: 'absolute', left: p.left, top: p.top, width: p.w, height: p.h, transform: `rotate(${p.rot}deg)`, pointerEvents: 'none' }} />)}
       {v.edPaint && !inPad && <PaintView el={v.edPaint} />}
       {v.edMarks.length > 0 && (
         <svg width={v.fw} height={v.fh} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} aria-hidden="true">
@@ -776,7 +777,45 @@ function Layers({ v, inPad }: { v: V; inPad?: boolean }) {
           {v.edInkPaths.map((d: string, i: number) => <path key={i} d={d} fill="none" stroke={TEXT_INK} strokeWidth={inPad ? 1.6 : 2.6} strokeLinecap="round" strokeLinejoin="round" opacity={v.inkBusy ? 0.35 : 1} />)}
         </svg>
       )}
+      {v.edPhotoSel && !inPad && <PhotoHandles v={v} />}
     </>
+  );
+}
+
+/** The selected photo: drag it to move it, the corner to resize it, the dot above it to turn it; tap off it when done. */
+function PhotoHandles({ v }: { v: V }) {
+  const p = v.edPhotos.find((q: V) => q.sel); if (!p) return null;
+  const dot: CSSProperties = { position: 'absolute', width: 24, height: 24, margin: -12, borderRadius: '50%', boxSizing: 'border-box', touchAction: 'none' };
+  return (
+    <div onPointerDown={v.photoDown} onPointerMove={v.photoMove} onPointerUp={v.photoUp} onPointerCancel={v.photoUp} style={{ position: 'absolute', inset: 0, touchAction: 'none', background: 'rgba(20,20,22,.06)' }}>
+      <div data-ph="move" aria-label="Photo: drag to move" style={{ position: 'absolute', left: p.left, top: p.top, width: p.w, height: p.h, transform: `rotate(${p.rot}deg)`, outline: `2px solid ${MARK}`, outlineOffset: 1, cursor: 'move', touchAction: 'none' }}>
+        <span aria-hidden="true" style={{ position: 'absolute', left: '50%', top: -30, height: 30, borderLeft: `2px solid ${MARK}` }} />
+        <span data-ph="rot" title="Turn" style={{ ...dot, left: '50%', top: -30, background: MARK, border: `2px solid ${PAPER}`, cursor: 'grab' }} />
+        <span data-ph="size" title="Resize" style={{ ...dot, right: -24, bottom: -24, background: PAPER, border: `2.5px solid ${MARK}`, cursor: 'nwse-resize' }} />
+      </div>
+    </div>
+  );
+}
+
+/** Photos on the page: add one, choose one to move; with one chosen, what to do with it. */
+function PhotoTools({ v, outline, mob }: { v: V; outline: CSSProperties; mob?: boolean }) {
+  if (v.edPhotoSel) return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: mob ? 8 : 12 }}>
+      <span style={{ fontSize: 12, lineHeight: 1.45, color: 'rgba(var(--ink-rgb),.6)' }}>Drag the photo to move it, the corner to resize it and the red dot to turn it. It sits under your drawing and text.</span>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={v.photoRemove} style={{ ...outline, color: MARK }}>Remove photo</button>
+        {v.photoCanFront && <button onClick={v.photoFront} style={outline}>Bring forward</button>}
+        <button onClick={v.photoDone} style={{ ...outline, background: INK, color: PAPER, border: 'none' }}>Done</button>
+      </div>
+    </div>
+  );
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+      <button onClick={v.addPhoto} style={{ ...outline, flex: v.placedPhotos.length ? 'none' : 1, padding: '0 14px', height: mob ? 40 : 36 }}>+ Add photo</button>
+      {v.placedPhotos.length > 0 && <div role="group" aria-label="Photos on this page" style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none' } as CSSProperties}>
+        {v.placedPhotos.map((p: V) => <button key={p.key} onClick={p.pick} title={`Move or resize ${p.label.toLowerCase()}`} aria-label={`Move or resize ${p.label.toLowerCase()}`} style={{ width: 36, height: 36, flexShrink: 0, padding: 0, border: '1px solid rgba(var(--ink-rgb),.2)', borderRadius: 4, background: `url("${p.src}") center/cover`, cursor: 'pointer' }} />)}
+      </div>}
+    </div>
   );
 }
 
@@ -876,7 +915,7 @@ function PickMode({ v, mob }: { v: V; mob?: boolean }) {
   const card: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start', textAlign: 'left', padding: mob ? '14px 16px' : '18px 18px', border: '1.5px solid rgba(var(--ink-rgb),.25)', borderRadius: 2, background: 'none', color: INK, cursor: 'pointer' };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {([['draw', 'Draw', 'Pen, pencil, marker, watercolour and oil'], ['write', 'Text', 'Type words onto the page']] as const).map(([k, l, d]) => (
+      {([['draw', 'Draw', 'Pens, paint and photos'], ['write', 'Text', 'Type words onto the page, with photos too']] as const).map(([k, l, d]) => (
         <button key={k} onClick={() => v.setEdMode(k)} className={hover(`border-color:${INK}`)} style={card}>
           <span style={{ font: `400 24px/1.1 ${SERIF}` }}>{l}</span>
           <span style={{ font: `400 13px ${SANS}`, color: 'rgba(var(--ink-rgb),.65)' }}>{d}</span>
@@ -1059,7 +1098,7 @@ function MobileEditor({ v }: { v: V }) {
             <PageButtons v={v} />
           </div>
         ) : <ModeSwitch v={v} height={34} />}
-        {pick ? <PickMode v={v} mob /> : draw ? <DrawBar v={v} wheel={wheel} setWheel={setWheel} /> : write ? <WriteTools v={v} outline={outline} mob /> : <>
+        {pick ? <PickMode v={v} mob /> : (draw || write) && v.edPhotoSel ? <PhotoTools v={v} outline={outline} mob /> : draw ? <><DrawBar v={v} wheel={wheel} setWheel={setWheel} />{v.placedPhotos.length > 0 && <PhotoTools v={v} outline={outline} mob />}</> : write ? <><WriteTools v={v} outline={outline} mob />{!v.selText && <PhotoTools v={v} outline={outline} mob />}</> : <>
         {!adjust && <SpreadSwitch v={v} height={32} />}
         <div role="tablist" aria-label={adjust ? 'Adjustment' : 'Tool'} style={{ display: 'flex', gap: 4, overflowX: 'auto', scrollbarWidth: 'none' } as CSSProperties}>
           {tools.map(t => (
@@ -1102,6 +1141,7 @@ function DeskToolbar({ v }: { v: V }) {
       {item('undo', 'Undo', 'M9 5L4 10l5 5M4 10h10a5 5 0 0 1 0 10h-3', false, v.undoMark, !v.hasMarks)}
       {item('redo', 'Redo', 'M15 5l5 5-5 5M20 10H10a5 5 0 0 0 0 10h3', false, v.redoMark, !v.hasRedo)}
       {item('layers', 'Layers', 'M12 4l8.5 4.5L12 13 3.5 8.5zM3.5 12.5L12 17l8.5-4.5M3.5 16.5L12 21l8.5-4.5', v.layersOpen, v.toggleLayers)}
+      {item('photo', 'Add a photo', 'M4 6.5h16v12H4zM4 15l4.5-4.5 4 4 2.5-2.5L20 17M15.5 9.5h.01', false, v.addPhoto)}
       {item('clear', 'Clear the drawing', 'M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13', false, v.clearMarks)}
       {line}
       {item('turn', 'Turn the page to draw sideways', 'M20 11a8 8 0 1 0-2.3 5.7M20 4.5V11h-6.5', v.edTurned, v.turnView)}
@@ -1182,7 +1222,7 @@ const BRUSH_ICONS: Record<string, string> = {
 /** Phones, Draw: a toolbar of brushes with undo and clear, a row of colours, and size and opacity side by side. */
 function DrawBar({ v, wheel, setWheel }: { v: V; wheel: boolean; setWheel: (f: (w: boolean) => boolean) => void }) {
   const icon = (d: string) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
-  const btn = (on: boolean, off?: boolean): CSSProperties => ({ width: 38, height: 38, flexShrink: 0, padding: 0, border: 'none', borderRadius: 10, background: on ? INK : 'none', color: on ? PAPER : INK, opacity: off ? 0.35 : 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' });
+  const btn = (on: boolean, off?: boolean): CSSProperties => ({ width: 'min(34px, calc((100vw - 54px) / 10))', height: 38, flexShrink: 0, padding: 0, border: 'none', borderRadius: 10, background: on ? INK : 'none', color: on ? PAPER : INK, opacity: off ? 0.35 : 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' });
   const dot = (c: string, on: boolean): CSSProperties => ({ width: 28, height: 28, flexShrink: 0, borderRadius: '50%', padding: 0, cursor: 'pointer', background: c, border: '1px solid rgba(34,35,32,.25)', boxShadow: on ? `0 0 0 2px ${PAPER}, 0 0 0 3.5px ${INK}` : 'none' });
   const names = Object.fromEntries(DRAW_COLORS), swatches = [...v.recentColors, ...DRAW_COLORS.map(([c]) => c).filter(c => !v.recentColors.includes(c))].slice(0, 7);
   const strength = v.penTool === 'blend' || v.penTool === 'eraser';
@@ -1198,6 +1238,7 @@ function DrawBar({ v, wheel, setWheel }: { v: V; wheel: boolean; setWheel: (f: (
       <div role="toolbar" aria-label={`Brushes · ${tool}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 3, border: '1px solid rgba(var(--ink-rgb),.15)', borderRadius: 13 }}>
         {DRAW_TOOLS.map(([k, l]) => <button key={k} onClick={() => v.setTool(k)} title={l} aria-label={l} aria-pressed={v.penTool === k} style={btn(v.penTool === k)}>{icon(BRUSH_ICONS[k])}</button>)}
         <span style={{ width: 1, height: 24, background: 'rgba(var(--ink-rgb),.15)', flexShrink: 0 }} />
+        <button onClick={v.addPhoto} title="Add a photo" aria-label="Add a photo" style={btn(false)}>{icon('M4 6.5h16v12H4zM4 15l4.5-4.5 4 4 2.5-2.5L20 17M15.5 9.5h.01')}</button>
         <button onClick={v.toggleLayers} title="Layers" aria-label="Layers" aria-pressed={v.layersOpen} style={btn(v.layersOpen)}>{icon('M12 4l8.5 4.5L12 13 3.5 8.5zM3.5 12.5L12 17l8.5-4.5M3.5 16.5L12 21l8.5-4.5')}</button>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 3px' }}>
@@ -1258,7 +1299,7 @@ export function Editor({ v }: { v: V }) {
           <div style={{ fontSize: 13, color: 'rgba(var(--ink-rgb),.7)' }}>{v.edTitle} · {sub}</div>
         </div>
         <ModeSwitch v={v} />
-        {pick ? <PickMode v={v} /> : draw ? <DrawPanel v={v} /> : write ? <WriteTools v={v} outline={outline} /> : adjust ? (
+        {pick ? <PickMode v={v} /> : (draw || write) && v.edPhotoSel ? <PhotoTools v={v} outline={outline} /> : draw ? <><DrawPanel v={v} /><PhotoTools v={v} outline={outline} /></> : write ? <><WriteTools v={v} outline={outline} />{!v.selText && <PhotoTools v={v} outline={outline} />}</> : adjust ? (
           <>
             {v.edAdj.map((a: V) => <Slider key={a.key} name={a.label} lbl={a.lbl} min={a.min} max={a.max} step={1} value={a.value} onChange={a.onChange} />)}
             <span style={{ fontSize: 12, lineHeight: 1.45, color: 'rgba(var(--ink-rgb),.6)', marginTop: -8 }}>Whites cleans up the grey of a photographed page. Settings carry over to the next image.</span>
