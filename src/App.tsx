@@ -42,7 +42,7 @@ const ReplayPlayer = lazy(() => import('./views/Replay').then(m => ({ default: m
 const Welcome = lazy(() => import('./views/Welcome').then(m => ({ default: m.Welcome })));
 const TimelapseModal = lazy(() => import('./views/Timelapse').then(m => ({ default: m.TimelapseModal })));
 import { shareImage, sharePicture } from './shareImage';
-import { ArchiveModal, AskModal, CardModal, ConsentBar, CollectionModal, UnsavedBar, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Toast } from './views/Overlays';
+import { ArchiveModal, AskModal, CardModal, ConsentBar, CollectionModal, UnsavedBar, Editor, EditProfile, EmbedModal, GiftModal, Manager, NewBookPicker, PlanConfirm, PlusModal, ReportModal, Tip, Toast } from './views/Overlays';
 
 /** Colours for text: ink, graphite, the accent red, blue, green and paper white. */
 const TEXT_COLORS: [string, string][] = [['#222320', 'Ink'], ['#6b6a64', 'Graphite'], ['#ad493a', 'Red'], ['#2f4a7a', 'Blue'], ['#3f7a56', 'Green'], ['#f3efe6', 'White']];
@@ -195,6 +195,15 @@ const LEAF_WINDOW = 3;
 /** Page width as a share of a phone's screen: closed, and open (two pages side by side, plus the fan of turning pages). */
 const PHONE_CLOSED = 0.6, PHONE_OPEN = 0.44;
 const IS_TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+/** One-time tips, each shown the first time someone gets to where it helps (see tipNow). */
+const TIPS: Record<string, string> = {
+  draw: IS_TOUCH ? 'Pinch to zoom in, and move around with two fingers. Every stroke is recorded, so people can watch your page being made.'
+    : 'Pinch on a trackpad, or Ctrl and scroll, to zoom in; scroll to move around. Every stroke is recorded, so people can watch your page being made.',
+  replay: `This page was drawn on fletora. ${IS_TOUCH ? 'Tap' : 'Click'} Replay to watch it being made.`,
+  book: 'Turn the pages with ← and →, or click a page. Click it again to zoom in.',
+  explore: IS_TOUCH ? 'Tap a sketchbook to leaf through it. Follow an artist from their profile and their new pages show up in Following.'
+    : 'Click a sketchbook to leaf through it. Follow an artist from their profile and their new pages show up in Following.',
+};
 /** Zooming into a page, and sliding between the two pages of a spread while zoomed (ms). */
 // With "Reduce motion" turned on, page turns, zooms and the shelf move in about a third of the time.
 const MOTION = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.35 : 1;
@@ -601,6 +610,20 @@ export default class App extends Component<object, State> {
   }
   /** The welcome sketchbook: a read-only guide to the site. */
   openGuide = () => { this.guideSeen = true; try { localStorage.setItem('fl-guide', '1'); } catch { /* fine */ } this.setState({ welcome: false, more: null }); this.openOtherBook(GUIDE_BOOK); };
+  tipsSeen = new Set<string>((() => { try { return JSON.parse(localStorage.getItem('fl-tips') || '[]') as string[]; } catch { return []; } })());
+  /** The tip for what's on screen, if it hasn't been seen: one at a time, never over a dialog. */
+  tipNow(): string | null {
+    const s = this.state, ed = s.edit, mode = s.mode || 'home', o = s.other as OtherBook | null;
+    if (s.welcome || s.embed || s.replay || s.managing || s.toast || s.more || s.ask || s.cmOpen) return null;
+    const pick = (k: string | null) => (k && !this.tipsSeen.has(k) ? k : null);
+    if (ed) return pick(ed.mode === 'draw' ? 'draw' : null); // Text explains itself in its panel
+    if ((mode === 'other' || mode === 'mine') && s.images.length && !s.switching) {
+      if (this.replayHere().length && !this.tipsSeen.has('replay')) return 'replay';
+      return IS_TOUCH || o?.guide ? null : pick('book'); // phones have the swipe hint
+    }
+    return mode === 'explore' ? pick('explore') : null;
+  }
+  seeTip(k: string) { this.tipsSeen.add(k); try { localStorage.setItem('fl-tips', JSON.stringify([...this.tipsSeen])); } catch { /* fine */ } this.forceUpdate(); }
   guideSeen = (() => { try { return !!localStorage.getItem('fl-guide'); } catch { return false; } })();
   viewed = new Set<string>();
   /** A new account's free 14-day trial of Plus: asked for once (the server decides), then welcomed. */
@@ -2954,6 +2977,7 @@ export default class App extends Component<object, State> {
           bkBlock: () => o?.ownerId && this.toggleBlock(o.ownerId, o.artist), bkBlockLbl: `Block ${o?.artist || ''}`,
           closeMore: () => (s.more || s.notifOpen || s.colMenu || s.socialMenu) && this.setState({ more: null, notifOpen: false, colMenu: null, socialMenu: false }),
           toastMsg: s.toast || '',
+          ...(() => { const k = this.tipNow(); return { tipMsg: k ? TIPS[k] : '', tipTop: !!s.edit && s.vw < 900, tipSide: !!s.edit && s.vw >= 900, tipClose: () => k && this.seeTip(k) }; })(),
           ...this.notifVals(),
           reportOpen: !!s.reportFor, reportLabel: s.reportFor?.label || '', reportKind: s.reportFor?.kind, reportReasons: api.REPORT_REASONS.map(r => ({ key: r, label: r, on: s.reportReason === r, pick: () => this.setState({ reportReason: r, reportErr: '' }) })),
           reportNote: s.reportNote || '', onReportNote: (e: ChangeEvent<HTMLTextAreaElement>) => this.setState({ reportNote: e.target.value }), reportBusy: !!s.reportBusy, reportErr: s.reportErr || '',
@@ -3117,6 +3141,7 @@ export default class App extends Component<object, State> {
         {v.cnOpen && <CollectionModal v={v} />}
         {v.arOpen && <ArchiveModal v={v} />}
         {v.toastMsg && <Toast msg={v.toastMsg} />}
+        {v.tipMsg && <Tip v={v} />}
         {v.isAuth && <AuthPage v={v} />}
         {v.pfEditing && <EditProfile v={v} />}
         {v.welcomeOpen && <Suspense fallback={null}><Welcome v={v} /></Suspense>}

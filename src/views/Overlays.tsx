@@ -1435,6 +1435,16 @@ export function EmbedModal({ v }: { v: V }) {
 }
 
 /** Brief confirmation at the bottom of the screen. */
+/** A one-time tip: what to try here, until Got it. In the editor it sits out of the way of the page and tools. */
+export function Tip({ v }: { v: V }) {
+  return (
+    <div role="status" style={{ position: 'absolute', ...(v.tipSide ? { right: 48, bottom: 24 } : { left: '50%', transform: 'translateX(-50%)', ...(v.tipTop ? { top: 64 } : { bottom: 'calc(110px + var(--tabbar, 0px))' }) }), zIndex: 41, width: 'min(400px, calc(100% - 32px))', boxSizing: 'border-box', padding: '14px 16px', background: INK, color: PAPER, borderRadius: 3, boxShadow: '0 12px 30px rgba(20,20,30,.25)', display: 'flex', gap: 14, alignItems: 'center' }}>
+      <span style={{ flex: 1, font: `400 14px/1.45 ${SANS}` }}>{v.tipMsg}</span>
+      <button onClick={v.tipClose} className={hover('opacity:.8')} style={{ flexShrink: 0, height: 34, padding: '0 14px', border: `1px solid rgba(255,255,255,.35)`, borderRadius: 2, background: 'none', color: PAPER, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Got it</button>
+    </div>
+  );
+}
+
 export function Toast({ msg }: { msg: string }) {
   return <div role="status" style={{ position: 'absolute', left: '50%', bottom: 'calc(110px + var(--tabbar, 0px))', transform: 'translateX(-50%)', zIndex: 40, padding: '10px 16px', background: INK, color: PAPER, font: `500 13px ${SANS}`, borderRadius: 2, boxShadow: '0 10px 24px rgba(34,35,32,.2)', whiteSpace: 'nowrap', pointerEvents: 'none' }}>{msg}</div>;
 }
