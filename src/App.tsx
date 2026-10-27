@@ -1443,7 +1443,10 @@ export default class App extends Component<object, State> {
       for (const st of e.ink) { ctx.beginPath(); for (let k = 0; k < st.length; k += 2) { const x = st[k] * outW, y = st[k + 1] * outH; if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); } if (st.length === 2) ctx.lineTo(st[0] * outW + 0.1, st[1] * outH); ctx.stroke(); }
       ctx.restore();
     }
-    const images = [...this.state.images], replay = !e.target ? this.replayOf() : null;
+    const images = [...this.state.images];
+    let replay = !e.target ? this.replayOf() : null;
+    // Editing a page again keeps its replay: carried over to the new picture, with any new strokes after it.
+    if (!e.target && e.replaceIdx != null && images[e.replaceIdx]) replay = await this.carriedReplay(images[e.replaceIdx], replay);
     if (e.spread && e.replaceIdx == null && !e.target) {
       // Two pages: one picture cut down the middle, the halves kept together on facing pages.
       // Two pages, and a blank one first when the next page would be a right-hand page.
@@ -1468,6 +1471,19 @@ export default class App extends Component<object, State> {
     } else if (this.pageRoom() <= 0) { this.setState({ edit: null }); return this.pagesFull(); }
     else images.push(url);
     this.setImages(images, patch); this.nextEdit();
+  }
+  /** The replay of page picture `old` (waiting to be saved, or stored), followed by `fresh`'s strokes if any. */
+  async carriedReplay(old: string, fresh: { data: string; n: number } | null) {
+    const id = this.state.books[this.state.active]?.id;
+    const prior = this.pendingReplays.get(old)?.data
+      ?? (id && !isData(old) && !id.startsWith('local') ? await api.replayData(id, api.pageKey(old)).catch(() => null) : null);
+    if (!prior) return fresh;
+    if (!fresh) { const p = JSON.parse(prior) as { ops: { t: string }[] }; return { data: prior, n: p.ops.filter(o => o.t === 's').length }; }
+    try {
+      const a = JSON.parse(prior), b = JSON.parse(fresh.data);
+      const data = JSON.stringify({ ...a, layers: b.layers.length > a.layers.length ? b.layers : a.layers, ops: [...a.ops, ...b.ops] });
+      return data.length <= 900000 ? { data, n: [...a.ops, ...b.ops].filter((o: { t: string }) => o.t === 's').length } : { data: prior, n: a.ops.filter((o: { t: string }) => o.t === 's').length };
+    } catch { return fresh; }
   }
   nextEdit() {
     const e = this.state.edit; if (!e) return; const i = e.i + 1;
