@@ -75,6 +75,12 @@ export function ReplayPlayer({ v }: { v: V }) {
         <span style={label(MARK, 10)}>Replay</span>
         <span style={{ font: `400 ${v.notMob ? 30 : 24}px/1.1 ${SERIF}` }}>{r?.title}</span>
       </div>
+      {v.rpPages?.length > 1 && (
+        // Both pages of the spread were drawn here: switch between them.
+        <div role="tablist" aria-label="Page" style={{ display: 'flex', gap: 2, padding: 3, border: '1px solid rgba(var(--ink-rgb),.2)' }}>
+          {v.rpPages.map((p: V) => <button key={p.key} role="tab" aria-selected={p.on} onClick={p.pick} style={{ height: 32, padding: '0 16px', border: 'none', borderRadius: 2, background: p.on ? INK : 'transparent', color: p.on ? PAPER : INK, font: `500 13px ${SANS}`, cursor: 'pointer' }}>{p.label}</button>)}
+        </div>
+      )}
       <div style={{ position: 'relative', width: W, height: H, borderRadius: '2px 8px 8px 2px', overflow: 'hidden', boxShadow: '0 20px 50px rgba(20,20,30,.25)', background: '#f3efe6' }}>
         {!rec && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: 'rgba(var(--ink-rgb),.6)' }}>{r?.err || 'Loading the strokes…'}</div>}
         <div ref={box} style={{ position: 'absolute', inset: 0 }} />
@@ -88,7 +94,7 @@ export function ReplayPlayer({ v }: { v: V }) {
         <span style={{ width: 8 }} />
         {SPEEDS.map(x => <button key={x} onClick={() => setSpeed(x)} aria-pressed={speed === x} style={btn(speed === x)}>{x}×</button>)}
         {/* As a video file (the replay sped up, framed for Instagram and TikTok; see timelapse.ts). */}
-        {rec && r?.at != null && <><span style={{ width: 8 }} /><button onClick={() => v.bkTimelapse(r.at)} style={btn(false)}>↓ Download video</button></>}
+        {rec && r?.at != null && <><span style={{ width: 8 }} /><button onClick={() => v.bkTimelapse(r.all?.length ? r.all : r.at)} style={btn(false)}>↓ Download video</button></>}
       </div>
     </div>
   );

@@ -49,13 +49,6 @@ export function HomeScreen({ v }: { v: V }) {
             : <button onClick={v.startOwn} className={hoverLine} style={underlineBtn(15)}>Start your own →</button>}
         </div>
         {v.promoPlus && !signedOut && <button onClick={v.openPlusPage} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', font: `500 13px ${SANS}`, color: MUTED }}><span style={{ ...label(MARK, 10), marginRight: 8 }}>Plus</span>{v.promoLine} <span style={{ color: INK, borderBottom: `1px solid ${INK}` }}>See what’s included</span></button>}
-        {v.hmPick && !signedOut && (
-          <button onClick={v.hmPick.open} className={hover(`border-color:${MARK}`)} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, maxWidth: '100%', padding: '7px 14px', border: '1px solid rgba(var(--ink-rgb),.2)', borderRadius: 20, background: 'none', color: INK, cursor: 'pointer', font: `500 13px ${SANS}` }}>
-            <span style={label(MARK, 10)}>Staff pick</span>
-            <span style={{ font: `italic 400 17px/1 ${SERIF}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{v.hmPick.name}</span>
-            <span style={{ color: MUTED, whiteSpace: 'nowrap' }}>by {v.hmPick.artist} →</span>
-          </button>
-        )}
       </section>
       <section style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10, paddingTop: mob ? 0 : 28 }}>
         {/* Room above the books for one lifted on hover with its Staff pick tag. */}

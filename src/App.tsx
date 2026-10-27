@@ -105,7 +105,7 @@ interface State {
   /** Explore's Content filter set to Mature only (with Mature work shown). */
   matureOnly?: boolean;
   /** Watching a page's stroke replay: the page, its finished picture, and the strokes once loaded. */
-  replay?: { title: string; img: string; data: string | null; err?: string; at?: number } | null;
+  replay?: { title: string; img: string; data: string | null; err?: string; at?: number; all?: number[] } | null;
   /** Comments on the open sketchbook (kept live), and the comments panel: open, showing every page, the draft, and which page it's for. */
   comments?: { bookId: string; list: api.Comment[] } | null; cmReply?: string | null; cmOpen?: boolean; cmAll?: boolean; cmDraft?: string; cmBusy?: boolean; cmErr?: string; cmFor?: number | null;
   /** Making a PDF of the open sketchbook: how far along ('3/40'). */
@@ -1395,16 +1395,17 @@ export default class App extends Component<object, State> {
     return data.length <= 900000 ? { data, n: snap.ops.filter(o => o.t === 's').length } : null;
   }
   /** The open book's pages on show that have a replay (looked up once each). */
-  replayHere(): number | null {
+  replayHere(): number[] {
     const s = this.state, mode = s.mode || 'home', o = s.other as OtherBook | null, mb = s.books[s.active];
-    const id = mode === 'other' && o && !o.arch ? o.id : mode === 'mine' && mb && !mb.id.startsWith('local') ? mb.id : null; if (!id) return null;
+    const id = mode === 'other' && o && !o.arch ? o.id : mode === 'mine' && mb && !mb.id.startsWith('local') ? mb.id : null; if (!id) return [];
+    const out: number[] = [];
     for (const i of this.shownPages()) {
       const u = s.images[i]; if (!u || isData(u)) continue;
       const k = `${id}_${api.pageKey(u)}`;
       if (!this.replayKnown.has(k)) { this.replayKnown.set(k, false); api.hasReplay(id, api.pageKey(u)).then(y => { if (y) { this.replayKnown.set(k, true); this.forceUpdate(); } }); }
-      if (this.replayKnown.get(k)) return i;
+      if (this.replayKnown.get(k)) out.push(i);
     }
-    return null;
+    return out;
   }
   // ---------- drafts: an unsaved drawing survives the editor closing by accident ----------
   draftKey() { const e = this.state.edit; return e ? `${api.pageKey(e.queue[e.i] || '')}:${this.edAspect().toFixed(3)}` : ''; }
@@ -1590,27 +1591,31 @@ export default class App extends Component<object, State> {
       cmSide: !!s.cmOpen && s.vw >= 640 && (mode === 'mine' || mode === 'other') && !s.edit && !s.managing,
       ...(() => {
         // Replay: the first page on show that was drawn in Fletora.
-        const at = this.replayHere(); if (at == null) return { rpAt: null };
-        const u = imgs[at];
-        return { rpAt: at, rpLbl: `Watch page ${at + 1} being drawn`, rpOpen: () => {
-          this.setState({ replay: { title: `${book.name} · page ${at + 1}`, img: this.blobUrl(u), data: null, at } });
-          api.replayData(book.id, api.pageKey(u)).then(d => this.setState(st => st.replay ? { replay: { ...st.replay, data: d, err: d ? '' : 'This replay isn’t available.' } } : null))
-            .catch(() => this.setState(st => st.replay ? { replay: { ...st.replay, err: 'Couldn’t load the replay.' } } : null));
-        } };
+        // Replays of the pages on show (both pages of a spread can have one); the player switches between them.
+        const all = this.replayHere(); if (!all.length) return { rpAt: null };
+        const show = (at: number) => {
+          const u = imgs[at];
+          this.setState({ replay: { title: `${book.name} · page ${at + 1}`, img: this.blobUrl(u), data: null, at, all } });
+          api.replayData(book.id, api.pageKey(u)).then(d => this.setState(st => st.replay?.at === at ? { replay: { ...st.replay, data: d, err: d ? '' : 'This replay isn’t available.' } } : null))
+            .catch(() => this.setState(st => st.replay?.at === at ? { replay: { ...st.replay, err: 'Couldn’t load the replay.' } } : null));
+        };
+        return { rpAt: all[0], rpLbl: all.length > 1 ? `Watch pages ${all.map(i => i + 1).join(' and ')} being drawn` : `Watch page ${all[0] + 1} being drawn`, rpOpen: () => show(all[0]),
+          rpPages: (s.replay?.all || []).map(i => ({ key: i, label: `Page ${i + 1}`, on: s.replay?.at === i, pick: () => show(i) })) };
       })(),
       rpState: s.replay || null, rpClose: () => this.setState({ replay: null }),
       // The whole sketchbook as a short vertical video: drawn pages replay their strokes (see timelapse.ts).
       // `only`: one page (the replay being watched), as its own video.
-      bkTimelapse: async (only?: number) => {
+      bkTimelapse: async (pick?: number | number[]) => {
+        const only = pick == null ? undefined : Array.isArray(pick) ? pick : [pick];
         const tlm = await import('./timelapse');
         if (!tlm.videoType()) return this.toast('This browser can’t make videos. Try Chrome or Safari.');
-        const fill = (s.books[s.active] as Book | undefined)?.fillers || {}, list = only != null ? [imgs[only]].filter(Boolean) : imgs.filter(u => u && !(o ? false : fill[u])).slice(0, 20);
+        const fill = (s.books[s.active] as Book | undefined)?.fillers || {}, list = only ? only.map(i => imgs[i]).filter(Boolean) : imgs.filter(u => u && !(o ? false : fill[u])).slice(0, 20);
         if (!list.length) return this.toast('Add some pages first.');
         const handle = o?.handle || mb?.owner?.handle || s.acct?.handle || '', artist = o ? o.artist : mb?.owner?.name || s.acct?.name || '';
         const link = `${location.origin}${o?.arch ? `/archive/${book.id}` : `/@${handle}/${book.id}`}`;
         const ac = new AbortController(); this.tlAbort?.abort(); this.tlAbort = ac;
-        const name = `${book.name.replace(/[^\w\- ]+/g, '').trim() || 'fletora'} - ${only != null ? `page ${only + 1} replay` : 'timelapse'}`;
-        this.setState({ more: null, replay: null, tl: { phase: 'making', progress: 0, title: only != null ? `${book.name} · page ${only + 1}` : book.name, link } });
+        const name = `${book.name.replace(/[^\w\- ]+/g, '').trim() || 'fletora'} - ${only ? `page${only.length > 1 ? 's' : ''} ${only.map(i => i + 1).join('-')} replay` : 'timelapse'}`;
+        this.setState({ more: null, replay: null, tl: { phase: 'making', progress: 0, title: only ? `${book.name} · page${only.length > 1 ? 's' : ''} ${only.map(i => i + 1).join(' and ')}` : book.name, link } });
         const urls: string[] = [];
         try {
           const pages = await Promise.all(list.map(async u => {
