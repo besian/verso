@@ -1070,7 +1070,9 @@ function MobileEditor({ v }: { v: V }) {
 /** Larger screens, Draw: the brushes and page tools in a column beside the page, each named on hover. */
 function DeskToolbar({ v }: { v: V }) {
   const icon = (d: string) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
-  const btn = (on: boolean, off?: boolean): CSSProperties => ({ width: 44, height: 44, padding: 0, border: 'none', borderRadius: 12, background: on ? INK : 'transparent', color: on ? PAPER : INK, opacity: off ? 0.35 : 1, cursor: off ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .15s, color .15s' });
+  // Shorter screens get slightly smaller buttons, so the whole bar fits beside the page.
+  const sz = (window.innerHeight || 900) < 860 ? 36 : 44;
+  const btn = (on: boolean, off?: boolean): CSSProperties => ({ width: sz, height: sz, padding: 0, border: 'none', borderRadius: sz > 40 ? 12 : 10, background: on ? INK : 'transparent', color: on ? PAPER : INK, opacity: off ? 0.35 : 1, cursor: off ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .15s, color .15s' });
   const hov = hover('background:rgba(var(--ink-rgb),.08)');
   const item = (key: string, label: string, d: string, on: boolean, onClick: () => void, off?: boolean) => (
     <button key={key} onClick={onClick} disabled={off} aria-label={label} aria-pressed={on} data-tip={label} className={'tip ' + (on || off ? '' : hov)} style={btn(on, off)}>{icon(d)}</button>
@@ -1155,6 +1157,7 @@ const BRUSH_ICONS: Record<string, string> = {
   pen: 'M4.5 19.5l1.2-4.2L15.5 5.5l3 3-9.8 9.8zM13.5 7.5l3 3',
   pencil: 'M4.5 19.5l1-3.8L16 5.2a1.9 1.9 0 0 1 2.8 2.8L8.3 18.5zM14.2 7l2.8 2.8M5.5 15.7l2.8 2.8',
   marker: 'M8.5 15.5l-4 4h5l1.3-1.3M8.5 15.5l7.8-7.8 3.3 3.3-7.8 7.8zM14.8 6.2l3 -3 3 3-3 3',
+  brush: 'M14.5 3.5l6 6-7.2 5.6-4.4-4.4zM8.6 11l4.4 4.4M8.9 15.1c-1.6-1.6-4.2-.6-4.4 1.7-.2 1.8-.9 2.8-2 3.2 2.6 1 6.6.6 7.6-1.9.4-1.1-.2-2.4-1.2-3z',
   water: 'M12 3.5c3.2 4.2 5.8 7.4 5.8 10.4a5.8 5.8 0 0 1-11.6 0c0-3 2.6-6.2 5.8-10.4z',
   oil: 'M20.5 3.5l-6.5 6.5M15.5 12l-3.5-3.5M12 8.5c-2.3-.5-4.8 1.1-5.2 3.7-.3 2-1.3 3.7-3.3 4.8 3.8 1.9 9.8 1.2 10-3.8z',
   blend: 'M3.5 9.5c2.5-3 4.5 3 8.5 0s6-3 8.5 0M3.5 15c2.5-3 4.5 3 8.5 0s6-3 8.5 0',

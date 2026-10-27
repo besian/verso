@@ -8,10 +8,10 @@
 
 import { Color, mix } from 'spectral.js';
 
-export type Tool = 'pen' | 'pencil' | 'marker' | 'water' | 'oil' | 'blend' | 'eraser';
+export type Tool = 'pen' | 'pencil' | 'marker' | 'brush' | 'water' | 'oil' | 'blend' | 'eraser';
 export interface Pen { tool: Tool; color: string; size: number; opacity: number }
 
-export const TOOLS: [Tool, string][] = [['pen', 'Pen'], ['pencil', 'Pencil'], ['marker', 'Marker'], ['water', 'Watercolour'], ['oil', 'Oil'], ['blend', 'Blend'], ['eraser', 'Eraser']];
+export const TOOLS: [Tool, string][] = [['pen', 'Pen'], ['pencil', 'Pencil'], ['marker', 'Marker'], ['brush', 'Brush'], ['water', 'Watercolour'], ['oil', 'Oil'], ['blend', 'Blend'], ['eraser', 'Eraser']];
 export const COLORS: [string, string][] = [
   ['#222320', 'Ink'], ['#6b6a64', 'Graphite'], ['#ad493a', 'Red'], ['#2f4a7a', 'Blue'], ['#3f7a56', 'Green'], ['#e0b23a', 'Yellow'], ['#f3efe6', 'White'],
 ];
@@ -20,7 +20,7 @@ export const DEFAULT_PEN: Pen = { tool: 'pen', color: '#222320', size: 5, opacit
 export const NO_COLOR = new Set<Tool>(['blend', 'eraser']);
 
 /** Brush width per step of the size slider (1–40), as a share of the page height. */
-const WIDTH: Record<Tool, number> = { pen: 0.0009, pencil: 0.0008, marker: 0.003, water: 0.0045, oil: 0.0035, blend: 0.0035, eraser: 0.0025 };
+const WIDTH: Record<Tool, number> = { pen: 0.0009, pencil: 0.0008, marker: 0.003, brush: 0.004, water: 0.0045, oil: 0.0035, blend: 0.0035, eraser: 0.0025 };
 
 /** The paint layer is laid out this tall; the saved page is drawn from it. */
 export const PAINT_H = 1280;
@@ -261,7 +261,7 @@ export class Painter {
   private radius(p: number) {
     const base = WIDTH[this.pen.tool] * this.pen.size * this.H / 2;
     // Pen and pencil get thinner with a light touch; the wet tools keep their size and lay down less.
-    return this.pen.tool === 'pen' ? base * (0.35 + 0.65 * p) : this.pen.tool === 'pencil' ? base * (0.6 + 0.4 * p) : base;
+    return this.pen.tool === 'pen' ? base * (0.35 + 0.65 * p) : this.pen.tool === 'pencil' ? base * (0.6 + 0.4 * p) : this.pen.tool === 'brush' ? base * (0.45 + 0.55 * p) : base;
   }
   private segment(x0: number, y0: number, x1: number, y1: number, p: number) {
     const b = this.bctx, r = Math.max(0.5, this.radius(p));
@@ -309,12 +309,33 @@ export class Painter {
     if (x1 < x0 || y1 < y0) return;
     this.grow(x0, y0, x1 + 1, y1 + 1, true);
     // Soft round brush: full strength in the middle, fading over the outer part.
-    const hard = tool === 'oil' ? 0.3 : tool === 'eraser' ? 0.5 : tool === 'water' ? 0.05 : 0.25, fall = (d: number) => d >= 1 ? 0 : d <= hard ? 1 : 1 - (d - hard) / (1 - hard);
+    const hard = tool === 'oil' ? 0.3 : tool === 'brush' ? 0.72 : tool === 'eraser' ? 0.5 : tool === 'water' ? 0.05 : 0.25, fall = (d: number) => d >= 1 ? 0 : d <= hard ? 1 : 1 - (d - hard) / (1 - hard);
     if (tool === 'eraser') {
       const k = o * (0.4 + 0.6 * p);
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
         const w = fall(Math.hypot(x - cx, y - cy) / r); if (!w) continue;
         const i = (y * W + x) * 4; L[i + 3] *= 1 - w * k;
+      }
+      return;
+    }
+    // Paint brush (gouache, acrylic): opaque colour that covers what's under it and doesn't mix, swelling with
+    // pressure; as the paint on it runs low over a long stroke, the bristles start to show (dry brush).
+    if (tool === 'brush') {
+      const [pr, pg, pb] = this.res, br = this.bristle!, cs = Math.cos(ang), sn = Math.sin(ang);
+      this.load = Math.max(0.3, this.load * 0.996); const dry = 1 - this.load;
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        let w = fall(Math.hypot(x - cx, y - cy) / r); if (!w) continue;
+        // About 14 broad bristles across the brush (smoothed between them), not the oil brush's fine streaks.
+        const u = ((-(x - cx) * sn + (y - cy) * cs) / r + 1) * 7, k0 = Math.floor(u), t = u - k0, b = br[k0 & 63] * (1 - t) + br[(k0 + 1) & 63] * t;
+        // A little texture always, more as the brush dries out.
+        w *= (0.86 + 0.14 * b) * (1 - dry * (1 - b) * 1.8); if (w <= 0) continue;
+        // Coverage is the most this stroke has laid on each spot so far, not the sum of every dab, so the bristle
+        // streaks along the stroke stay instead of filling in.
+        const i = (y * W + x) * 4, c0 = this.comp(i, this.before || L), c = this.comp(i), dr = pr - c0[0], dg = pg - c0[1], db = pb - c0[2];
+        const big = Math.abs(dr) >= Math.abs(dg) && Math.abs(dr) >= Math.abs(db) ? 0 : Math.abs(dg) >= Math.abs(db) ? 1 : 2, dd = [dr, dg, db][big];
+        const had = Math.abs(dd) > 1 ? Math.max(0, Math.min(1, (c[big] - c0[big]) / dd)) : 1;
+        const f = Math.max(had, Math.min(1, o * (0.9 + 0.1 * p) * w));
+        L[i] = c0[0] + dr * f; L[i + 1] = c0[1] + dg * f; L[i + 2] = c0[2] + db * f; L[i + 3] = 255;
       }
       return;
     }
