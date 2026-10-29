@@ -20,7 +20,7 @@ export function SiteFooter({ v }: { v: V }) {
         <button onClick={v.openPrivacy} className={'tap ' + hoverInk} style={link}>Privacy</button>
         <button onClick={v.openTerms} className={'tap ' + hoverInk} style={link}>Terms</button>
         <button onClick={v.openContact} className={'tap ' + hoverInk} style={link}>Contact</button>
-        <button onClick={v.openFeedback} className={'tap ' + hoverInk} style={link}>Send feedback</button>
+        <button onClick={v.openFeedback} className={'tap ' + hoverInk} style={link}>Feedback</button>
       </nav>
       <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span style={{ ...serif(17, 1), color: INK }}>fletora<span style={{ color: MARK }}>.</span></span>

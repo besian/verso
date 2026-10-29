@@ -857,7 +857,7 @@ function LegalLinks({ v, align = 'center' }: { v: V; align?: CSSProperties['just
       <button onClick={v.openPrivacy} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>Privacy</button>
       <button onClick={v.openTerms} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>Terms</button>
       <button onClick={v.openContact} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>Contact</button>
-      <button onClick={v.openFeedback} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>Send feedback</button>
+      <button onClick={v.openFeedback} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>Feedback</button>
     </div>
   );
 }

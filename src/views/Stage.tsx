@@ -91,7 +91,7 @@ function NavMenu({ v }: { v: V }) {
         <span role="menu" style={{ position: 'absolute', right: -8, top: 'calc(100% + 8px)', zIndex: 30, width: 220, padding: 6, background: PAPER, border: `1px solid ${INK}`, boxShadow: '0 14px 34px rgba(34,35,32,.16)' }}>
           {item('Explore', v.goExplore, v.navExFg === INK)}
           {v.promoPlus && item('Fletora Plus', v.openPlusPage, v.navPlusFg === INK)}
-          {item('Send feedback', v.openFeedback)}
+          {item('Feedback', v.openFeedback)}
           <span style={{ display: 'block', height: 1, margin: '4px 10px', background: 'rgba(var(--ink-rgb),.12)' }} />
           {item('Sign in', v.openSignin)}
         </span>
