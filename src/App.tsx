@@ -626,7 +626,8 @@ export default class App extends Component<object, State> {
     const s = this.state, ed = s.edit, mode = s.mode || 'home', o = s.other as OtherBook | null;
     if (s.welcome || s.tour || s.embed || s.replay || s.managing || s.toast || s.more || s.ask || s.cmOpen) return null;
     const pick = (k: string | null) => (k && !this.tipsSeen.has(k) ? k : null);
-    if (ed) return pick(ed.mode === 'draw' ? 'draw' : null); // Text explains itself in its panel
+    // Text explains itself in its panel; on a phone's full page, the callout about showing every tool comes first.
+    if (ed) return ed.mode === 'draw' && ed.full !== false && s.vw < 640 && !this.tipsSeen.has('full') ? null : pick(ed.mode === 'draw' ? 'draw' : null);
     if ((mode === 'other' || mode === 'mine') && s.images.length && !s.switching) {
       if (this.replayHere().length && !this.tipsSeen.has('replay')) return 'replay';
       return IS_TOUCH || o?.guide ? null : pick('book'); // phones have the swipe hint
@@ -1344,7 +1345,7 @@ export default class App extends Component<object, State> {
     if (vw < 640) {
       const e = this.state.edit, box = this.state.edArea, room = box ? box.h - (e?.mode === 'draw' ? 4 : 28) : vh * 0.45;
       const maxH = e?.mode === 'write' && e.pad ? room * 0.55 : room;
-      const side = e?.mode === 'draw' && e.full ? 16 : 32;
+      const side = e?.mode === 'draw' && e.full !== false ? 16 : 32;   // full page is the default (see edFull)
       let fw = Math.min(vw - side, box?.w || vw), fh = fw / a; if (fh > maxH) { fh = maxH; fw = fh * a; }
       return { fw: Math.max(1, Math.round(fw)), fh: Math.max(1, Math.round(fh)) };
     }
@@ -2670,7 +2671,9 @@ export default class App extends Component<object, State> {
       toggleDrawSpread: () => this.setSpread(!ed.spread),
       undoMark: () => { p?.undo(); bump(); }, clearMarks: () => { p?.clear(); bump(); },
       hasRedo: !!p?.canRedo, redoMark: () => { p?.redo(); bump(); },
-      edFull: !!ed.full && ed.mode === 'draw' && this.state.vw < 640, toggleFull: () => this.setEd({ full: !ed.full, layersOpen: false }),
+      // Phones draw on the full page by default, with the slim bar; the expand button brings back every tool.
+      edFull: ed.full !== false && ed.mode === 'draw' && this.state.vw < 640, toggleFull: () => { this.seeTip('full'); this.setEd({ full: ed.full === false, layersOpen: false }); },
+      fullHint: ed.full !== false && ed.mode === 'draw' && this.state.vw < 640 && !this.tipsSeen.has('full'), fullHintClose: () => this.seeTip('full'),
       // Zoom while drawing (on the frame; see pagePoint).
       edZoomT: ed.mode === 'draw' && ed.zm ? `translate(${ed.zm.x}px, ${ed.zm.y}px) scale(${ed.zm.k})` : '', edZoomPct: `${Math.round((ed.mode === 'draw' && ed.zm ? ed.zm.k : 1) * 100)}%`,
       edZoomed: ed.mode === 'draw' && !!ed.zm, zoomInDraw: () => this.zoomAt(1.5), zoomOutDraw: () => this.zoomAt(1 / 1.5), zoomResetDraw: () => this.setEd({ zm: null }),

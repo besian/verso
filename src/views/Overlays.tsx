@@ -1127,7 +1127,7 @@ function MobileEditor({ v }: { v: V }) {
 /** Phones, full page: the page as big as the screen allows, with the tools reached for most in one slim bar:
  *  the brush (tap for the others, photos and layers), the colour, undo and redo, size, and the way back. */
 function FullBar({ v, setWheel }: { v: V; setWheel: (f: (w: boolean) => boolean) => void }) {
-  const [brushes, setBrushes] = useState(false);
+  const [brushes, setBrushes] = useState(false), hint = v.fullHint && !brushes;
   const icon = (d: string) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
   const btn = (on: boolean, off?: boolean): CSSProperties => ({ width: 38, height: 38, flexShrink: 0, padding: 0, border: 'none', borderRadius: 10, background: on ? INK : 'none', color: on ? PAPER : INK, opacity: off ? 0.35 : 1, cursor: off ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' });
   const narrow: CSSProperties = { width: 'min(38px, calc((100vw - 40px) / 10))' };
@@ -1150,8 +1150,16 @@ function FullBar({ v, setWheel }: { v: V; setWheel: (f: (w: boolean) => boolean)
         <button onClick={v.undoMark} disabled={!v.hasMarks} title="Undo" aria-label="Undo" style={btn(false, !v.hasMarks)}>{icon('M9 5L4 10l5 5M4 10h10a5 5 0 0 1 0 10h-3')}</button>
         <button onClick={v.redoMark} disabled={!v.hasRedo} title="Redo" aria-label="Redo" style={btn(false, !v.hasRedo)}>{icon('M15 5l5 5-5 5M20 10H10a5 5 0 0 0 0 10h3')}</button>
         <input type="range" min={1} max={40} step={1} value={v.penSize} onChange={v.onPenSize} aria-label={v.penTool === 'eraser' ? 'Eraser size' : 'Size'} aria-valuetext={String(v.penSize)} style={{ flex: 1, minWidth: 0, margin: '0 6px', accentColor: INK, height: 30 }} />
-        <button onClick={v.toggleFull} title="Show all tools" aria-label="Show all tools" style={btn(false)}>{icon('M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5')}</button>
+        <button onClick={v.toggleFull} title="Show all tools" aria-label="Show all tools" style={{ ...btn(false), ...(hint ? { boxShadow: `0 0 0 2px ${MARK}` } : {}) }}>{icon('M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5')}</button>
       </div>
+      {/* Once: where the rest of the tools went, pointing at the button that brings them back. */}
+      {hint && (
+        <div role="status" style={{ position: 'absolute', right: 0, bottom: 'calc(100% + 10px)', zIndex: 3, width: 'min(280px, calc(100vw - 32px))', display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 12px 12px 14px', borderRadius: 10, background: INK, color: PAPER, boxShadow: '0 10px 30px rgba(20,20,30,.25)' }}>
+          <span style={{ flex: 1, font: `400 13.5px/1.45 ${SANS}` }}>The whole page is yours to draw on. Tap <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="the expand button" style={{ verticalAlign: '-2px' }}><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /></svg> for every tool, and to save.</span>
+          <button onClick={v.fullHintClose} style={{ flexShrink: 0, height: 30, padding: '0 10px', border: '1px solid rgba(246,242,232,.35)', borderRadius: 4, background: 'none', color: PAPER, font: `500 12.5px ${SANS}`, cursor: 'pointer' }}>Got it</button>
+          <span aria-hidden="true" style={{ position: 'absolute', right: 15, top: '100%', width: 0, height: 0, borderLeft: '7px solid transparent', borderRight: '7px solid transparent', borderTop: `7px solid ${INK}` }} />
+        </div>
+      )}
     </div>
   );
 }
