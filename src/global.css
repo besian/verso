@@ -65,8 +65,9 @@ input[type="date"] { color-scheme: inherit; }
   .legal-nav { display: flex; flex-direction: column; gap: 10px; position: sticky; top: 24px; }
 }
 
-/* FAQ (src/views/Pages.tsx): one readable column of questions beside the same sticky list of sections. */
-.faq-list { display: flex; flex-direction: column; gap: 44px; max-width: 760px; }
+/* FAQ (src/views/Pages.tsx): the groups of questions in columns across the full width, beside the same sticky list
+   of sections; each group keeps to its own column, so opening a question never moves the others sideways. */
+.faq-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 44px 56px; align-items: start; }
 .faq-q > summary { list-style: none; }
 .faq-q > summary::-webkit-details-marker { display: none; }
 .faq-q > summary .faq-plus { transition: transform .2s; }
