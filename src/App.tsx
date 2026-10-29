@@ -2284,7 +2284,8 @@ export default class App extends Component<object, State> {
   }
 
   exploreVals(): V {
-    const s = this.state, saved = s.exView || this.exView0 || '', view = ['grid', 'stack'].includes(saved) ? saved : 'grid', sort = s.exSort || 'trending', list = this.exSorted(), n = list.length;
+    const s = this.state, view: string = 'grid',   // the stack view's toggle was removed; Explore is always the grid
+      sort = s.exSort || 'trending', list = this.exSorted(), n = list.length;
     const on = (v: boolean) => v ? [INK, PAPER] : ['transparent', INK];
     const sp = s.stS || 0, top = Math.max(0, Math.min(n - 1, Math.round(this.stT)));
     const stackList = list.map((b, i) => {

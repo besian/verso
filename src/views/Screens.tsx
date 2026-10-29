@@ -178,7 +178,7 @@ export function Explore({ v }: { v: V }) {
           </div>
         )}
         {!v.exGrid && <ExploreTabs v={v} />}
-        {/* One row: search, then surprise, sort, medium and view. Phones put sort and medium on a short second row. */}
+        {/* One row: search, then surprise, sort, medium and content. Phones put sort and medium on a short second row. */}
         {(() => {
           const sortItems = [{ key: 'trend', label: 'Featured', on: v.sTrBg !== 'transparent', pick: v.sortTrend }, { key: 'new', label: 'Recent', on: v.sNewBg !== 'transparent', pick: v.sortNew }];
           const med = v.exMediums.find((m: V) => m.on && m.key), medLbl = med ? med.label : 'Medium';
@@ -187,12 +187,6 @@ export function Explore({ v }: { v: V }) {
           const cont = v.exContent.find((c: V) => c.on), content = <Pick label={cont?.key === 'all' ? 'All content' : cont?.key === 'only' ? 'Mature only' : 'Content'} title="Mature work" items={v.exContent} touch={v.isTouch} active={cont?.key !== 'hide'} />;
           const surprise = <button onClick={v.surprise} title="Surprise me: open a random sketchbook" aria-label="Surprise me" className={hover(`border-color:${INK};color:${MARK}`)} style={{ ...toolBtn(false), width: 40, padding: 0, justifyContent: 'center', fontSize: 16 }}>✦</button>;
           const tag = v.exTag && <button onClick={v.clearLabel} title="Clear tag" style={{ ...toolBtn(true), background: MARK, borderColor: MARK, color: PAPER }}>{v.exTag} ×</button>;
-          const view = (
-            <div style={{ ...segGroup, flexShrink: 0 }}>
-              <button onClick={v.viewGrid} title="Grid" style={iconSeg(v.vGridBg, v.vGridFg)}>▦</button>
-              <button onClick={v.viewStack} title="Stack" style={iconSeg(v.vStackBg, v.vStackFg)}>≡</button>
-            </div>
-          );
           const search = (
             <div style={{ flex: v.notMob ? `1 1 ${v.exSearchBasis}` : '1 1 0', minWidth: v.notMob ? 200 : 0, maxWidth: v.exSearchMax, height: 40, display: 'flex', alignItems: 'center', gap: 10, padding: 0, borderBottom: '1px solid rgba(var(--ink-rgb),.35)', boxSizing: 'border-box' }}>
               <span style={{ fontSize: 15, color: 'rgba(var(--ink-rgb),.6)' }}>⌕</span>
@@ -201,11 +195,11 @@ export function Explore({ v }: { v: V }) {
           );
           return v.notMob ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              {search}{tag}<div style={{ flex: 1, minWidth: 0 }} />{surprise}{sort}{medium}{content}{view}
+              {search}{tag}<div style={{ flex: 1, minWidth: 0 }} />{surprise}{sort}{medium}{content}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>{search}{surprise}{view}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>{search}{surprise}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>{sort}{medium}{content}{tag}</div>
             </div>
           );
