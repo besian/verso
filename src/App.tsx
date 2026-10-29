@@ -163,7 +163,7 @@ interface State {
   exTab?: 'all' | 'following';
   /** Explore paging, and the medium/tag filter ('m:ink', 't:lisbon') with its results. */
   exMore?: boolean; exBusy?: boolean; exLabel?: string; exLabelBooks?: OtherBook[] | null;
-  legal?: 'privacy' | 'terms' | 'contact' | 'plus'; nf?: string;
+  legal?: 'privacy' | 'terms' | 'contact' | 'plus' | 'faq'; nf?: string;
   /** Explore's Plus card, closed by the visitor (for a while). */
   exPromoHidden?: boolean;
   /** The Contact page's form. */
@@ -466,7 +466,7 @@ export default class App extends Component<object, State> {
     } catch (e) { set({ step: 'error', err: api.errMsg(e) }); }
   }
   notFound(nf: string) { cancelAnimationFrame(this.raf); this.target = 0; this.setState(s => ({ mode: 'notfound', nf, other: null, images: s.books[s.active].images, p: 0, focus: false, fz: 0, managing: false })); }
-  openLegal(legal: 'privacy' | 'terms' | 'contact' | 'plus') { cancelAnimationFrame(this.raf); this.setState({ mode: 'legal', legal, other: null, focus: false, fz: 0, managing: false, draft: null }); }
+  openLegal(legal: 'privacy' | 'terms' | 'contact' | 'plus' | 'faq') { cancelAnimationFrame(this.raf); this.setState({ mode: 'legal', legal, other: null, focus: false, fz: 0, managing: false, draft: null }); }
   /** The contact form, set to feedback. */
   openFeedback() { const s = this.state; this.setState({ ct: { kind: 'feedback', email: s.ct?.email || s.acct?.email || '', text: s.ct?.text || '', link: '', hp: '' } }); this.openLegal('contact'); }
   openAdmin() { cancelAnimationFrame(this.raf); this.setState({ mode: 'admin', other: null, focus: false, fz: 0, managing: false, draft: null }); if (this.state.admin) this.loadReports(); }
@@ -714,7 +714,7 @@ export default class App extends Component<object, State> {
     const s = this.state, mode = s.mode || 'home', o = s.other as OtherBook | null;
     const t = mode === 'other' && o ? `${o.name} by ${o.artist}` : mode === 'mine' ? s.books[s.active]?.name : mode === 'explore' ? 'Explore'
       : mode === 'profile' ? (s.profileOf ? (s.pf?.profile?.name || s.profileOf.name) : s.acct?.name) : mode === 'settings' ? 'Account settings' : mode === 'billing' ? 'Billing' : mode === 'messages' ? 'Messages' : mode === 'auth' ? (s.suMode === 'join' ? 'Join' : 'Sign in')
-      : mode === 'legal' ? (s.legal === 'terms' ? 'Terms' : s.legal === 'contact' ? 'Contact' : s.legal === 'plus' ? 'Fletora Plus' : 'Privacy') : mode === 'admin' ? 'Moderation' : mode === 'notfound' ? 'Not found' : '';
+      : mode === 'legal' ? (s.legal === 'terms' ? 'Terms' : s.legal === 'contact' ? 'Contact' : s.legal === 'plus' ? 'Fletora Plus' : s.legal === 'faq' ? 'Questions' : 'Privacy') : mode === 'admin' ? 'Moderation' : mode === 'notfound' ? 'Not found' : '';
     return t ? `${t} · fletora.` : 'fletora. — A place for the unfinished';
   }
   /** Shows the screen for the current address (first load, back/forward, pasted links). */
@@ -728,7 +728,7 @@ export default class App extends Component<object, State> {
         this.goMode('explore'); this.setState({ exQ: q.get('q') || '' });
         return this.setLabel(m ? 'm:' + m : t ? 't:' + tagSlug(t) : '');
       }
-      if (a === 'privacy' || a === 'terms' || a === 'contact') return this.openLegal(a);
+      if (a === 'privacy' || a === 'terms' || a === 'contact' || a === 'faq') return this.openLegal(a);
       if (a === 'auth' && b === 'action') return this.openAction();
       if (a === 'embed' && b) {
         const d = await api.getBook(b);
@@ -1996,7 +1996,7 @@ export default class App extends Component<object, State> {
       inInstalled: installer.installed(), inCanPrompt: installer.canPrompt(), inIOS: installer.isIOS(),
       inInstall: () => installer.install().then(ok => ok && this.toast('fletora is on your home screen')),
       isDark: !!s.dark, setTheme: (t: 'light' | 'dark') => { themeMode.setTheme(t); this.setState({ dark: t === 'dark' }); },
-      openPrivacy: () => this.openLegal('privacy'), openTerms: () => this.openLegal('terms'), openContact: () => this.openLegal('contact'), openFeedback: () => this.openFeedback(), openPlusPage: () => this.openLegal('plus'),
+      openPrivacy: () => this.openLegal('privacy'), openTerms: () => this.openLegal('terms'), openContact: () => this.openLegal('contact'), openFeedback: () => this.openFeedback(), openPlusPage: () => this.openLegal('plus'), openFaq: () => this.openLegal('faq'), faqGuide: this.openGuide,
       // Plus and its free trial, shown around the site to people who don't have Plus.
       promoPlus: !s.plus, promoTrial: !s.acct, promoLine: !s.acct ? 'Join free and get 14 days of Fletora Plus, no card needed.' : 'More room, PDFs and stats with Fletora Plus.',
       // This week's prompt, while it runs.

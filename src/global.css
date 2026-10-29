@@ -65,6 +65,13 @@ input[type="date"] { color-scheme: inherit; }
   .legal-nav { display: flex; flex-direction: column; gap: 10px; position: sticky; top: 24px; }
 }
 
+/* FAQ (src/views/Pages.tsx): one readable column of questions beside the same sticky list of sections. */
+.faq-list { display: flex; flex-direction: column; gap: 44px; max-width: 760px; }
+.faq-q > summary { list-style: none; }
+.faq-q > summary::-webkit-details-marker { display: none; }
+.faq-q > summary .faq-plus { transition: transform .2s; }
+.faq-q[open] > summary .faq-plus { transform: rotate(45deg); }
+
 /* Toolbar labels: the button's name beside it on hover (data-tip). */
 .tip { position: relative; }
 .tip::after { content: attr(data-tip); position: absolute; left: calc(100% + 12px); top: 50%; transform: translate(-4px, -50%); padding: 6px 10px; border-radius: 6px; background: rgb(var(--ink-rgb)); color: rgb(var(--paper-rgb)); font: 500 12px/1.2 'Geist', sans-serif; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s; z-index: 30; }

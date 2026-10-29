@@ -171,6 +171,7 @@ function Terms() {
 export function Legal({ v }: { v: V }) {
   if (v.legalDoc === 'contact') return <ContactPage v={v} />;
   if (v.legalDoc === 'plus') return <PlusPage v={v} />;
+  if (v.legalDoc === 'faq') return <FaqPage v={v} />;
   const mob = !v.notMob, terms = v.legalDoc === 'terms', tab = (on: boolean, name: string, open: () => void) => (
     <button onClick={open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', ...label(on ? INK : undefined), borderBottom: on ? `1px solid ${INK}` : 'none' }}>{name}</button>
   );
@@ -193,7 +194,7 @@ export function Legal({ v }: { v: V }) {
 }
 
 /** The sections, with a sticky list of them beside (wide screens) that marks the one you're reading. */
-function LegalBody({ children }: { children: ReactNode }) {
+function LegalBody({ children, list }: { children: ReactNode; list?: boolean }) {
   const ref = useRef<HTMLDivElement>(null), [secs, setSecs] = useState<string[]>([]), [on, setOn] = useState('');
   useEffect(() => {
     const el = ref.current; if (!el) return;
@@ -215,7 +216,7 @@ function LegalBody({ children }: { children: ReactNode }) {
           <button key={t} onClick={() => go(t)} className={hoverText} style={{ padding: '2px 0 2px 12px', border: 'none', borderLeft: `2px solid ${on === t ? MARK : 'rgba(var(--ink-rgb),.15)'}`, background: 'none', textAlign: 'left', color: on === t ? INK : MUTED, font: `500 13px/1.35 ${SANS}`, cursor: 'pointer' }}>{t}</button>
         ))}
       </nav>
-      <div ref={ref} className="legal-cards">{children}</div>
+      <div ref={ref} className={list ? 'faq-list' : 'legal-cards'}>{children}</div>
     </div>
   );
 }
@@ -293,6 +294,90 @@ function PlusPage({ v }: { v: V }) {
   );
 }
 
+/** A link inside an answer. */
+const InLink = ({ onClick, children }: { onClick: () => void; children: ReactNode }) => (
+  <button onClick={onClick} className={hoverLine} style={{ padding: 0, border: 'none', borderBottom: `1px solid ${INK}`, background: 'none', color: INK, font: 'inherit', cursor: 'pointer' }}>{children}</button>
+);
+/** One question: closed to its line, opened in place. */
+function Q({ q, children }: { q: string; children: ReactNode }) {
+  return (
+    <details className="faq-q" style={{ borderTop: '1px solid rgba(var(--ink-rgb),.15)' }}>
+      <summary className={hoverText} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, padding: '15px 0', cursor: 'pointer', ...serif(21, 1.25) }}>
+        {q}<span className="faq-plus" aria-hidden="true" style={{ flexShrink: 0, font: `300 22px/1 ${SANS}`, color: MARK }}>+</span>
+      </summary>
+      <div style={{ ...prose, gap: 10, padding: '0 36px 18px 0', fontSize: 15 }}>{children}</div>
+    </details>
+  );
+}
+function Group({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section id={slug(title)} data-sec={title} style={{ display: 'flex', flexDirection: 'column', scrollMarginTop: 24 }}>
+      <h2 style={{ margin: '0 0 8px', ...label(MARK) }}>{title}</h2>
+      {children}
+      <div style={{ borderTop: '1px solid rgba(var(--ink-rgb),.15)' }} />
+    </section>
+  );
+}
+
+/** Questions people ask, grouped, each answer a click away. */
+function FaqPage({ v }: { v: V }) {
+  const mob = !v.notMob;
+  return (
+    <div data-scroll style={screen}>
+      <div style={{ ...pagePad(mob, 64), display: 'flex', flexDirection: 'column', gap: mob ? 24 : 32, minHeight: '100%', paddingBottom: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <span style={label(MARK)}>fletora.</span>
+          <h1 style={{ margin: 0, ...serif(mob ? 44 : 64, 1, '-.02em') }}>Questions, <em>answered.</em></h1>
+          <p style={{ margin: '6px 0 0', maxWidth: 620, fontSize: 17, lineHeight: 1.55, color: MUTED }}>Can’t find yours? <InLink onClick={v.openContact}>Ask us</InLink> and we’ll reply within 2 working days.</p>
+        </div>
+        <LegalBody list>
+          <Group title="Getting started">
+            <Q q="What is Fletora?"><P>A place to keep your sketchbooks online and share them. Photograph the pages of a paper sketchbook, or start a new one and draw straight onto its pages. Unfinished pages are welcome: that’s the point.</P></Q>
+            <Q q="Is it free?"><P>Yes. A free account has {BOOKS_FREE} sketchbooks of up to {PAGES_FREE} pages each, with drawing, writing, sharing, comments and messages. <InLink onClick={v.openPlusPage}>Fletora Plus</InLink> adds more room and a few extras, and every new account gets 14 days of it free.</P></Q>
+            <Q q="Is there a guide?"><P>The <InLink onClick={v.faqGuide}>welcome sketchbook</InLink> walks through everything on its pages, and you can watch one of them being painted.</P></Q>
+            <Q q="Can I use it on my phone?"><P>Yes, in any up-to-date browser. To open it like an app from your home screen, use <b>Install fletora</b> in Settings → App. On iPhone and iPad, tap Share in Safari, then <b>Add to Home Screen</b>.</P></Q>
+          </Group>
+          <Group title="Sketchbooks and pages">
+            <Q q="How do I make a sketchbook?"><P>Choose <b>+ New sketchbook</b>, pick a shape (pocket, portrait, square, landscape or panorama), then give it a name and a cover: a colour, or a picture of your own.</P></Q>
+            <Q q="How do I add pages from my paper sketchbook?"><P>Choose <b>Add pages</b> and take photos or pick them from your library, several at once if you like. Each one is straightened and cropped to the page for you; adjust it by hand if you want, and <b>Reset</b> shows the photo as you took it.</P></Q>
+            <Q q="Can one picture go across two pages?"><P>Yes: choose <b>Across two pages</b> when fitting it, and it’s split across the spread. Moving or removing one half moves or removes both.</P></Q>
+            <Q q="How many sketchbooks and pages can I have?"><P>Free accounts have {BOOKS_FREE} sketchbooks of up to {PAGES_FREE} pages. With Plus, sketchbooks are unlimited and each holds up to {PAGES_PLUS} pages, saved at full resolution.</P></Q>
+            <Q q="Can I download my sketchbook?"><P>With Plus, any of your sketchbooks downloads as a PDF laid out to print. On any plan, <b>Share page as a picture</b> in the ⋯ menu makes an image of the open pages, sized for Instagram.</P></Q>
+          </Group>
+          <Group title="Drawing and writing">
+            <Q q="Can I draw straight onto a page?"><P>Yes. Open a page and choose <b>Draw</b>: pen, pencil, marker, brush, watercolour, oil, blend and eraser, any colour, up to 4 layers, zoom while you work, and undo and redo. Your work is kept as a draft as you go, so nothing’s lost if you close the page.</P></Q>
+            <Q q="Can I add notes and photos to a page?"><P>Yes. Text comes in a choice of fonts, sizes and colours, and photos can be placed, resized and moved anywhere on the page, under your drawing.</P></Q>
+            <Q q="What’s a replay?"><P>Pages drawn on Fletora remember each stroke. Anyone looking at the page can press <b>Watch page … being drawn</b> beside it to see it come to life, and you can download the replay as a video.</P></Q>
+            <Q q="The page is small on my phone"><P>While drawing, the full-page button hides the tools and makes the page as big as the screen allows; the brushes you use most stay in one slim bar.</P></Q>
+          </Group>
+          <Group title="Sharing and privacy">
+            <Q q="Who can see my sketchbooks?"><P>You choose for each one, in its Details: <b>Public</b> (in Explore and on your profile), <b>Link only</b> (hidden, but open to anyone with the link; part of Plus) or <b>Private</b> (only you). Change it whenever you like.</P></Q>
+            <Q q="Can I make a sketchbook with someone else?"><P>Yes: <b>Draw together</b>, in a sketchbook’s Share tab, invites one other person (up to five with Plus) to add and caption pages.</P></Q>
+            <Q q="Is my email shown?"><P>Never. Your profile shows only what you add to it. The <InLink onClick={v.openPrivacy}>Privacy policy</InLink> explains what we store and why.</P></Q>
+            <Q q="Are pictures checked?"><P>Every picture is checked automatically before it’s published, and people can report anything that breaks the <InLink onClick={v.openTerms}>Terms</InLink>. Reports reach our moderators straight away.</P></Q>
+          </Group>
+          <Group title="People and community">
+            <Q q="How do I find other artists?"><P>Explore shows public sketchbooks, which you can search or filter by medium. Follow people to see their new pages first, and look out for the weekly prompt.</P></Q>
+            <Q q="What can I do on someone’s sketchbook?"><P>Like it, save it to a shelf of your own, comment on a page (with replies and @mentions), and message the artist.</P></Q>
+            <Q q="Someone is bothering me"><P>Choose <b>Report</b> in the ⋯ menu on their sketchbook, profile or message, and <b>Block</b> them from your conversation so they can’t message you again.</P></Q>
+            <Q q="Can I get updates by email?"><P>Turn on the weekly email in Settings: on Mondays, new pages from people you follow and the likes, comments and followers your work got. It’s only sent when there’s something new.</P></Q>
+          </Group>
+          <Group title="Plus and billing">
+            {PLUS_FAQ.map(([q, a]) => <Q key={q} q={q}><P>{a}</P></Q>)}
+          </Group>
+          <Group title="Your account">
+            <Q q="I forgot my password"><P>Choose <b>Forgot password?</b> when signing in and we’ll email you a link to set a new one.</P></Q>
+            <Q q="Can I change my name or handle?"><P>Yes, in <b>Edit profile</b> on your profile.</P></Q>
+            <Q q="Can I get a copy of my data?"><P>Yes: Account settings → Your data → <b>Download my data</b>.</P></Q>
+            <Q q="How do I delete my account?"><P>Account settings → <b>Delete account</b>. It permanently deletes your profile and every sketchbook with all its pages, and cancels Plus straight away. It can’t be undone.</P></Q>
+          </Group>
+        </LegalBody>
+        <SiteFooter v={v} />
+      </div>
+    </div>
+  );
+}
+
 /** One block of quick help beside the Contact form. */
 function Help({ title, children, mark }: { title: string; children: ReactNode; mark?: boolean }) {
   return (
@@ -351,6 +436,9 @@ function ContactPage({ v }: { v: V }) {
         <div style={{ display: 'grid', gridTemplateColumns: mob ? 'minmax(0,1fr)' : 'minmax(0,1.2fr) minmax(0,1fr)', gap: mob ? 36 : 64, alignItems: 'start' }}>
           {form}
           <aside style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,360px),1fr))', gap: '22px 40px', alignItems: 'start' }}>
+            <Help title="Quick answers">
+              <span>Most questions about sketchbooks, drawing, sharing and Plus are answered in the <InLink onClick={v.openFaq}>FAQ</InLink>.</span>
+            </Help>
             <Help title="Email us">
               <a href={`mailto:${contact}`} className={hoverText} style={{ ...serif(24, 1.1), color: INK, textDecoration: 'none', borderBottom: `1px solid ${INK}`, alignSelf: 'flex-start' }}>{contact}</a>
               <span style={{ color: MUTED }}>Privacy and data requests are answered within one month at most.</span>

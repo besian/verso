@@ -853,6 +853,7 @@ export function BillingPage({ v }: { v: V }) {
 function LegalLinks({ v, align = 'center' }: { v: V; align?: CSSProperties['justifyContent'] }) {
   return (
     <div style={{ display: 'flex', gap: 16, justifyContent: align, fontSize: 12, color: STONE }}>
+      <button onClick={v.openFaq} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>FAQ</button>
       <button onClick={v.openPrivacy} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>Privacy</button>
       <button onClick={v.openTerms} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>Terms</button>
       <button onClick={v.openContact} className={'tap ' + hoverText} style={{ padding: 0, border: 'none', background: 'none', color: 'inherit', font: `500 12px ${SANS}`, cursor: 'pointer' }}>Contact</button>
