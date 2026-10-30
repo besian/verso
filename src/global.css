@@ -73,6 +73,16 @@ input[type="date"] { color-scheme: inherit; }
 .faq-q > summary .faq-plus { transition: transform .2s; }
 .faq-q[open] > summary .faq-plus { transform: rotate(45deg); }
 
+/* The Following feed (src/views/Screens.tsx): pages swiped sideways with no scrollbar, the arrows only on hover
+   with a mouse, and the heart that pops on a double-tap. */
+.feed-strip { scrollbar-width: none; }
+.feed-strip::-webkit-scrollbar { display: none; }
+.feed-arrow { opacity: 0; transition: opacity .15s; }
+.feed-media:hover .feed-arrow { opacity: 1; }
+@media (hover: none) { .feed-arrow { display: none !important; } }
+.feed-burst { transform: translate(-50%, -50%) scale(0); animation: feed-burst .8s cubic-bezier(.2,.8,.2,1) forwards; filter: drop-shadow(0 4px 12px rgba(0,0,0,.25)); }
+@keyframes feed-burst { 15% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; } 30% { transform: translate(-50%, -50%) scale(.95); } 70% { transform: translate(-50%, -50%) scale(1); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 0; } }
+
 /* Toolbar labels: the button's name beside it on hover (data-tip). */
 .tip { position: relative; }
 .tip::after { content: attr(data-tip); position: absolute; left: calc(100% + 12px); top: 50%; transform: translate(-4px, -50%); padding: 6px 10px; border-radius: 6px; background: rgb(var(--ink-rgb)); color: rgb(var(--paper-rgb)); font: 500 12px/1.2 'Geist', sans-serif; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s; z-index: 30; }

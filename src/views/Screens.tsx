@@ -126,8 +126,66 @@ function ExploreTabs({ v }: { v: V }) {
   return <div role="tablist" aria-label="Explore" style={{ display: 'flex', gap: 24 }}>{tab(!v.exFollowing, 'Everyone', v.exTabAll)}{tab(v.exFollowing, 'Following', v.exTabFollowing)}</div>;
 }
 
-/** The Following tab: the same grid as Explore, of sketchbooks by the artists you follow, newest first, marked
- *  with what's new since you last opened them. */
+const feedIcon = (d: string, fill = 'none') => <svg width="24" height="24" viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
+const HEART = 'M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z';
+const actBtn: CSSProperties = { width: 40, height: 40, margin: '0 -4px', padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+
+/** One post in the Following feed: who and what, the pages side by side to swipe through, then like, comment, save
+ *  and share. Tap a page to open the sketchbook there; double-tap it to like. */
+function FeedPost({ p }: { p: V }) {
+  const strip = useRef<HTMLDivElement>(null), [at, setAt] = useState(0), [burst, setBurst] = useState(0);
+  const tap = useRef<{ t: number; timer?: ReturnType<typeof setTimeout> }>({ t: 0 });
+  const n = p.pages.length;
+  const go = (d: number) => { const el = strip.current; if (el) el.scrollTo({ left: (at + d) * el.clientWidth, behavior: 'smooth' }); };
+  const onTap = (pg: V) => {
+    const now = Date.now(), r = tap.current; clearTimeout(r.timer);
+    if (now - r.t < 280) { r.t = 0; p.likeOn(); setBurst(k => k + 1); return; }
+    r.t = now; r.timer = setTimeout(() => { r.t = 0; pg.open(); }, 280);
+  };
+  const arrow = (d: number, on: boolean) => on && (
+    <button onClick={() => go(d)} aria-label={d < 0 ? 'Previous page' : 'Next page'} className="feed-arrow" style={{ position: 'absolute', top: '50%', [d < 0 ? 'left' : 'right']: 10, transform: 'translateY(-50%)', width: 32, height: 32, padding: 0, border: 'none', borderRadius: '50%', background: 'rgba(244,241,232,.92)', color: INK, boxShadow: '0 2px 8px rgba(20,20,30,.18)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', font: `500 16px ${SANS}` }}>{d < 0 ? '‹' : '›'}</button>
+  );
+  const cur = p.pages[Math.min(at, n - 1)];
+  return (
+    <article style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <header style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+        <button onClick={p.openArtist} aria-label={`${p.artist}’s profile`} style={{ width: 38, height: 38, flexShrink: 0, padding: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.15)', background: p.av || INK, color: PAPER, font: `500 15px ${SANS}`, cursor: 'pointer' }}>{p.av ? '' : p.init}</button>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2, fontSize: 13.5, lineHeight: 1.3 }}>
+          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <button onClick={p.openArtist} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `600 13.5px ${SANS}`, cursor: 'pointer' }}>{p.artist}</button>
+            {p.verified && <Verified size={13} />}<span style={{ color: MUTED }}> {p.what} </span>
+            <button onClick={p.open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `italic 400 15px ${SERIF}`, cursor: 'pointer' }}>{p.name}</button>
+          </span>
+          <span style={{ fontSize: 12, color: MUTED }}>{p.isNew && <span style={{ color: MARK, fontWeight: 600 }}>New · </span>}{p.when} · {p.count}{p.mature && ' · Mature'}</span>
+        </div>
+      </header>
+      <div className="feed-media" style={{ position: 'relative' }}>
+        <div ref={strip} onScroll={e => { const el = e.currentTarget; setAt(Math.round(el.scrollLeft / Math.max(1, el.clientWidth))); }} className="feed-strip" style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', borderRadius: 4 }}>
+          {p.pages.map((pg: V) => (
+            <div key={pg.key} onClick={() => onTap(pg)} style={{ flex: '0 0 100%', scrollSnapAlign: 'center', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '18px 0', background: 'rgba(var(--ink-rgb),.045)', cursor: 'pointer', touchAction: 'manipulation' }}>
+              <img src={pg.src} alt={`Page ${pg.n} of ${p.name}`} loading="lazy" draggable={false} style={{ display: 'block', width: 'auto', height: 'auto', maxWidth: '86%', maxHeight: 'min(68vh, 620px)', aspectRatio: p.ar, objectFit: 'cover', background: '#FBF9F4', borderRadius: '1px 3px 3px 1px', boxShadow: '0 8px 24px rgba(20,20,30,.16), 0 1px 2px rgba(20,20,30,.1)', userSelect: 'none' }} />
+            </div>
+          ))}
+        </div>
+        {burst > 0 && <span key={burst} aria-hidden="true" className="feed-burst" style={{ position: 'absolute', left: '50%', top: '50%', color: MARK, pointerEvents: 'none' }}><svg width="84" height="84" viewBox="0 0 24 24" fill="currentColor"><path d={HEART} /></svg></span>}
+        {arrow(-1, at > 0)}{arrow(1, at < n - 1)}
+        {n > 1 && <span style={{ position: 'absolute', top: 10, right: 10, padding: '3px 9px', borderRadius: 11, background: 'rgba(34,35,32,.7)', color: '#F6F2E8', font: `500 11.5px ${SANS}` }}>{at + 1}/{n}</span>}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button onClick={p.like} aria-pressed={p.liked} aria-label={p.liked ? 'Unlike' : 'Like'} title="Like" style={{ ...actBtn, color: p.liked ? MARK : INK }}>{feedIcon(HEART, p.liked ? 'currentColor' : 'none')}</button>
+        <button onClick={cur?.comment} aria-label="Comment on this page" title="Comment" style={actBtn}>{feedIcon('M4.5 18.5l1.2-3.6A7.5 7.5 0 1 1 9 18.3z')}</button>
+        <button onClick={p.share} aria-label="Share" title="Share" style={actBtn}>{feedIcon('M12 15V4m0 0L8 8m4-4l4 4M5 13v6h14v-6')}</button>
+        {n > 1 && <span style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: 5 }}>{p.pages.map((pg: V, i: number) => <span key={pg.key} style={{ width: 6, height: 6, borderRadius: 3, background: i === at ? MARK : 'rgba(var(--ink-rgb),.2)' }} />)}</span>}
+        <span style={{ flex: n > 1 ? undefined : 1 }} />
+        <button onClick={p.save} aria-pressed={p.saved} aria-label={p.saved ? 'Saved' : 'Save'} title={p.saved ? 'Saved' : 'Save'} style={actBtn}>{feedIcon('M6.5 4h11v16L12 16.2 6.5 20z', p.saved ? 'currentColor' : 'none')}</button>
+      </div>
+      {cur?.cap && <p style={{ margin: '-4px 0 0', fontSize: 14, lineHeight: 1.5 }}><b style={{ fontWeight: 600 }}>{p.artist}</b> {cur.cap}</p>}
+      <button onClick={cur?.open} className={hoverText} style={{ alignSelf: 'flex-start', margin: '-6px 0 0', padding: 0, border: 'none', background: 'none', color: MUTED, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Open the sketchbook at page {cur?.n} →</button>
+    </article>
+  );
+}
+
+/** The Following tab: a feed, like a social app's, of what the artists you follow have added. */
 function FollowingFeed({ v }: { v: V }) {
   return (
     <div style={screen('auto')}>
@@ -140,24 +198,13 @@ function FollowingFeed({ v }: { v: V }) {
           : !v.exFollowList.length ? (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, textAlign: 'center', padding: '40px 0', color: MUTED, fontSize: 14 }}>
               <span style={serif(34)}>{v.exFeedNoFollows ? <>Follow some <em style={{ color: MARK }}>artists.</em></> : <>Nothing new <em style={{ color: MARK }}>yet.</em></>}</span>
-              <span style={{ maxWidth: 380, lineHeight: 1.5 }}>{v.exFeedNoFollows ? 'Follow artists from their profiles, and their sketchbooks show up here.' : 'When the artists you follow add pages, they show up here.'}</span>
+              <span style={{ maxWidth: 380, lineHeight: 1.5 }}>{v.exFeedNoFollows ? 'Follow artists from their profiles, and their new pages show up here.' : 'When the artists you follow add pages, they show up here.'}</span>
               <button onClick={v.exTabAll} className={hoverLine} style={underlineBtn(14)}>Explore everyone’s sketchbooks ↗</button>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${v.exCols},minmax(0,1fr))`, gap: '44px 18px', width: '100%', alignItems: 'end' }}>
-              {v.exFollowList.map((xb: V) => (
-                <div key={xb.key} onClick={xb.open} style={{ display: 'flex', flexDirection: 'column', gap: 20, cursor: 'pointer', minWidth: 0 }}>
-                  <div className={hover('transform:translateY(-8px)')} style={{ position: 'relative', aspectRatio: xb.ar, width: `calc(${xb.wp}% - 7px)`, marginRight: 7, transition: 'transform .35s cubic-bezier(.2,.8,.2,1)' }}>
-                    <ClosedBook bg={xb.bg} board={xb.color} label={xb.showLabel ? xb.name : null} />
-                    {xb.mature && <span style={matureBadge}>Mature</span>}
-                    {xb.badge && <span style={{ position: 'absolute', left: 10, top: 10, padding: '4px 9px', borderRadius: 11, background: MARK, color: '#F6F2E8', font: `600 10px/1.2 ${SANS}`, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,.2)' }}>{xb.badge}</span>}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-                    <span style={{ ...serif(22, 1.1, 'normal'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{xb.name}</span>
-                    <span style={{ fontSize: 13, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>by <span onClick={xb.openArtist} className={hoverText} style={{ color: INK, cursor: 'pointer', borderBottom: '1px solid rgba(var(--ink-rgb),.3)' }}>{xb.artist}</span>{xb.verified && <Verified size={12} />} · {xb.when}</span>
-                  </div>
-                </div>
-              ))}
+            <div style={{ width: '100%', maxWidth: 560, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 44 }}>
+              {v.exFollowList.map((p: V) => <FeedPost key={p.key} p={p} />)}
+              <div style={{ padding: '8px 0 20px', textAlign: 'center', fontSize: 13, color: MUTED }}>You’re all caught up. <button onClick={v.exTabAll} className={hoverLine} style={underlineBtn(13)}>Explore everyone</button></div>
             </div>
           )}
         <SiteFooter v={v} />

@@ -551,6 +551,8 @@ export default class App extends Component<object, State> {
     const bookId = s.mode === 'other' ? (o?.guide ? undefined : o?.id) : s.mode === 'mine' && mb && !mb.id.startsWith('local') ? mb.id : undefined;
     if (bookId) want.set('bc:' + bookId, () => api.watch(['bookCounts', bookId], d => this.setState(st => ({ counts: { ...st.counts, ['b:' + bookId]: Math.max(0, d?.likes || 0) } }))));
     if (bookId) want.set('cm:' + bookId, () => api.watchComments(bookId, list => this.setState({ comments: { bookId, list } })));
+    // The Following feed: whether you've liked each post's sketchbook, for its heart.
+    if (me && s.mode === 'explore' && s.exTab === 'following') for (const b of (s.followFeed || []).slice(0, 40)) want.set(`lk:${b.id}:${me}`, () => api.watch(['books', b.id, 'likes', me], d => this.setState(st => ({ liked: { ...st.liked, [b.id]: !!d } }))));
     if (bookId && me && s.mode === 'other') want.set(`lk:${bookId}:${me}`, () => api.watch(['books', bookId, 'likes', me], d => this.setState(st => ({ liked: { ...st.liked, [bookId]: !!d } }))));
     const pu = s.mode === 'profile' ? s.profileOf?.uid || me : undefined;
     for (const u of new Set([pu, me])) if (u) {
@@ -1698,7 +1700,7 @@ export default class App extends Component<object, State> {
       cmPost: post, cmBusy: !!s.cmBusy, cmErr: s.cmErr || '', cmLeft: api.COMMENT_MAX - (s.cmDraft || '').length,
     };
   }
-  /** Explore's Following tab: each followed artist's recently updated sketchbooks, newest first, with their latest pages. */
+  /** Explore's Following tab: a feed of posts, one per followed artist's recently updated sketchbook, newest first. */
   feedVals(): V {
     const s = this.state, on = !!s.acct && s.exTab === 'following';
     const setTab = (t: 'all' | 'following') => { this.setState({ exTab: t }); if (t === 'following' && !s.followFeed) this.loadFollowFeed(); };
@@ -1707,19 +1709,26 @@ export default class App extends Component<object, State> {
     return {
       exTabs: !!s.acct, exFollowing: on, exTabAll: () => setTab('all'), exTabFollowing: () => setTab('following'),
       exFeedLoading: on && !s.followFeed, exFeedNoFollows: on && !(s.follows || []).length,
-      // The grid (like Explore): each followed artist's sketchbooks, newest first, with what's new since you last
-      // opened it on this device (+N pages), or New if it changed in the last three days and you haven't opened it.
+      // A feed, like a social app's: one post per sketchbook, newest first, showing what's new since you last opened
+      // it on this device (or its latest pages), with like, comment, save and share on the post itself.
       exFollowList: on ? (() => {
         let seen: Record<string, number> = {}; try { seen = JSON.parse(localStorage.getItem('fl-seen') || '{}'); } catch { /* none kept */ }
         return feed.map(b => {
-          const n = b.images.length, was = seen[b.id], add = was != null ? n - was : 0;
+          const n = b.images.length, was = seen[b.id], add = was != null ? Math.max(0, n - was) : 0, fresh = was == null && Date.now() - (b.updatedAt || 0) < 3 * 86_400_000;
+          const from = Math.max(0, n - Math.min(add || 4, 8)), av = b.ownerId ? this.avatarOf(b.ownerId) : null;
+          const markSeen = () => { try { localStorage.setItem('fl-seen', JSON.stringify({ ...seen, [b.id]: n })); } catch { /* fine */ } };
+          const openAt = (i: number, comments = false) => { markSeen(); this.openOtherBook(b, 'explore'); setTimeout(() => { if (comments) this.setState({ cmOpen: true, cmAll: false }); if (i > 0) this.goToPage(i); }, 80); };
           return {
-            key: b.id, name: b.name, artist: b.artist, verified: this.isTeam(b.ownerId), mature: !!b.mature, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg,
-            badge: add > 0 ? `+${add} ${add === 1 ? 'page' : 'pages'}` : was == null && Date.now() - (b.updatedAt || 0) < 3 * 86_400_000 ? 'New' : '',
-            when: ago(b.updatedAt || 0), count: `${n} ${n === 1 ? 'page' : 'pages'}`,
-            ar: String(this.shapeOf(b).a), wp: String(GRID_WIDTH[b.shape] || 78),
-            open: () => { try { localStorage.setItem('fl-seen', JSON.stringify({ ...seen, [b.id]: n })); } catch { /* fine */ } this.openOtherBook(b, 'explore'); },
-            openArtist: (e: MouseEvent) => { e.stopPropagation(); this.openProfile(this.whoOf(b)); },
+            key: b.id, name: b.name, artist: b.artist, verified: this.isTeam(b.ownerId), mature: !!b.mature,
+            av: av ? avatarBg(av) : '', init: (b.artist || '?').trim().charAt(0).toUpperCase(),
+            what: add > 0 ? `added ${add} ${add === 1 ? 'page' : 'pages'} to` : fresh ? 'shared' : 'updated', isNew: add > 0 || fresh,
+            when: ago(b.updatedAt || 0), count: `${n} ${n === 1 ? 'page' : 'pages'}`, ar: String(this.shapeOf(b).a),
+            pages: b.images.slice(from).map((u, j) => ({ key: u, src: u, cap: b.notes?.[u]?.c || '', n: from + j + 1, open: () => openAt(from + j), comment: () => openAt(from + j, true) })),
+            liked: !!s.liked?.[b.id], like: () => this.toggleLike(b), likeOn: () => { if (!s.liked?.[b.id]) this.toggleLike(b); },
+            saved: this.isSaved(b.id), save: () => this.toggleSave(b),
+            share: () => this.share(`/@${b.handle}/${b.id}`, b.name),
+            open: () => openAt(0),
+            openArtist: () => this.openProfile(this.whoOf(b)),
           };
         });
       })() : [],
