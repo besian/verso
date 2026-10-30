@@ -86,6 +86,15 @@ export const GUIDE_BOOK: OtherBook = {
 /** A historical, public-domain sketchbook featured on Explore (archive/{bookId}). */
 export interface ArchiveEntry { bookId: string; artist: string; years: string; source: string; url: string; note: string; at: number }
 
+/** The stamps you can press on a sketchbook in the Following feed: each is a like, with a word of encouragement
+ *  (what the chip says, then what's inked on the page). */
+export const STAMPS: { key: string; chip: string; ink: string }[] = [
+  { key: 'love', chip: 'Loved', ink: 'Loved' },
+  { key: 'going', chip: 'Keep going', ink: 'Keep going' },
+  { key: 'colour', chip: 'Love the colour', ink: 'The colour!' },
+  { key: 'trying', chip: 'Trying this', ink: 'Trying this' },
+];
+
 /** Cover width (% of its grid cell) per shape, so books in a row read as a shelf. */
 export const GRID_WIDTH: Record<ShapeKey, number> = { pocket: 64, portrait: 78, square: 88, landscape: 100, panorama: 100 };
 

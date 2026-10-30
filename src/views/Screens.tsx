@@ -126,85 +126,100 @@ function ExploreTabs({ v }: { v: V }) {
   return <div role="tablist" aria-label="Explore" style={{ display: 'flex', gap: 24 }}>{tab(!v.exFollowing, 'Everyone', v.exTabAll)}{tab(v.exFollowing, 'Following', v.exTabFollowing)}</div>;
 }
 
-const feedIcon = (d: string, fill = 'none') => <svg width="24" height="24" viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
-const HEART = 'M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z';
-const actBtn: CSSProperties = { width: 40, height: 40, margin: '0 -4px', padding: 0, border: 'none', background: 'none', color: INK, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+const HAND = "'Caveat', 'Segoe Print', cursive";
+const deskLink = (on = false): CSSProperties => ({ padding: '6px 0', border: 'none', background: 'none', color: on ? INK : MUTED, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' });
 
-/** One post in the Following feed: who and what, the pages side by side to swipe through, then like, comment, save
- *  and share. Tap a page to open the sketchbook there; double-tap it to like. */
-function FeedPost({ p }: { p: V }) {
-  const strip = useRef<HTMLDivElement>(null), [at, setAt] = useState(0), [burst, setBurst] = useState(0);
-  const tap = useRef<{ t: number; timer?: ReturnType<typeof setTimeout> }>({ t: 0 });
-  const n = p.pages.length;
-  const go = (d: number) => { const el = strip.current; if (el) el.scrollTo({ left: (at + d) * el.clientWidth, behavior: 'smooth' }); };
-  const onTap = (pg: V) => {
-    const now = Date.now(), r = tap.current; clearTimeout(r.timer);
-    if (now - r.t < 280) { r.t = 0; p.likeOn(); setBurst(k => k + 1); return; }
-    r.t = now; r.timer = setTimeout(() => { r.t = 0; pg.open(); }, 280);
-  };
-  const arrow = (d: number, on: boolean) => on && (
-    <button onClick={() => go(d)} aria-label={d < 0 ? 'Previous page' : 'Next page'} className="feed-arrow" style={{ position: 'absolute', top: '50%', [d < 0 ? 'left' : 'right']: 10, transform: 'translateY(-50%)', width: 32, height: 32, padding: 0, border: 'none', borderRadius: '50%', background: 'rgba(244,241,232,.92)', color: INK, boxShadow: '0 2px 8px rgba(20,20,30,.18)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', font: `500 16px ${SANS}` }}>{d < 0 ? '‹' : '›'}</button>
-  );
-  const cur = p.pages[Math.min(at, n - 1)];
+/** One sketchbook on the desk: lying open at its new pages, slightly askew, with a label in the artist's hand.
+ *  Turn its pages here (the arrows, or a swipe); a stamp you press is inked on the page; a tap opens the book there. */
+function DeskPost({ p }: { p: V }) {
+  const [at, setAt] = useState(0), [dir, setDir] = useState(0), drag = useRef<number | null>(null), swiped = useRef(false);
+  const n = p.spreads.length, sp = p.spreads[Math.min(at, n - 1)], pages: V[] = sp.pages;
+  const turn = (d: number) => { const to = at + d; if (to < 0 || to >= n) return; setDir(d); setAt(to); };
+  const range = pages.length > 1 ? `p. ${pages[0].n}–${pages[1].n}` : `p. ${pages[0].n}`, cap = pages.find(x => x.cap)?.cap;
   return (
-    <article style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <article style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-        <button onClick={p.openArtist} aria-label={`${p.artist}’s profile`} style={{ width: 38, height: 38, flexShrink: 0, padding: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.15)', background: p.av || INK, color: PAPER, font: `500 15px ${SANS}`, cursor: 'pointer' }}>{p.av ? '' : p.init}</button>
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2, fontSize: 13.5, lineHeight: 1.3 }}>
-          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            <button onClick={p.openArtist} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `600 13.5px ${SANS}`, cursor: 'pointer' }}>{p.artist}</button>
-            {p.verified && <Verified size={13} />}<span style={{ color: MUTED }}> {p.what} </span>
-            <button onClick={p.open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `italic 400 15px ${SERIF}`, cursor: 'pointer' }}>{p.name}</button>
-          </span>
-          <span style={{ fontSize: 12, color: MUTED }}>{p.isNew && <span style={{ color: MARK, fontWeight: 600 }}>New · </span>}{p.when} · {p.count}{p.mature && ' · Mature'}</span>
-        </div>
+        <button onClick={p.openArtist} aria-label={`${p.artist}’s profile`} style={{ width: 34, height: 34, flexShrink: 0, padding: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.15)', background: p.av || INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer' }}>{p.av ? '' : p.init}</button>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, lineHeight: 1.4, color: MUTED }}>
+          <button onClick={p.openArtist} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `600 13.5px ${SANS}`, cursor: 'pointer' }}>{p.artist}</button>{p.verified && <Verified size={13} />}
+          {' '}{p.what[0]}{' '}<button onClick={p.open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `italic 400 16px ${SERIF}`, cursor: 'pointer' }}>{p.name}</button>{p.what[1] && ' ' + p.what[1]}
+          <span style={{ whiteSpace: 'nowrap' }}> · {p.when}{p.mature && ' · Mature'}</span>
+        </span>
       </header>
-      <div className="feed-media" style={{ position: 'relative' }}>
-        <div ref={strip} onScroll={e => { const el = e.currentTarget; setAt(Math.round(el.scrollLeft / Math.max(1, el.clientWidth))); }} className="feed-strip" style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', borderRadius: 4 }}>
-          {p.pages.map((pg: V) => (
-            <div key={pg.key} onClick={() => onTap(pg)} style={{ flex: '0 0 100%', scrollSnapAlign: 'center', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '18px 0', background: 'rgba(var(--ink-rgb),.045)', cursor: 'pointer', touchAction: 'manipulation' }}>
-              <img src={pg.src} alt={`Page ${pg.n} of ${p.name}`} loading="lazy" draggable={false} style={{ display: 'block', width: 'auto', height: 'auto', maxWidth: '86%', maxHeight: 'min(68vh, 620px)', aspectRatio: p.ar, objectFit: 'cover', background: '#FBF9F4', borderRadius: '1px 3px 3px 1px', boxShadow: '0 8px 24px rgba(20,20,30,.16), 0 1px 2px rgba(20,20,30,.1)', userSelect: 'none' }} />
+      {/* The book, open on the desk. */}
+      <div onPointerDown={e => { drag.current = e.clientX; swiped.current = false; }} onPointerUp={e => { const x = drag.current; drag.current = null; if (x != null && Math.abs(e.clientX - x) > 40) { swiped.current = true; turn(e.clientX < x ? 1 : -1); } }}
+        onClickCapture={e => { if (swiped.current) { e.stopPropagation(); swiped.current = false; } }}
+        style={{ position: 'relative', alignSelf: 'center', width: p.two ? '100%' : 'min(100%, 420px)', transform: `rotate(${p.tilt}deg)`, touchAction: 'pan-y' }}>
+        <span style={{ position: 'absolute', top: -13, left: 16, zIndex: 3, padding: '2px 10px 4px', background: '#FBF9F4', color: '#222320', font: `500 21px/1 ${HAND}`, boxShadow: '0 2px 6px rgba(20,20,30,.16)', transform: 'rotate(-3deg)', whiteSpace: 'nowrap' }}>{p.first} · {range}</span>
+        <div key={sp.key} className={dir > 0 ? 'desk-in-next' : dir < 0 ? 'desk-in-prev' : undefined} style={{ position: 'relative', display: 'grid', gridTemplateColumns: p.two ? '1fr 1fr' : '1fr', background: '#FBF9F4', borderRadius: '2px 4px 4px 2px', boxShadow: '0 14px 30px rgba(20,20,30,.2), 0 1px 3px rgba(20,20,30,.14)' }}>
+          {(p.two ? [pages[0], pages[1]] : pages).map((pg: V | undefined, i: number) => (
+            <div key={pg?.key || 'blank'} onClick={pg?.open} style={{ aspectRatio: p.ar, padding: 7, cursor: pg ? 'pointer' : 'default', overflow: 'hidden' }}>
+              {pg && <img src={pg.src} alt={`Page ${pg.n} of ${p.name}`} loading="lazy" draggable={false} style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', userSelect: 'none' }} />}
+              {p.two && i === 0 && <span aria-hidden="true" style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: 26, transform: 'translateX(-50%)', pointerEvents: 'none', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,.1) 42%, rgba(0,0,0,.17) 50%, rgba(0,0,0,.1) 58%, transparent)' }} />}
             </div>
           ))}
         </div>
-        {burst > 0 && <span key={burst} aria-hidden="true" className="feed-burst" style={{ position: 'absolute', left: '50%', top: '50%', color: MARK, pointerEvents: 'none' }}><svg width="84" height="84" viewBox="0 0 24 24" fill="currentColor"><path d={HEART} /></svg></span>}
-        {arrow(-1, at > 0)}{arrow(1, at < n - 1)}
-        {n > 1 && <span style={{ position: 'absolute', top: 10, right: 10, padding: '3px 9px', borderRadius: 11, background: 'rgba(34,35,32,.7)', color: '#F6F2E8', font: `500 11.5px ${SANS}` }}>{at + 1}/{n}</span>}
+        {cap && <span style={{ position: 'absolute', right: -6, top: '22%', zIndex: 2, maxWidth: 150, padding: '6px 9px', background: '#FFF6C4', color: '#3A3A30', font: `500 18px/1.05 ${HAND}`, boxShadow: '0 3px 8px rgba(20,20,30,.16)', transform: 'rotate(4deg)' }}>“{cap}” — {p.first}</span>}
+        {p.stamp && (
+          <span key={p.stamp} aria-label={`You stamped it: ${p.stampInk}`} className="desk-stamp" style={{ position: 'absolute', right: 14, bottom: 12, zIndex: 2, width: 66, height: 66, borderRadius: '50%', border: `2px solid ${MARK}`, color: MARK, background: 'rgba(251,249,244,.55)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', pointerEvents: 'none' }}>
+            <span style={{ font: `600 9.5px/1.1 ${SANS}`, letterSpacing: '.08em', textTransform: 'uppercase', padding: '0 6px' }}>{p.stampInk}</span>
+            <span style={{ font: `500 7.5px/1.4 ${SANS}`, letterSpacing: '.14em', textTransform: 'uppercase', opacity: .8 }}>by you</span>
+          </span>
+        )}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={p.like} aria-pressed={p.liked} aria-label={p.liked ? 'Unlike' : 'Like'} title="Like" style={{ ...actBtn, color: p.liked ? MARK : INK }}>{feedIcon(HEART, p.liked ? 'currentColor' : 'none')}</button>
-        <button onClick={cur?.comment} aria-label="Comment on this page" title="Comment" style={actBtn}>{feedIcon('M4.5 18.5l1.2-3.6A7.5 7.5 0 1 1 9 18.3z')}</button>
-        <button onClick={p.share} aria-label="Share" title="Share" style={actBtn}>{feedIcon('M12 15V4m0 0L8 8m4-4l4 4M5 13v6h14v-6')}</button>
-        {n > 1 && <span style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: 5 }}>{p.pages.map((pg: V, i: number) => <span key={pg.key} style={{ width: 6, height: 6, borderRadius: 3, background: i === at ? MARK : 'rgba(var(--ink-rgb),.2)' }} />)}</span>}
-        <span style={{ flex: n > 1 ? undefined : 1 }} />
-        <button onClick={p.save} aria-pressed={p.saved} aria-label={p.saved ? 'Saved' : 'Save'} title={p.saved ? 'Saved' : 'Save'} style={actBtn}>{feedIcon('M6.5 4h11v16L12 16.2 6.5 20z', p.saved ? 'currentColor' : 'none')}</button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          {n > 1 && <>
+            <button onClick={() => turn(-1)} disabled={at === 0} aria-label="Turn back" style={{ ...deskLink(), opacity: at === 0 ? .35 : 1, cursor: at === 0 ? 'default' : 'pointer' }}>‹</button>
+            <button onClick={() => turn(1)} disabled={at === n - 1} className={at === n - 1 ? undefined : hoverText} style={{ ...deskLink(true), marginLeft: -8, opacity: at === n - 1 ? .35 : 1, cursor: at === n - 1 ? 'default' : 'pointer' }}>Turn the page ›</button>
+          </>}
+          <button onClick={() => p.note(pages[0].n - 1)} className={hoverText} style={deskLink()}>Leave a note</button>
+          <span style={{ flex: 1 }} />
+          <button onClick={p.save} aria-pressed={p.saved} className={hoverText} style={deskLink(p.saved)}>{p.saved ? 'Kept ✓' : 'Keep'}</button>
+          <button onClick={p.share} className={hoverText} style={deskLink()}>Share</button>
+        </div>
+        <div role="group" aria-label="Stamp it" className="desk-chips" style={{ display: 'flex', gap: 5, overflowX: 'auto', margin: '0 -16px', padding: '0 16px' }}>
+          {p.stamps.map((x: V) => (
+            <button key={x.key} onClick={x.press} aria-pressed={x.on} className={x.on ? undefined : hover('border-color:rgba(var(--ink-rgb),.55)')} style={{ height: 32, padding: '0 clamp(9px, 2.6vw, 12px)', borderRadius: 16, border: `1px solid ${x.on ? MARK : 'rgba(var(--ink-rgb),.2)'}`, background: x.on ? MARK : 'rgba(var(--paper-rgb),.7)', color: x.on ? '#F6F2E8' : INK, font: `500 clamp(11.5px, 3.1vw, 12.5px) ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>{x.label}</button>
+          ))}
+        </div>
       </div>
-      {cur?.cap && <p style={{ margin: '-4px 0 0', fontSize: 14, lineHeight: 1.5 }}><b style={{ fontWeight: 600 }}>{p.artist}</b> {cur.cap}</p>}
-      <button onClick={cur?.open} className={hoverText} style={{ alignSelf: 'flex-start', margin: '-6px 0 0', padding: 0, border: 'none', background: 'none', color: MUTED, font: `500 13px ${SANS}`, cursor: 'pointer' }}>Open the sketchbook at page {cur?.n} →</button>
     </article>
   );
 }
 
-/** The Following tab: a feed, like a social app's, of what the artists you follow have added. */
+/** The Following tab: the desk. The sketchbooks of the artists you follow lie open at their new pages, day by day,
+ *  like a shared diary of what people made. */
 function FollowingFeed({ v }: { v: V }) {
   return (
-    <div style={screen('auto')}>
+    <div style={{ ...screen('auto'), background: `linear-gradient(rgba(var(--ink-rgb),.045), rgba(var(--ink-rgb),.045)), ${PAPER}` }}>
       <div style={{ minHeight: '100%', boxSizing: 'border-box', padding: `${v.exPadT}px ${v.exPadX}px 28px`, display: 'flex', flexDirection: 'column', gap: v.exGap }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', paddingBottom: 18, borderBottom: `1px solid ${INK}` }}>
           <h1 style={{ margin: 0, ...serif(v.exH1, .95, '-.02em') }}><em>Following</em></h1>
           <ExploreTabs v={v} />
         </div>
         {v.exFeedLoading ? <div style={{ padding: '40px 0', textAlign: 'center', color: MUTED, fontSize: 14 }}>Opening sketchbooks…</div>
-          : !v.exFollowList.length ? (
+          : !v.exFeedDays.length ? (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, textAlign: 'center', padding: '40px 0', color: MUTED, fontSize: 14 }}>
               <span style={serif(34)}>{v.exFeedNoFollows ? <>Follow some <em style={{ color: MARK }}>artists.</em></> : <>Nothing new <em style={{ color: MARK }}>yet.</em></>}</span>
-              <span style={{ maxWidth: 380, lineHeight: 1.5 }}>{v.exFeedNoFollows ? 'Follow artists from their profiles, and their new pages show up here.' : 'When the artists you follow add pages, they show up here.'}</span>
+              <span style={{ maxWidth: 380, lineHeight: 1.5 }}>{v.exFeedNoFollows ? 'Follow artists from their profiles, and their sketchbooks land here, open at their new pages.' : 'When the artists you follow add pages, their sketchbooks land here.'}</span>
               <button onClick={v.exTabAll} className={hoverLine} style={underlineBtn(14)}>Explore everyone’s sketchbooks ↗</button>
             </div>
           ) : (
-            <div style={{ width: '100%', maxWidth: 560, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 44 }}>
-              {v.exFollowList.map((p: V) => <FeedPost key={p.key} p={p} />)}
-              <div style={{ padding: '8px 0 20px', textAlign: 'center', fontSize: 13, color: MUTED }}>You’re all caught up. <button onClick={v.exTabAll} className={hoverLine} style={underlineBtn(13)}>Explore everyone</button></div>
+            <div style={{ width: '100%', maxWidth: 640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 48 }}>
+              {v.exFeedDays.map((d: V) => (
+                <section key={d.key} aria-label={d.name} style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, paddingBottom: 8, borderBottom: `1px solid ${INK}` }}>
+                    <h2 style={{ margin: 0, ...serif(30, 1) }}>{d.name}{d.num && <> <em style={{ color: MARK }}>{d.num}</em></>}</h2>
+                    {d.drew && <span style={label()}>{d.drew}</span>}
+                  </div>
+                  {d.posts.map((p: V) => <DeskPost key={p.key} p={p} />)}
+                </section>
+              ))}
+              <div style={{ padding: '4px 0 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                <span style={{ ...serif(20, 1.2), fontStyle: 'italic', color: MUTED }}>That’s everything on your desk.</span>
+                <button onClick={v.exTabAll} className={hoverLine} style={underlineBtn(13)}>Explore everyone’s sketchbooks</button>
+              </div>
             </div>
           )}
         <SiteFooter v={v} />

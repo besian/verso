@@ -664,13 +664,15 @@ function notifyOnce(to: string, id: string, data: object) {
 }
 
 /** Likes or unlikes a sketchbook: the like itself, the book's and owner's like counts, and (the first time) a notification. */
-export async function setLike(me: Account, book: { id: string; ownerId: string; name: string }, on: boolean) {
+/** Likes a sketchbook (or takes the like back). `stamp` is the stamp pressed in the Following feed (see STAMPS),
+ *  kept with the like and named in the artist's notification; a plain like has none. */
+export async function setLike(me: Account, book: { id: string; ownerId: string; name: string }, on: boolean, stamp?: { key: string; label: string }) {
   const { db: d } = need(), batch = writeBatch(d), r = doc(d, 'books', book.id, 'likes', me.uid), by = on ? 1 : -1;
-  if (on) batch.set(r, { at: Date.now() }); else batch.delete(r);
+  if (on) batch.set(r, { at: Date.now(), ...(stamp ? { r: stamp.key } : {}) }); else batch.delete(r);
   batch.set(doc(d, 'bookCounts', book.id), { likes: increment(by) }, { merge: true });
   batch.set(doc(d, 'userCounts', book.ownerId), { likes: increment(by), likeBook: book.id }, { merge: true });
   await batch.commit();
-  if (on && book.ownerId !== me.uid) notifyOnce(book.ownerId, `like_${book.id}_${me.uid}`, note(me, 'like', book));
+  if (on && book.ownerId !== me.uid) notifyOnce(book.ownerId, `like_${book.id}_${me.uid}`, { ...note(me, 'like', book), ...(stamp ? { text: stamp.label } : {}) });
 }
 
 // ---------- stroke replays ----------

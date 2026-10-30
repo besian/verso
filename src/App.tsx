@@ -1,7 +1,7 @@
 import { Component, Suspense, createRef, lazy } from 'react';
 import { flushSync } from 'react-dom';
 import type { ChangeEvent, DragEvent, MouseEvent, PointerEvent, ReactNode, WheelEvent } from 'react';
-import { CONFIG, GUIDE_BOOK, GRID_WIDTH, MAX_MEDIUMS, MAX_TAGS, MEDIUMS, PALETTE, SHAPES, mediumKey, tagSlug } from './data';
+import { CONFIG, GUIDE_BOOK, GRID_WIDTH, STAMPS, MAX_MEDIUMS, MAX_TAGS, MEDIUMS, PALETTE, SHAPES, mediumKey, tagSlug } from './data';
 import type { Account, ArchiveEntry, Book, OtherBook, PageNote, Shape, ShapeKey } from './data';
 import * as api from './backend';
 import type { AuthUser, Billing, BillingDetails, BookDoc, Chat, Msg, Notif, Person, Report, Saved, Stats, ViewSource } from './backend';
@@ -135,7 +135,7 @@ interface State {
   community?: OtherBook[]; people?: Person[];
   saved?: Saved[]; blocked?: string[]; followFeed?: OtherBook[]; followPeople?: Person[]; pfTab?: 'books' | 'saved' | 'following';
   toast?: string; more?: 'book' | 'profile' | 'chat' | null;
-  counts?: Record<string, number>; liked?: Record<string, boolean>; notifs?: Notif[]; notifOpen?: boolean;
+  counts?: Record<string, number>; liked?: Record<string, boolean>; stamp?: Record<string, string>; notifs?: Notif[]; notifOpen?: boolean;
   reportFor?: { kind: 'book' | 'user' | 'message' | 'comment'; targetId: string; ownerId: string; label: string; quote?: string } | null; reportReason?: string; reportNote?: string; reportBusy?: boolean; reportErr?: string;
   p: number; zoom: number; managing: boolean;
   vw: number; vh: number; sw?: number; sh?: number;
@@ -552,7 +552,7 @@ export default class App extends Component<object, State> {
     if (bookId) want.set('bc:' + bookId, () => api.watch(['bookCounts', bookId], d => this.setState(st => ({ counts: { ...st.counts, ['b:' + bookId]: Math.max(0, d?.likes || 0) } }))));
     if (bookId) want.set('cm:' + bookId, () => api.watchComments(bookId, list => this.setState({ comments: { bookId, list } })));
     // The Following feed: whether you've liked each post's sketchbook, for its heart.
-    if (me && s.mode === 'explore' && s.exTab === 'following') for (const b of (s.followFeed || []).slice(0, 40)) want.set(`lk:${b.id}:${me}`, () => api.watch(['books', b.id, 'likes', me], d => this.setState(st => ({ liked: { ...st.liked, [b.id]: !!d } }))));
+    if (me && s.mode === 'explore' && s.exTab === 'following') for (const b of (s.followFeed || []).slice(0, 40)) want.set(`lk:${b.id}:${me}`, () => api.watch(['books', b.id, 'likes', me], d => this.setState(st => ({ liked: { ...st.liked, [b.id]: !!d }, stamp: { ...st.stamp, [b.id]: d ? String(d.r || 'love') : '' } }))));
     if (bookId && me && s.mode === 'other') want.set(`lk:${bookId}:${me}`, () => api.watch(['books', bookId, 'likes', me], d => this.setState(st => ({ liked: { ...st.liked, [bookId]: !!d } }))));
     const pu = s.mode === 'profile' ? s.profileOf?.uid || me : undefined;
     for (const u of new Set([pu, me])) if (u) {
@@ -589,6 +589,17 @@ export default class App extends Component<object, State> {
     const on = !this.state.liked?.[o.id], key = 'b:' + o.id;
     this.setState(st => ({ liked: { ...st.liked, [o.id]: on }, counts: { ...st.counts, [key]: Math.max(0, (st.counts?.[key] || 0) + (on ? 1 : -1)) } }));
     api.setLike(a, { id: o.id, ownerId: o.ownerId, name: o.name }, on).catch(e => { console.error(e); this.toast('Couldn’t save that. Try again.'); this.setState(st => ({ liked: { ...st.liked, [o.id]: !on } })); });
+  }
+  /** Presses a stamp on a sketchbook (a like with a word of encouragement), swaps it for another, or takes it off. */
+  setStamp(o: OtherBook, key: string) {
+    const a = this.state.acct; if (!a) return this.openJoin();
+    if (!o.ownerId) return;
+    const cur = this.state.stamp?.[o.id] || (this.state.liked?.[o.id] ? 'love' : ''), st = STAMPS.find(x => x.key === key);
+    if (cur === key) { this.setState(x => ({ stamp: { ...x.stamp, [o.id]: '' } })); return this.toggleLike(o); }
+    this.setState(x => ({ liked: { ...x.liked, [o.id]: true }, stamp: { ...x.stamp, [o.id]: key }, counts: cur ? x.counts : { ...x.counts, ['b:' + o.id]: (x.counts?.['b:' + o.id] || 0) + 1 } }));
+    const book = { id: o.id, ownerId: o.ownerId, name: o.name }, stamp = st && { key, label: st.chip };
+    (cur ? api.setLike(a, book, false).then(() => api.setLike(a, book, true, stamp)) : api.setLike(a, book, true, stamp))
+      .catch(e => { console.error(e); this.toast('Couldn’t save that. Try again.'); this.setState(x => ({ stamp: { ...x.stamp, [o.id]: cur }, liked: { ...x.liked, [o.id]: !!cur } })); });
   }
   componentWillUnmount() {
     this.watches.forEach(stop => stop());
@@ -1700,7 +1711,7 @@ export default class App extends Component<object, State> {
       cmPost: post, cmBusy: !!s.cmBusy, cmErr: s.cmErr || '', cmLeft: api.COMMENT_MAX - (s.cmDraft || '').length,
     };
   }
-  /** Explore's Following tab: a feed of posts, one per followed artist's recently updated sketchbook, newest first. */
+  /** Explore's Following tab: the desk, the sketchbooks of the artists you follow lying open at their new pages, by day. */
   feedVals(): V {
     const s = this.state, on = !!s.acct && s.exTab === 'following';
     const setTab = (t: 'all' | 'following') => { this.setState({ exTab: t }); if (t === 'following' && !s.followFeed) this.loadFollowFeed(); };
@@ -1709,28 +1720,45 @@ export default class App extends Component<object, State> {
     return {
       exTabs: !!s.acct, exFollowing: on, exTabAll: () => setTab('all'), exTabFollowing: () => setTab('following'),
       exFeedLoading: on && !s.followFeed, exFeedNoFollows: on && !(s.follows || []).length,
-      // A feed, like a social app's: one post per sketchbook, newest first, showing what's new since you last opened
-      // it on this device (or its latest pages), with like, comment, save and share on the post itself.
-      exFollowList: on ? (() => {
+      // The desk: one post per sketchbook, newest first, each lying open at what's new since you last opened it on
+      // this device (or its latest pages), grouped by the day it changed.
+      exFeedDays: on ? (() => {
         let seen: Record<string, number> = {}; try { seen = JSON.parse(localStorage.getItem('fl-seen') || '{}'); } catch { /* none kept */ }
-        return feed.map(b => {
+        const day0 = new Date(); day0.setHours(0, 0, 0, 0);
+        const dayOf = (t: number) => {
+          const d = Math.floor((day0.getTime() - new Date(t).setHours(0, 0, 0, 0)) / 86_400_000), dt = new Date(t);
+          if (d <= 0) return { key: 'd0', name: 'Today', num: '' };
+          if (d === 1) return { key: 'd1', name: 'Yesterday', num: '' };
+          if (d < 7) return { key: 'd' + d, name: dt.toLocaleDateString('en-GB', { weekday: 'long' }), num: String(dt.getDate()) };
+          return { key: 'older', name: 'Earlier', num: '' };
+        };
+        const days: V[] = [];
+        feed.forEach((b, k) => {
           const n = b.images.length, was = seen[b.id], add = was != null ? Math.max(0, n - was) : 0, fresh = was == null && Date.now() - (b.updatedAt || 0) < 3 * 86_400_000;
-          const from = Math.max(0, n - Math.min(add || 4, 8)), av = b.ownerId ? this.avatarOf(b.ownerId) : null;
+          const from = Math.max(0, n - Math.min(add || 4, 8)), av = b.ownerId ? this.avatarOf(b.ownerId) : null, a = this.shapeOf(b).a, two = a < 1.1;
           const markSeen = () => { try { localStorage.setItem('fl-seen', JSON.stringify({ ...seen, [b.id]: n })); } catch { /* fine */ } };
           const openAt = (i: number, comments = false) => { markSeen(); this.openOtherBook(b, 'explore'); setTimeout(() => { if (comments) this.setState({ cmOpen: true, cmAll: false }); if (i > 0) this.goToPage(i); }, 80); };
-          return {
-            key: b.id, name: b.name, artist: b.artist, verified: this.isTeam(b.ownerId), mature: !!b.mature,
-            av: av ? avatarBg(av) : '', init: (b.artist || '?').trim().charAt(0).toUpperCase(),
-            what: add > 0 ? `added ${add} ${add === 1 ? 'page' : 'pages'} to` : fresh ? 'shared' : 'updated', isNew: add > 0 || fresh,
-            when: ago(b.updatedAt || 0), count: `${n} ${n === 1 ? 'page' : 'pages'}`, ar: String(this.shapeOf(b).a),
-            pages: b.images.slice(from).map((u, j) => ({ key: u, src: u, cap: b.notes?.[u]?.c || '', n: from + j + 1, open: () => openAt(from + j), comment: () => openAt(from + j, true) })),
-            liked: !!s.liked?.[b.id], like: () => this.toggleLike(b), likeOn: () => { if (!s.liked?.[b.id]) this.toggleLike(b); },
+          const page = (i: number) => ({ key: b.images[i], src: b.images[i], n: i + 1, cap: b.notes?.[b.images[i]]?.c || '', open: () => openAt(i) });
+          // Open at two pages side by side (portrait, square and pocket books) or one (landscape and panorama).
+          const spreads: V[] = [];
+          for (let i = from; i < n; i += two ? 2 : 1) spreads.push({ key: b.images[i], pages: two ? [page(i), ...(i + 1 < n ? [page(i + 1)] : [])] : [page(i)] });
+          const stamp = s.stamp?.[b.id] || (s.liked?.[b.id] ? 'love' : ''), first = (b.artist || '').split(' ')[0];
+          const post = {
+            key: b.id, name: b.name, artist: b.artist, first, verified: this.isTeam(b.ownerId), mature: !!b.mature, tilt: k % 2 ? 0.8 : -1,
+            av: av ? avatarBg(av) : '', init: (b.artist || '?').trim().charAt(0).toUpperCase(), when: ago(b.updatedAt || 0),
+            what: add > 0 ? ['left', `open at ${add} new ${add === 1 ? 'page' : 'pages'}`] : fresh ? ['opened a new sketchbook,', ''] : ['left', 'open'], isNew: add > 0 || fresh,
+            ar: String(a), two, spreads, total: n,
+            stamp, stampInk: STAMPS.find(x => x.key === stamp)?.ink || '',
+            stamps: STAMPS.map(x => ({ key: x.key, label: x.chip, on: stamp === x.key, press: () => this.setStamp(b, x.key) })),
             saved: this.isSaved(b.id), save: () => this.toggleSave(b),
             share: () => this.share(`/@${b.handle}/${b.id}`, b.name),
-            open: () => openAt(0),
+            note: (i: number) => openAt(i, true), open: () => openAt(from),
             openArtist: () => this.openProfile(this.whoOf(b)),
           };
+          const d = dayOf(b.updatedAt || 0), last = days[days.length - 1];
+          if (last?.key === d.key) { last.posts.push(post); last.people.add(b.ownerId); } else days.push({ ...d, posts: [post], people: new Set([b.ownerId]) });
         });
+        return days.map(d => ({ ...d, drew: d.key === 'older' ? '' : `${d.people.size} ${d.people.size === 1 ? 'artist' : 'artists'} drew` }));
       })() : [],
     };
   }
@@ -2137,7 +2165,7 @@ export default class App extends Component<object, State> {
       ntItems: list.map(n => ({
         key: n.id, unread: !n.read, when: ago(n.at), goal: n.type === 'goal',
         who: n.type === 'goal' ? '' : n.fromName || '@' + n.fromHandle,
-        text: n.type === 'comment' ? <>commented on page {n.page} of <i>{n.bookName}</i>: “{n.text}”</> : n.type === 'reply' ? <>replied to your comment on <i>{n.bookName}</i>: “{n.text}”</> : n.type === 'mention' ? <>mentioned you on <i>{n.bookName}</i>: “{n.text}”</> : n.type === 'commentLike' ? <>liked your comment on <i>{n.bookName}</i>: “{n.text}”</> : n.type === 'like' ? <>liked <i>{n.bookName}</i></> : n.type === 'invite' ? <>invited you to draw in <i>{n.bookName}</i></> : n.type === 'follow' ? 'started following you' : n.goal === 'likes100' ? `You reached ${GOAL} likes. Thank you for sharing your pages.` : `You reached ${GOAL} followers. People are following along.`,
+        text: n.type === 'comment' ? <>commented on page {n.page} of <i>{n.bookName}</i>: “{n.text}”</> : n.type === 'reply' ? <>replied to your comment on <i>{n.bookName}</i>: “{n.text}”</> : n.type === 'mention' ? <>mentioned you on <i>{n.bookName}</i>: “{n.text}”</> : n.type === 'commentLike' ? <>liked your comment on <i>{n.bookName}</i>: “{n.text}”</> : n.type === 'like' ? (n.text ? <>stamped “{n.text}” on <i>{n.bookName}</i></> : <>liked <i>{n.bookName}</i></>) : n.type === 'invite' ? <>invited you to draw in <i>{n.bookName}</i></> : n.type === 'follow' ? 'started following you' : n.goal === 'likes100' ? `You reached ${GOAL} likes. Thank you for sharing your pages.` : `You reached ${GOAL} followers. People are following along.`,
         open: () => {
           this.setState({ notifOpen: false });
           if (n.type === 'invite' && n.bookId) { const j = s.books.findIndex(b => b.id === n.bookId); if (j >= 0) { this.goMode('mine'); this.setState({ active: j, images: s.books[j].images }); } else this.setState({ notifOpen: true }); }
