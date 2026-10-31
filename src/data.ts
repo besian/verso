@@ -38,6 +38,8 @@ export interface Book {
   spreads?: Record<string, string>; fillers?: Record<string, true>;
   /** Labelled Mature (drawn nudity or sexual content); `matureLock` when the upload check did it. */
   mature?: boolean; matureLock?: boolean;
+  /** The cover without its elastic band (Details → Elastic band). */
+  noBand?: boolean;
   /** Full image URL → thumbnail URL. */
   thumbs?: Record<string, string>;
   /** Page image URL → caption and date written in its margin. */
@@ -69,6 +71,8 @@ export interface OtherBook {
   notes?: Record<string, PageNote>; mediums?: string[]; tags?: string[];
   /** Labelled Mature: drawn nudity or sexual content. */
   mature?: boolean; collabIds?: string[];
+  /** Drawn without the elastic band round the cover. */
+  noBand?: boolean;
   /** Pictures across two pages: left half → right half. */
   spreads?: Record<string, string>;
   /** Set for sketchbooks in From the archive: the historical artist and where the pages come from. */

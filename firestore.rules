@@ -330,7 +330,8 @@ service cloud.firestore {
       function valid(d) {
         return d.keys().hasOnly(['ownerId', 'ownerName', 'ownerHandle', 'name', 'color', 'shape', 'cover', 'pages', 'pageCount', 'createdAt', 'updatedAt', 'isPublic', 'linkOnly', 'thumbs', 'coverThumb',
             'captions', 'dates', 'mediums', 'tags', 'labels', 'hidden', 'collab', 'collabName', 'collabHandle', 'invite', 'inviteName', 'inviteHandle',
-            'collabs', 'invites', 'people', 'mature', 'matureLock', 'spreads', 'fillers'])
+            'collabs', 'invites', 'people', 'mature', 'matureLock', 'spreads', 'fillers', 'noBand'])
+          && (!('noBand' in d) || d.noBand is bool)
           && (!('isPublic' in d) || d.isPublic is bool)
           && (!('thumbs' in d) || (d.thumbs is list && d.thumbs.size() <= 1000))
           && (!('captions' in d) || (d.captions is list && d.captions.size() <= 1000))

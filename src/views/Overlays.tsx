@@ -244,6 +244,14 @@ export function Manager({ v }: { v: V }) {
                       <input ref={v.coverRef} type="file" accept="image/*" onChange={v.onCoverFile} style={{ display: 'none' }} />
                     </div>
                   </Row>
+                  {v.mtShow && (
+                    <Row label="Elastic band" note="The band that holds the cover closed. Take it off for a plain cover.">
+                      <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 14, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={v.bandOn} onChange={v.bandToggle} style={{ width: 18, height: 18, accentColor: MARK }} />
+                        Show the elastic band
+                      </label>
+                    </Row>
+                  )}
                   <Row label="Who can see it" note={v.bookHidden ? <span style={{ color: MARK }}>Hidden by moderators for breaking the terms. Only you can see it.</span> : VIS_NOTE[v.bookVis]}>
                     <div role="radiogroup" aria-label="Who can see this sketchbook" style={{ display: 'flex', gap: 2, padding: 3, border: '1px solid rgba(var(--ink-rgb),.2)', alignSelf: 'flex-start', opacity: v.bookHidden ? 0.45 : 1 }}>
                       {([['public', 'Public'], ['link', 'Link only'], ['private', 'Private']] as const).map(([k, name]) => (

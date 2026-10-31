@@ -262,6 +262,8 @@ export interface BookDoc {
   /** Mature: nudity or sexual content (drawn). Hidden from Explore and lists unless the viewer chooses to see it.
    *  `matureLock` is set when the upload check found it, and only moderators can take it off. */
   mature: boolean; matureLock: boolean;
+  /** The cover is drawn without its elastic band. */
+  noBand: boolean;
   /** Small (≈480px) versions: `thumbs[i]` belongs to `pages[i]` ('' when missing). */
   thumbs: string[]; coverThumb: string | null;
   /** Margin notes per page, aligned with `pages` like thumbs. */
@@ -287,7 +289,7 @@ const sharing = (d: DocumentData) => {
 const bookDoc = (id: string, d: DocumentData): BookDoc => ({
   id, ownerId: d.ownerId, ownerName: d.ownerName || '', ownerHandle: d.ownerHandle || '', name: d.name || 'sketchbook',
   color: d.color || '#b8243a', shape: d.shape || 'portrait', cover: d.cover || null, pages: d.pages || [], pageCount: d.pageCount || 0,
-  createdAt: d.createdAt || 0, updatedAt: d.updatedAt || 0, isPublic: d.isPublic !== false, legacy: d.isPublic === undefined, linkOnly: d.linkOnly === true, mature: d.mature === true, matureLock: d.matureLock === true,
+  createdAt: d.createdAt || 0, updatedAt: d.updatedAt || 0, isPublic: d.isPublic !== false, legacy: d.isPublic === undefined, linkOnly: d.linkOnly === true, mature: d.mature === true, noBand: d.noBand === true, matureLock: d.matureLock === true,
   thumbs: d.thumbs || [], coverThumb: d.coverThumb || null,
   captions: d.captions || [], dates: d.dates || [], spreads: d.spreads || [], fillers: d.fillers || [], mediums: d.mediums || [], tags: d.tags || [], hidden: d.hidden === true,
   ...sharing(d),
@@ -306,7 +308,7 @@ export const noteMap = (b: BookDoc): Record<string, PageNote> => {
 };
 /** A book as the signed-in user's own: they own it, or draw in it with its owner. */
 export const toBook = (b: BookDoc, me?: string): Book => ({
-  id: b.id, name: b.name, color: b.color, shape: b.shape, coverImg: b.cover, images: b.pages, createdAt: b.createdAt, isPublic: b.isPublic, linkOnly: b.linkOnly, mature: b.mature, matureLock: b.matureLock,
+  id: b.id, name: b.name, color: b.color, shape: b.shape, coverImg: b.cover, images: b.pages, createdAt: b.createdAt, isPublic: b.isPublic, linkOnly: b.linkOnly, mature: b.mature, matureLock: b.matureLock, noBand: b.noBand,
   thumbs: thumbMap(b), notes: noteMap(b), mediums: b.mediums,
   spreads: Object.fromEntries(b.pages.flatMap((u, i) => b.spreads[i] && b.pages[i + 1] ? [[u, b.pages[i + 1]]] : [])),
   fillers: Object.fromEntries(b.pages.filter((_, i) => b.fillers[i]).map(u => [u, true as const])), tags: b.tags, hidden: b.hidden,
@@ -418,6 +420,8 @@ export async function writeBook(owner: Account, b: Book) {
     // Once the upload check has labelled it, it stays Mature (matureLock); otherwise the owner chooses. Written
     // only when set, so books without the label save the same as before it existed.
     ...(b.mature || b.matureLock ? { mature: true } : { mature: deleteField() }), ...(b.matureLock ? { matureLock: true } : {}),
+    // The same for a cover without its elastic band.
+    ...(b.noBand ? { noBand: true } : { noBand: deleteField() }),
   }, { merge: true }));
 }
 

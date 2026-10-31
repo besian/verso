@@ -90,7 +90,7 @@ export function HomeScreen({ v }: { v: V }) {
             )}
             {v.hmShelf.map((sh: V) => (
               <div key={sh.key} onClick={sh.open} title={sh.title} className={hover('transform:translateY(-12px)')} style={{ position: 'relative', flexShrink: 0, width: sh.w, height: sh.h, transform: `rotate(${sh.rot}deg)`, transformOrigin: '50% 100%', cursor: 'pointer', transition: 'transform .5s cubic-bezier(.2,.8,.2,1)' }}>
-                <ClosedBook size="sm" bg={sh.bg} board={sh.color} label={sh.showLabel ? sh.name : null} labelStyle={{ padding: '6px 8px', font: `400 ${sh.fs}px/1.1 ${SERIF}` }} />
+                <ClosedBook size="sm" bg={sh.bg} board={sh.color} hasBand={sh.hasBand} label={sh.showLabel ? sh.name : null} labelStyle={{ padding: '6px 8px', font: `400 ${sh.fs}px/1.1 ${SERIF}` }} />
                 {sh.isPick && <span style={{ position: 'absolute', left: '50%', top: -11, transform: 'translateX(-50%)', padding: '3px 8px', borderRadius: 10, background: MARK, color: '#F6F2E8', font: `600 9px/1.2 ${SANS}`, letterSpacing: '.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,.2)' }}>Staff pick</span>}
               </div>
             ))}
@@ -278,7 +278,7 @@ export function Explore({ v }: { v: V }) {
                 const h = v.notMob ? 170 : 130, w = Math.round(h * b.a);
                 return (
                   <button key={b.key} onClick={b.open} className={hover('transform:translateY(-4px)')} style={{ flexShrink: 0, width: Math.max(w + 7, 120), display: 'flex', flexDirection: 'column', gap: 10, padding: 0, border: 'none', background: 'none', color: INK, textAlign: 'left', cursor: 'pointer', transition: 'transform .3s cubic-bezier(.2,.8,.2,1)' }}>
-                    <span style={{ position: 'relative', width: w, height: h, display: 'block' }}><ClosedBook bg={b.bg} board={b.color} label={b.showLabel ? b.name : null} /></span>
+                    <span style={{ position: 'relative', width: w, height: h, display: 'block' }}><ClosedBook bg={b.bg} board={b.color} hasBand={b.hasBand} label={b.showLabel ? b.name : null} /></span>
                     <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, width: '100%' }}>
                       <span style={{ ...serif(18, 1.15, 'normal'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.artist}</span>
                       <span style={{ fontSize: 12, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{[b.years, b.name].filter(Boolean).join(' · ')}</span>
@@ -343,7 +343,7 @@ export function Explore({ v }: { v: V }) {
               {v.exploreList.map((xb: V) => (
                 <div key={xb.key} onClick={xb.open} style={{ display: 'flex', flexDirection: 'column', gap: 20, cursor: 'pointer', minWidth: 0 }}>
                   <div className={hover('transform:translateY(-8px)')} style={{ position: 'relative', aspectRatio: xb.ar, width: `calc(${xb.wp}% - 7px)`, marginRight: 7, transition: 'transform .35s cubic-bezier(.2,.8,.2,1)' }}>
-                    <ClosedBook bg={xb.bg} board={xb.color} label={xb.showLabel ? xb.name : null} />
+                    <ClosedBook bg={xb.bg} board={xb.color} hasBand={xb.hasBand} label={xb.showLabel ? xb.name : null} />
                     {xb.mature && <span style={matureBadge}>Mature</span>}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
@@ -375,7 +375,7 @@ export function Explore({ v }: { v: V }) {
                     <div style={stackEdge('right', 'repeating-linear-gradient(90deg,#f3efe6 0 2px,#d8d1c1 2px 3px)')} />
                     <div style={stackEdge('left', sk.color, 'brightness(.7)')} />
                     <div style={{ position: 'absolute', inset: 0, borderRadius: '2px 10px 10px 2px', overflow: 'hidden', background: sk.bg }}>
-                      <div style={{ position: 'absolute', right: '13%', top: 0, bottom: 0, width: 8, background: '#1d1d26' }} />
+                      {sk.hasBand && <div style={{ position: 'absolute', right: '13%', top: 0, bottom: 0, width: 8, background: '#1d1d26' }} />}
                       {sk.showLabel && <div className="cover-label" style={{ position: 'absolute', left: '16%', right: '26%', top: '14%', padding: '10px 12px', background: '#f6f2e9', borderRadius: 2, color: '#222320', fontSize: 15, fontWeight: 600 }}>{sk.name}</div>}
                       <div style={{ position: 'absolute', inset: 0, background: '#1c1d30', opacity: sk.shade }} />
                     </div>
@@ -413,7 +413,7 @@ function ShelfBook({ pb, zone, fit }: { pb: V; zone: number; fit?: boolean }) {
     <div onClick={pb.open} style={{ display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer', minWidth: 0, width: fit ? w + 7 : undefined }}>
       <div style={{ height: zone, display: 'flex', alignItems: 'flex-end' }}>
         <div className={hover('transform:translateY(-6px)')} style={{ position: 'relative', width: `min(calc(100% - 7px), ${Math.round(zone * 0.94 * pb.s * pb.a)}px)`, aspectRatio: String(pb.a), transition: 'transform .35s cubic-bezier(.2,.8,.2,1)' }}>
-          <ClosedBook bg={pb.bg} board={pb.color} label={pb.showLabel ? pb.name : null} />
+          <ClosedBook bg={pb.bg} board={pb.color} hasBand={pb.hasBand} label={pb.showLabel ? pb.name : null} />
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>

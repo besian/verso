@@ -229,7 +229,7 @@ const toOther = (b: BookDoc, idx: number): OtherBook => ({
   id: b.id, idx, shape: b.shape, likes: b.pageCount, artist: names([{ name: b.ownerName, handle: b.ownerHandle }, ...b.collabs]), name: b.name, color: b.color,
   images: b.pages, pages: Math.max(CONFIG.minPages, b.pageCount + (b.pageCount % 2)), initials: ini(b.ownerName), coverImg: b.cover,
   ownerId: b.ownerId, handle: b.ownerHandle, updatedAt: b.updatedAt, thumbs: api.thumbMap(b),
-  notes: api.noteMap(b), mediums: b.mediums, tags: b.tags, mature: b.mature, collabIds: b.collabs.map(m => m.uid),
+  notes: api.noteMap(b), mediums: b.mediums, tags: b.tags, mature: b.mature, noBand: b.noBand, collabIds: b.collabs.map(m => m.uid),
   spreads: Object.fromEntries(b.pages.flatMap((u, i) => b.spreads[i] && b.pages[i + 1] ? [[u, b.pages[i + 1]]] : [])),
 });
 /** "Ana", "Ana & Ben", "Ana, Ben & Cleo", "Ana, Ben & 3 others". */
@@ -1811,7 +1811,7 @@ export default class App extends Component<object, State> {
       hmFollowing: feed.length > 0, hmMixed: feed.length > 0 && feed.length < sel.length, hmMob: mob, hmPadX: mob ? 16 : 40, hmPadT: mob ? 70 : 84, hmEmpty: !!this.state.community && !list.length, hmShelfGap: gap, hmShelfH: Math.round(base),
       hmShelf: sel.map((b, i) => {
         const hh = Math.round(base * shapes[i].s);
-        return { key: b.id, isPick: b.id === pick?.id, name: b.name, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, title: b.name + ' — ' + b.artist, h: hh, w: Math.round(hh * shapes[i].a), fs: Math.max(11, Math.round(hh / 17)), rot: [-1.5, 0, 1.5][i] || 0, open: () => this.openOtherBook(b) };
+        return { key: b.id, isPick: b.id === pick?.id, name: b.name, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, hasBand: !b.noBand, title: b.name + ' — ' + b.artist, h: hh, w: Math.round(hh * shapes[i].a), fs: Math.max(11, Math.round(hh / 17)), rot: [-1.5, 0, 1.5][i] || 0, open: () => this.openOtherBook(b) };
       }),
       hmPick: pick ? { name: pick.name, artist: pick.artist, open: () => this.openOtherBook(pick) } : null,
       hmPrompt: currentPrompt().word, hmPromptOpen: () => this.openLabel('t:' + currentPrompt().tag),
@@ -1824,7 +1824,7 @@ export default class App extends Component<object, State> {
     // Plus: the pinned sketchbook comes first on the profile.
     const pin = mine ? (s.plus ? a.pin : '') : s.pf?.uid === s.profileOf?.uid && s.pf?.plus ? s.pf?.profile?.pin : '';
     const card = (b: AnyBook, bg: string, showLabel: boolean, pages: number, open: () => void) => ({
-      key: b.id, name: b.name, color: b.color, bg, showLabel, a: this.shapeOf(b).a, s: this.shapeOf(b).s,
+      key: b.id, name: b.name, color: b.color, bg, showLabel, hasBand: !b.noBand, a: this.shapeOf(b).a, s: this.shapeOf(b).s,
       count: `${pin && b.id === pin ? 'Pinned · ' : ''}${pages} ${pages === 1 ? 'page' : 'pages'} · ${(b as Book).role === 'collab' ? 'With ' + (b as Book).owner?.name : (b as Book).collabs?.length ? 'With ' + names((b as Book).collabs) : this.shapeOf(b).label || 'Portrait'}${(b as Book).linkOnly ? ' · Link only' : (b as Book).isPublic === false ? ' · Private' : ''}`, open,
     });
     const pinFirst = <T extends { key: string }>(l: T[]) => pin ? [...l.filter(x => x.key === pin), ...l.filter(x => x.key !== pin)] : l;
@@ -2333,7 +2333,7 @@ export default class App extends Component<object, State> {
         ? `translateZ(${(-o * 18).toFixed(1)}px) rotateZ(${jit}deg)`
         : `translateZ(${(l * 240).toFixed(1)}px) translateY(${(-l * 420).toFixed(1)}px) rotateX(${(-l * 25).toFixed(1)}deg) rotateZ(${(jit * (1 - l)).toFixed(2)}deg)`;
       const shp = this.shapeOf(b), bh = Math.round(300 * shp.s), bw = Math.round(bh * shp.a);
-      return { key: b.id, name: b.name, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, w: bw, h: bh, l: -bw / 2, tp: -bh / 2, t,
+      return { key: b.id, name: b.name, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, hasBand: !b.noBand, w: bw, h: bh, l: -bw / 2, tp: -bh / 2, t,
         op: (o >= 0 ? Math.min(1, 9 - o) : 1 - l).toFixed(3), shade: (Math.min(0.5, Math.max(0, o) * 0.12)).toFixed(3),
         click: () => { if (i === top) this.openOtherBook(b); } };
     }).filter(Boolean).reverse();
@@ -2365,7 +2365,7 @@ export default class App extends Component<object, State> {
       exNoneLbl: s.exLabel ? (s.exLabel.startsWith('m:') ? `No ${MEDIUMS.find(m => 'm:' + mediumKey(m) === s.exLabel) || 'sketchbooks'} sketchbooks yet` : `Nothing tagged #${s.exLabel.slice(2)} yet`) + (s.exQ ? ` matching “${s.exQ}”` : '') : s.exQ ? `No sketchbooks match “${s.exQ}”` : 'No community sketchbooks yet. Be the first to share one.',
       // From the archive: shown on the main Explore view, not while searching or filtering.
       exArchive: s.exQ || s.exLabel ? [] : (s.archive || []).map(b => ({ key: b.id, name: b.name, artist: b.artist, years: b.arch?.years || '', color: b.color,
-        bg: this.coverBg(b), showLabel: !b.coverImg, shape: b.shape, a: this.shapeOf(b).a, open: () => this.openOtherBook(b) })),
+        bg: this.coverBg(b), showLabel: !b.coverImg, hasBand: !b.noBand, shape: b.shape, a: this.shapeOf(b).a, open: () => this.openOtherBook(b) })),
       exPeople: (() => {
         const q = (s.exQ || '').trim().toLowerCase().replace(/^@/, '');
         if (!q) return [];
@@ -2381,7 +2381,7 @@ export default class App extends Component<object, State> {
       exGrid: view === 'grid' && n > 0, exStack: view === 'stack' && n > 0, vGridBg, vGridFg, vStackBg, vStackFg, sTrBg, sTrFg, sNewBg, sNewFg,
       viewGrid: () => setView('grid'), viewStack: () => setView('stack'), sortTrend: () => setSort('trending'), sortNew: () => setSort('new'),
       exploreList: list.map(b => ({
-        key: b.id, name: b.name, artist: b.artist, verified: this.isTeam(b.ownerId), mature: !!b.mature, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, no: 'Sketchbook ' + String(b.idx + 1).padStart(3, '0'),
+        key: b.id, name: b.name, artist: b.artist, verified: this.isTeam(b.ownerId), mature: !!b.mature, color: b.color, bg: this.coverBg(b), showLabel: !b.coverImg, hasBand: !b.noBand, no: 'Sketchbook ' + String(b.idx + 1).padStart(3, '0'),
         count: `${b.pages} pages · ${(b.mediums || []).length ? (b.mediums || []).join(', ') : this.shapeOf(b).label}`,
         ar: String(this.shapeOf(b).a), wp: String(GRID_WIDTH[b.shape] || 78),
         open: () => this.openOtherBook(b), openArtist: (e: MouseEvent) => { e.stopPropagation(); this.openProfile(this.whoOf(b)); },
@@ -2888,7 +2888,7 @@ export default class App extends Component<object, State> {
         // The leaves either side of the resting spread keep their curl strips built (hidden) so a turn can start at once.
         curlable: i >= Math.min(rest - 1, fp) && i <= Math.max(rest, fp),
         wearF: F.wear, wearB: B.wear, overlayF: F.wear?.overlay || (F.inside ? COVER_INSIDE : ''), overlayB: B.wear?.overlay || (B.inside ? COVER_INSIDE : ''),
-        key: i, label: book.name, isCover: i === 0 && !book.coverImg, isCoverAny: i === 0, isBackCover: i === N - 1,
+        key: i, label: book.name, isCover: i === 0 && !book.coverImg, isCoverAny: i === 0, isBackCover: i === N - 1, hasBand: !book.noBand,
         transform: `rotateY(${a}deg) translateZ(${((N - i) * 0.5).toFixed(2)}px)`, frontBg: F.bg, backBg: B.bg,
         shadeF: (0.35 * Math.sin(rad) * (rad < Math.PI / 2 ? 1 : 0)).toFixed(3), shadeB: (0.3 * Math.max(0, Math.sin(rad)) * (rad > Math.PI / 2 ? 1 : 0)).toFixed(3),
         numF: F.num, numB: B.num, noteF: F.note || '', noteB: B.note || '', noteFs: Math.max(9, Math.min(15, Math.round(L.H * 0.026))),
@@ -2924,7 +2924,7 @@ export default class App extends Component<object, State> {
       return {
         key: b.id, w: d.W, h: d.H, top: -d.H / 2, transform: sideT(j, zTop(b)),
         opacity: clamp01(3 - Math.abs(j - car)).toFixed(3), labelOp: Math.min(1, Math.abs(j - car)).toFixed(3),
-        shade: (0.35 * Math.min(1, Math.abs(j - car))).toFixed(3), bg: this.coverBg(b), board: b.color, showLabel: !b.coverImg, name: b.name, count: `${b.images.length} ${b.images.length === 1 ? 'page' : 'pages'}`,
+        shade: (0.35 * Math.min(1, Math.abs(j - car))).toFixed(3), bg: this.coverBg(b), board: b.color, showLabel: !b.coverImg, hasBand: !b.noBand, name: b.name, count: `${b.images.length} ${b.images.length === 1 ? 'page' : 'pages'}`,
         stop: (e: PointerEvent) => e.stopPropagation(), open: () => this.switchBook(j),
       };
     });
@@ -3126,6 +3126,7 @@ export default class App extends Component<object, State> {
       // Mature: the owner labels it, or the upload check did (and then only moderators can take it off).
       mtShow: !other && (book as Book).role !== 'collab', mtBook: !!(book as Book).mature || !!(book as Book).matureLock, mtLock: !!(book as Book).matureLock,
       mtBookToggle: () => { const b = book as Book; if (!b.matureLock) this.updateBook({ mature: !b.mature }); },
+      bandOn: !(book as Book).noBand, bandToggle: () => this.updateBook({ noBand: !(book as Book).noBand }),
       ...(() => {
         // Stats and pinning (Plus), for the owner of a saved sketchbook.
         const b = book as Book, st = s.stats?.id === b.id ? s.stats.s : null, a = s.acct, likes = s.counts?.['b:' + b.id] || 0;
