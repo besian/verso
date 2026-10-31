@@ -2901,7 +2901,7 @@ export default class App extends Component<object, State> {
     // Carousel of closed books either side of the open one. Each book is laid out at its own size
     // (books can be different shapes) with a fixed gap, so nothing re-spaces when the middle book
     // changes; mid-switch, positions blend between the layouts centred on the two nearest books.
-    const sw = !!s.switching, car = sw ? s.car! : active, SIDE = 0.78;
+    const sw = !!s.switching, car = sw ? s.car! : active, SIDE = 0.74;
     const shelf = (other ? [] : books) as Book[];
     const ghostD = this.dims({ shape: 'portrait' } as Book, true);
     const widths = [...shelf.map(b => this.dims(b, true).W), ghostD.W]; // last slot is "+ New sketchbook"
@@ -2924,7 +2924,8 @@ export default class App extends Component<object, State> {
       return {
         key: b.id, w: d.W, h: d.H, top: -d.H / 2, transform: sideT(j, zTop(b)),
         opacity: clamp01(3 - Math.abs(j - car)).toFixed(3), labelOp: Math.min(1, Math.abs(j - car)).toFixed(3),
-        shade: (0.35 * Math.min(1, Math.abs(j - car))).toFixed(3), bg: this.coverBg(b), board: b.color, showLabel: !b.coverImg, hasBand: !b.noBand, name: b.name, count: `${b.images.length} ${b.images.length === 1 ? 'page' : 'pages'}`,
+        // Not darkened (it hid the covers): the books either side are set back, smaller and with a softer shadow.
+        shadow: `0 ${Math.round(24 - 10 * Math.min(1, Math.abs(j - car)))}px ${Math.round(40 - 14 * Math.min(1, Math.abs(j - car)))}px rgba(var(--ink-rgb),${(0.16 - 0.06 * Math.min(1, Math.abs(j - car))).toFixed(3)})`, bg: this.coverBg(b), board: b.color, showLabel: !b.coverImg, hasBand: !b.noBand, name: b.name, count: `${b.images.length} ${b.images.length === 1 ? 'page' : 'pages'}`,
         stop: (e: PointerEvent) => e.stopPropagation(), open: () => this.switchBook(j),
       };
     });

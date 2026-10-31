@@ -254,7 +254,7 @@ function Carousel({ v }: { v: V }) {
     <div style={{ position: 'absolute', left: '50%', top: '50%', width: 0, height: 0, transformStyle: 'preserve-3d', transform: v.sbBase, opacity: v.uiOp, pointerEvents: v.uiPE }}>
       {v.sideBooks.map((sb: V) => (
         <div key={sb.key} onPointerDown={sb.stop} onClick={sb.open} style={{ position: 'absolute', left: 0, top: sb.top, width: sb.w, height: sb.h, transform: sb.transform, opacity: sb.opacity, cursor: 'pointer' }}>
-          <ClosedBook bg={sb.bg} board={sb.board} hasBand={sb.hasBand} boardShadow="0 24px 40px rgba(var(--ink-rgb),.16)" band={8} shade={sb.shade}
+          <ClosedBook bg={sb.bg} board={sb.board} hasBand={sb.hasBand} boardShadow={sb.shadow} band={8}
             label={sb.showLabel ? sb.name : null} labelStyle={{ padding: '10px 12px', fontSize: 'clamp(10px, 8cqw, 15px)' }} />
           <div style={{ position: 'absolute', top: 'calc(100% + 18px)', left: 0, right: 0, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 2, opacity: sb.labelOp }}>
             <div style={{ fontSize: 18, fontWeight: 600 }}>{sb.name}</div>
