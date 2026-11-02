@@ -65,23 +65,33 @@ const SCHEMA = {
 interface Verdict { medium: 'drawing' | 'photo' | 'mixed' | 'none'; nudity: boolean; sexual: boolean; minor: 'none' | 'nude' | 'sexual'; unsure: boolean; reason: string }
 type Outcome = 'ok' | 'mature' | 'photo' | 'explicit' | 'hold' | 'child' | 'avatar';
 
-/** Claude's reading of the picture; null when it declines to look at it. */
+/** Claude's reading of the picture; null when it declines to look at it. Opus first; if it's busy or failing, Sonnet
+ *  (a key, billing or permission problem isn't tried again: a second model would fail the same way). */
 async function classify(jpeg: Buffer): Promise<Verdict | null> {
   const client = new Anthropic();
-  const msg = await client.beta.messages.create({
-    model: 'claude-opus-5-5',
-    max_tokens: 4000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
-    output_config: { effort: 'low', format: { type: 'json_schema', schema: SCHEMA } },
-    messages: [{ role: 'user', content: [
-      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: jpeg.toString('base64') } },
-      { type: 'text', text: PROMPT },
-    ] }],
-  });
-  if (msg.stop_reason === 'refusal') return null;
-  const text = msg.content.map(b => b.type === 'text' ? b.text : '').join('');
-  try { return JSON.parse(text) as Verdict; } catch { return null; }
+  const content: Anthropic.Beta.BetaContentBlockParam[] = [
+    { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: jpeg.toString('base64') } },
+    { type: 'text', text: PROMPT },
+  ];
+  const ask = (model: string) => model === 'claude-opus-5-5'
+    ? client.beta.messages.create({ model, max_tokens: 4000, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
+        output_config: { effort: 'low', format: { type: 'json_schema', schema: SCHEMA } }, messages: [{ role: 'user', content }] })
+    : client.beta.messages.create({ model, max_tokens: 4000, output_config: { effort: 'low', format: { type: 'json_schema', schema: SCHEMA } }, messages: [{ role: 'user', content }] });
+  let last: unknown;
+  for (const model of ['claude-opus-5-5', 'claude-sonnet-5-5']) {
+    try {
+      const msg = await ask(model);
+      if (msg.stop_reason === 'refusal') return null;
+      const text = msg.content.map(b => b.type === 'text' ? b.text : '').join('');
+      try { return JSON.parse(text) as Verdict; } catch { return null; }
+    } catch (e) {
+      last = e;
+      const st = e instanceof Anthropic.APIError ? e.status : undefined;
+      console.error('check failed', model, st ?? '', e instanceof Anthropic.APIError ? `${e.type || ''} ${e.message}` : String(e));
+      if (st === 401 || st === 402 || st === 403) break;
+    }
+  }
+  throw last;
 }
 
 function decide(v: Verdict | null, avatar: boolean): Outcome {
@@ -190,8 +200,8 @@ async function check(a: Admin, uid: string, body: { path?: string; kind?: string
   try { v = await classify(look); }
   catch (e) {
     // Nothing goes up unchecked: if Claude can't be reached, the upload waits and the app tries again later.
-    console.error('check', e);
-    return json(e instanceof Anthropic.RateLimitError ? 429 : 503, { error: 'check-unavailable' });
+    // `why` (the API's status) is only for whoever's looking at the response; the app shows its own message.
+    return json(e instanceof Anthropic.RateLimitError ? 429 : 503, { error: 'check-unavailable', why: e instanceof Anthropic.APIError ? e.status ?? 'network' : 'error' });
   }
   const outcome = decide(v, kind === 'avatar');
 
