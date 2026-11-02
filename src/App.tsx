@@ -552,8 +552,6 @@ export default class App extends Component<object, State> {
     if (bookId) want.set('bc:' + bookId, () => api.watch(['bookCounts', bookId], d => this.setState(st => ({ counts: { ...st.counts, ['b:' + bookId]: Math.max(0, d?.likes || 0) } }))));
     if (bookId) want.set('cm:' + bookId, () => api.watchComments(bookId, list => this.setState({ comments: { bookId, list } })));
     // The Following feed: whether you've liked each post's sketchbook, for its heart.
-    // Explore's wall: the same, for the sketchbooks on it.
-    if (me && s.mode === 'explore' && s.exTab !== 'following') for (const b of this.exSorted().slice(0, 60)) if (b.ownerId) want.set(`lk:${b.id}:${me}`, () => api.watch(['books', b.id, 'likes', me], d => this.setState(st => ({ liked: { ...st.liked, [b.id]: !!d }, stamp: { ...st.stamp, [b.id]: d ? String(d.r || 'love') : '' } }))));
     if (me && s.mode === 'explore' && s.exTab === 'following') for (const b of (s.followFeed || []).slice(0, 40)) want.set(`lk:${b.id}:${me}`, () => api.watch(['books', b.id, 'likes', me], d => this.setState(st => ({ liked: { ...st.liked, [b.id]: !!d }, stamp: { ...st.stamp, [b.id]: d ? String(d.r || 'love') : '' } }))));
     if (bookId && me && s.mode === 'other') want.set(`lk:${bookId}:${me}`, () => api.watch(['books', bookId, 'likes', me], d => this.setState(st => ({ liked: { ...st.liked, [bookId]: !!d } }))));
     const pu = s.mode === 'profile' ? s.profileOf?.uid || me : undefined;
@@ -1721,61 +1719,21 @@ export default class App extends Component<object, State> {
       cmPost: post, cmBusy: !!s.cmBusy, cmErr: s.cmErr || '', cmLeft: api.COMMENT_MAX - (s.cmDraft || '').length,
     };
   }
-  /** Explore's Following tab: the desk, the sketchbooks of the artists you follow lying open at their new pages, by day. */
+  /** Explore's Following tab: a wall of pages from the sketchbooks of the artists you follow, newest first. */
   feedVals(): V {
     const s = this.state, on = !!s.acct && s.exTab === 'following';
     const setTab = (t: 'all' | 'following') => { this.setState({ exTab: t }); if (t === 'following' && !s.followFeed) this.loadFollowFeed(); };
-    const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); return m < 60 ? 'just now' : m < 1440 ? Math.round(m / 60) + 'h ago' : m < 10080 ? Math.round(m / 1440) + 'd ago' : new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); };
     const feed = this.community((s.followFeed || []).filter(b => b.images.length > 0)).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 40);
     return {
       exTabs: !!s.acct, exFollowing: on, exTabAll: () => setTab('all'), exTabFollowing: () => setTab('following'),
       exFeedLoading: on && !s.followFeed, exFeedNoFollows: on && !(s.follows || []).length,
-      // The desk: one post per sketchbook, newest first, each lying open at what's new since you last opened it on
-      // this device (or its latest pages), grouped by the day it changed.
-      exFeedDays: on ? (() => {
-        let seen: Record<string, number> = {}; try { seen = JSON.parse(localStorage.getItem('fl-seen') || '{}'); } catch { /* none kept */ }
-        const day0 = new Date(); day0.setHours(0, 0, 0, 0);
-        const dayOf = (t: number) => {
-          const d = Math.floor((day0.getTime() - new Date(t).setHours(0, 0, 0, 0)) / 86_400_000), dt = new Date(t);
-          if (d <= 0) return { key: 'd0', name: 'Today', num: '' };
-          if (d === 1) return { key: 'd1', name: 'Yesterday', num: '' };
-          if (d < 7) return { key: 'd' + d, name: dt.toLocaleDateString('en-GB', { weekday: 'long' }), num: String(dt.getDate()) };
-          return { key: 'older', name: 'Earlier', num: '' };
-        };
-        const days: V[] = [];
-        feed.forEach((b, k) => {
-          const n = b.images.length, was = seen[b.id], add = was != null ? Math.max(0, n - was) : 0, fresh = was == null && Date.now() - (b.updatedAt || 0) < 3 * 86_400_000;
-          const from = Math.max(0, n - Math.min(add || 4, 8)), av = b.ownerId ? this.avatarOf(b.ownerId) : null, a = this.shapeOf(b).a, two = a < 1.1;
-          const markSeen = () => { try { localStorage.setItem('fl-seen', JSON.stringify({ ...seen, [b.id]: n })); } catch { /* fine */ } };
-          const openAt = (i: number, comments = false) => { markSeen(); this.openOtherBook(b, 'explore'); setTimeout(() => { if (comments) this.setState({ cmOpen: true, cmAll: false }); if (i > 0) this.goToPage(i); }, 80); };
-          const page = (i: number) => ({ key: b.images[i], src: b.images[i], n: i + 1, cap: b.notes?.[b.images[i]]?.c || '', open: () => openAt(i) });
-          // Open at two pages side by side (portrait, square and pocket books) or one (landscape and panorama).
-          const spreads: V[] = [];
-          for (let i = from; i < n; i += two ? 2 : 1) spreads.push({ key: b.images[i], pages: two ? [page(i), ...(i + 1 < n ? [page(i + 1)] : [])] : [page(i)] });
-          const stamp = s.stamp?.[b.id] || (s.liked?.[b.id] ? 'love' : ''), first = (b.artist || '').split(' ')[0];
-          const post = {
-            key: b.id, name: b.name, artist: b.artist, first, verified: this.isTeam(b.ownerId), mature: !!b.mature, tilt: k % 2 ? 0.8 : -1,
-            av: av ? avatarBg(av) : '', init: (b.artist || '?').trim().charAt(0).toUpperCase(), when: ago(b.updatedAt || 0),
-            what: add > 0 ? ['left', `open at ${add} new ${add === 1 ? 'page' : 'pages'}`] : fresh ? ['opened a new sketchbook,', ''] : ['left', 'open'], isNew: add > 0 || fresh,
-            ar: String(a), two, spreads, total: n,
-            stamp, stampInk: STAMPS.find(x => x.key === stamp)?.ink || '',
-            stamps: STAMPS.map(x => ({ key: x.key, label: x.chip, on: stamp === x.key, press: () => this.setStamp(b, x.key) })),
-            saved: this.isSaved(b.id), save: () => this.toggleSave(b),
-            share: () => this.share(`/@${b.handle}/${b.id}`, b.name),
-            note: (i: number) => openAt(i, true), open: () => openAt(from),
-            openArtist: () => this.openProfile(this.whoOf(b)),
-          };
-          const d = dayOf(b.updatedAt || 0), last = days[days.length - 1];
-          if (last?.key === d.key) { last.posts.push(post); last.people.add(b.ownerId); } else days.push({ ...d, posts: [post], people: new Set([b.ownerId]) });
-        });
-        return days.map(d => ({ ...d, drew: d.key === 'older' ? '' : `${d.people.size} ${d.people.size === 1 ? 'artist' : 'artists'} drew` }));
-      })() : [],
+      ...(on ? this.wallVals(feed, s.vw < 640) : { wallTiles: [], wallPeople: [] }),
     };
   }
-  /** Explore's wall, like a pinboard: pages from everyone's sketchbooks at their own shapes (each book's newest page,
-   *  and now and then its first), the tags people are using, and artists you might follow. */
+  /** The Following wall, like a pinboard: pages at their own shapes (each sketchbook's newest page, and now and then its
+   *  first), and artists you might follow too. */
   wallVals(list: OtherBook[], mob: boolean): V {
-    const s = this.state, me = s.acct?.uid, follows = s.follows || [], filtering = !!(s.exQ || s.exLabel);
+    const s = this.state, me = s.acct?.uid, follows = s.follows || [];
     const canFollow = (uid?: string) => !!uid && uid !== me;
     const tile = (b: OtherBook, i: number) => {
       const u = b.images[i], av = b.ownerId ? this.avatarOf(b.ownerId) : null, stamp = s.stamp?.[b.id] || (s.liked?.[b.id] ? 'love' : '');
@@ -1793,12 +1751,6 @@ export default class App extends Component<object, State> {
     const tiles: V[] = [];
     firsts.forEach((t, k) => { tiles.push(t); if (k % 3 === 2 && seconds.length) tiles.push(seconds.shift()!); });
     tiles.push(...seconds);
-    // The tags people use most, this week's prompt first.
-    const count = new Map<string, number>();
-    this.community().forEach(b => (b.tags || []).forEach(t => count.set(t, (count.get(t) || 0) + 1)));
-    const pr = currentPrompt()?.tag, top = [...count.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t).filter(t => t !== pr).slice(0, 10);
-    const on = s.exLabel?.startsWith('t:') ? s.exLabel.slice(2) : '';
-    const tags = [...(pr ? [pr] : []), ...top].map(t => ({ key: t, label: '#' + t, on: on === tagSlug(t), pick: () => this.setLabel(on === tagSlug(t) ? '' : 't:' + tagSlug(t)) }));
     // Artists to follow: people with public work you don't follow yet, most liked first, with three of their pages.
     const seen = new Set<string>(), people: V[] = [];
     [...this.community()].sort((a, b) => b.likes - a.likes).forEach(b => {
@@ -1810,7 +1762,7 @@ export default class App extends Component<object, State> {
     });
     return {
       wallTiles: tiles, wallCols: mob ? 2 : Math.max(2, Math.min(6, Math.floor((s.vw - 80 + 18) / 250))), wallGap: mob ? 12 : 20,
-      wallTags: filtering && !on ? [] : tags, wallPeople: filtering ? [] : people, wallPeopleAt: mob ? 6 : 12,
+      wallPeople: people, wallPeopleAt: mob ? 6 : 12,
     };
   }
   /** Explore's Content filter. Showing Mature work needs a signed-in adult, as in Account settings. */
@@ -2431,7 +2383,6 @@ export default class App extends Component<object, State> {
         ar: String(this.shapeOf(b).a), wp: String(GRID_WIDTH[b.shape] || 78),
         open: () => this.openOtherBook(b), openArtist: (e: MouseEvent) => { e.stopPropagation(); this.openProfile(this.whoOf(b)); },
       })),
-      ...this.wallVals(list, mob),
       stackList,
       stMature: !!tb?.mature, stRank: 'Sketchbook ' + String((tb?.idx ?? 0) + 1).padStart(3, '0'), stShape: this.shapeOf(tb).label || '', stName: tb?.name, stArtist: tb?.artist,
       stPages: `Pages 01—${String(tb?.pages).padStart(2, '0')}`, stPos: `${top + 1} of ${n}`,

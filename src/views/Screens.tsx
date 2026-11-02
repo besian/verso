@@ -126,102 +126,23 @@ function ExploreTabs({ v }: { v: V }) {
   return <div role="tablist" aria-label="Explore" style={{ display: 'flex', gap: 24 }}>{tab(!v.exFollowing, 'Everyone', v.exTabAll)}{tab(v.exFollowing, 'Following', v.exTabFollowing)}</div>;
 }
 
-const HAND = "'Caveat', 'Segoe Print', cursive";
-const deskLink = (on = false): CSSProperties => ({ padding: '6px 0', border: 'none', background: 'none', color: on ? INK : MUTED, font: `500 13px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' });
-
-/** One sketchbook on the desk: lying open at its new pages, slightly askew, with a label in the artist's hand.
- *  Turn its pages here (the arrows, or a swipe); a stamp you press is inked on the page; a tap opens the book there. */
-function DeskPost({ p }: { p: V }) {
-  const [at, setAt] = useState(0), [dir, setDir] = useState(0), drag = useRef<number | null>(null), swiped = useRef(false);
-  const n = p.spreads.length, sp = p.spreads[Math.min(at, n - 1)], pages: V[] = sp.pages;
-  const turn = (d: number) => { const to = at + d; if (to < 0 || to >= n) return; setDir(d); setAt(to); };
-  const range = pages.length > 1 ? `p. ${pages[0].n}–${pages[1].n}` : `p. ${pages[0].n}`, cap = pages.find(x => x.cap)?.cap;
-  return (
-    <article style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-        <button onClick={p.openArtist} aria-label={`${p.artist}’s profile`} style={{ width: 34, height: 34, flexShrink: 0, padding: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.15)', background: p.av || INK, color: PAPER, font: `500 14px ${SANS}`, cursor: 'pointer' }}>{p.av ? '' : p.init}</button>
-        <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, lineHeight: 1.4, color: MUTED }}>
-          <button onClick={p.openArtist} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `600 13.5px ${SANS}`, cursor: 'pointer' }}>{p.artist}</button>{p.verified && <Verified size={13} />}
-          {' '}{p.what[0]}{' '}<button onClick={p.open} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `italic 400 16px ${SERIF}`, cursor: 'pointer' }}>{p.name}</button>{p.what[1] && ' ' + p.what[1]}
-          <span style={{ whiteSpace: 'nowrap' }}> · {p.when}{p.mature && ' · Mature'}</span>
-        </span>
-      </header>
-      {/* The book, open on the desk. */}
-      <div onPointerDown={e => { drag.current = e.clientX; swiped.current = false; }} onPointerUp={e => { const x = drag.current; drag.current = null; if (x != null && Math.abs(e.clientX - x) > 40) { swiped.current = true; turn(e.clientX < x ? 1 : -1); } }}
-        onClickCapture={e => { if (swiped.current) { e.stopPropagation(); swiped.current = false; } }}
-        style={{ position: 'relative', alignSelf: 'center', width: p.two ? '100%' : 'min(100%, 420px)', transform: `rotate(${p.tilt}deg)`, touchAction: 'pan-y' }}>
-        <span style={{ position: 'absolute', top: -13, left: 16, zIndex: 3, padding: '2px 10px 4px', background: '#FBF9F4', color: '#222320', font: `500 21px/1 ${HAND}`, boxShadow: '0 2px 6px rgba(20,20,30,.16)', transform: 'rotate(-3deg)', whiteSpace: 'nowrap' }}>{p.first} · {range}</span>
-        <div key={sp.key} className={dir > 0 ? 'desk-in-next' : dir < 0 ? 'desk-in-prev' : undefined} style={{ position: 'relative', display: 'grid', gridTemplateColumns: p.two ? '1fr 1fr' : '1fr', background: '#FBF9F4', borderRadius: '2px 4px 4px 2px', boxShadow: '0 14px 30px rgba(20,20,30,.2), 0 1px 3px rgba(20,20,30,.14)' }}>
-          {(p.two ? [pages[0], pages[1]] : pages).map((pg: V | undefined, i: number) => (
-            <div key={pg?.key || 'blank'} onClick={pg?.open} style={{ aspectRatio: p.ar, padding: 7, cursor: pg ? 'pointer' : 'default', overflow: 'hidden' }}>
-              {pg && <img src={pg.src} alt={`Page ${pg.n} of ${p.name}`} loading="lazy" draggable={false} style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', userSelect: 'none' }} />}
-              {p.two && i === 0 && <span aria-hidden="true" style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: 26, transform: 'translateX(-50%)', pointerEvents: 'none', background: 'linear-gradient(90deg, transparent, rgba(0,0,0,.1) 42%, rgba(0,0,0,.17) 50%, rgba(0,0,0,.1) 58%, transparent)' }} />}
-            </div>
-          ))}
-        </div>
-        {cap && <span style={{ position: 'absolute', right: -6, top: '22%', zIndex: 2, maxWidth: 150, padding: '6px 9px', background: '#FFF6C4', color: '#3A3A30', font: `500 18px/1.05 ${HAND}`, boxShadow: '0 3px 8px rgba(20,20,30,.16)', transform: 'rotate(4deg)' }}>“{cap}” — {p.first}</span>}
-        {p.stamp && (
-          <span key={p.stamp} aria-label={`You stamped it: ${p.stampInk}`} className="desk-stamp" style={{ position: 'absolute', right: 14, bottom: 12, zIndex: 2, width: 66, height: 66, borderRadius: '50%', border: `2px solid ${MARK}`, color: MARK, background: 'rgba(251,249,244,.55)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', pointerEvents: 'none' }}>
-            <span style={{ font: `600 9.5px/1.1 ${SANS}`, letterSpacing: '.08em', textTransform: 'uppercase', padding: '0 6px' }}>{p.stampInk}</span>
-            <span style={{ font: `500 7.5px/1.4 ${SANS}`, letterSpacing: '.14em', textTransform: 'uppercase', opacity: .8 }}>by you</span>
-          </span>
-        )}
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          {n > 1 && <>
-            <button onClick={() => turn(-1)} disabled={at === 0} aria-label="Turn back" style={{ ...deskLink(), opacity: at === 0 ? .35 : 1, cursor: at === 0 ? 'default' : 'pointer' }}>‹</button>
-            <button onClick={() => turn(1)} disabled={at === n - 1} className={at === n - 1 ? undefined : hoverText} style={{ ...deskLink(true), marginLeft: -8, opacity: at === n - 1 ? .35 : 1, cursor: at === n - 1 ? 'default' : 'pointer' }}>Turn the page ›</button>
-          </>}
-          <button onClick={() => p.note(pages[0].n - 1)} className={hoverText} style={deskLink()}>Leave a note</button>
-          <span style={{ flex: 1 }} />
-          <button onClick={p.save} aria-pressed={p.saved} className={hoverText} style={deskLink(p.saved)}>{p.saved ? 'Kept ✓' : 'Keep'}</button>
-          <button onClick={p.share} className={hoverText} style={deskLink()}>Share</button>
-        </div>
-        <div role="group" aria-label="Stamp it" className="desk-chips" style={{ display: 'flex', gap: 5, overflowX: 'auto', margin: '0 -16px', padding: '0 16px' }}>
-          {p.stamps.map((x: V) => (
-            <button key={x.key} onClick={x.press} aria-pressed={x.on} className={x.on ? undefined : hover('border-color:rgba(var(--ink-rgb),.55)')} style={{ height: 32, padding: '0 clamp(9px, 2.6vw, 12px)', borderRadius: 16, border: `1px solid ${x.on ? MARK : 'rgba(var(--ink-rgb),.2)'}`, background: x.on ? MARK : 'rgba(var(--paper-rgb),.7)', color: x.on ? '#F6F2E8' : INK, font: `500 clamp(11.5px, 3.1vw, 12.5px) ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>{x.label}</button>
-          ))}
-        </div>
-      </div>
-    </article>
-  );
-}
-
-/** The Following tab: the desk. The sketchbooks of the artists you follow lie open at their new pages, day by day,
- *  like a shared diary of what people made. */
+/** The Following tab: a wall of pages, like a pinboard, from the artists you follow, newest first. */
 function FollowingFeed({ v }: { v: V }) {
   return (
-    <div style={{ ...screen('auto'), background: `linear-gradient(rgba(var(--ink-rgb),.045), rgba(var(--ink-rgb),.045)), ${PAPER}` }}>
+    <div style={screen('auto')}>
       <div style={{ minHeight: '100%', boxSizing: 'border-box', padding: `${v.exPadT}px ${v.exPadX}px 28px`, display: 'flex', flexDirection: 'column', gap: v.exGap }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', paddingBottom: 18, borderBottom: `1px solid ${INK}` }}>
           <h1 style={{ margin: 0, ...serif(v.exH1, .95, '-.02em') }}><em>Following</em></h1>
           <ExploreTabs v={v} />
         </div>
         {v.exFeedLoading ? <div style={{ padding: '40px 0', textAlign: 'center', color: MUTED, fontSize: 14 }}>Opening sketchbooks…</div>
-          : !v.exFeedDays.length ? (
+          : !v.wallTiles.length ? (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, textAlign: 'center', padding: '40px 0', color: MUTED, fontSize: 14 }}>
               <span style={serif(34)}>{v.exFeedNoFollows ? <>Follow some <em style={{ color: MARK }}>artists.</em></> : <>Nothing new <em style={{ color: MARK }}>yet.</em></>}</span>
-              <span style={{ maxWidth: 380, lineHeight: 1.5 }}>{v.exFeedNoFollows ? 'Follow artists from their profiles, and their sketchbooks land here, open at their new pages.' : 'When the artists you follow add pages, their sketchbooks land here.'}</span>
+              <span style={{ maxWidth: 380, lineHeight: 1.5 }}>{v.exFeedNoFollows ? 'Follow artists from their profiles, and their pages show up here.' : 'When the artists you follow add pages, they show up here.'}</span>
               <button onClick={v.exTabAll} className={hoverLine} style={underlineBtn(14)}>Explore everyone’s sketchbooks ↗</button>
             </div>
-          ) : (
-            <div style={{ width: '100%', maxWidth: 640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 48 }}>
-              {v.exFeedDays.map((d: V) => (
-                <section key={d.key} aria-label={d.name} style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, paddingBottom: 8, borderBottom: `1px solid ${INK}` }}>
-                    <h2 style={{ margin: 0, ...serif(30, 1) }}>{d.name}{d.num && <> <em style={{ color: MARK }}>{d.num}</em></>}</h2>
-                    {d.drew && <span style={label()}>{d.drew}</span>}
-                  </div>
-                  {d.posts.map((p: V) => <DeskPost key={p.key} p={p} />)}
-                </section>
-              ))}
-              <div style={{ padding: '4px 0 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                <span style={{ ...serif(20, 1.2), fontStyle: 'italic', color: MUTED }}>That’s everything on your desk.</span>
-                <button onClick={v.exTabAll} className={hoverLine} style={underlineBtn(13)}>Explore everyone’s sketchbooks</button>
-              </div>
-            </div>
-          )}
+          ) : <Wall v={v} />}
         <SiteFooter v={v} />
       </div>
     </div>
@@ -279,18 +200,11 @@ function Masonry({ tiles, cols, gap }: { tiles: V[]; cols: number; gap: number }
   );
 }
 
-/** Explore, as a wall of pages from everyone, with the tags people use and artists you might follow. */
+/** The Following tab's wall: pages from the artists you follow, and (part way down) artists you might follow too. */
 function Wall({ v }: { v: V }) {
   const at = v.wallPeople.length ? v.wallPeopleAt : v.wallTiles.length;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: v.notMob ? 28 : 20 }}>
-      {v.wallTags.length > 0 && (
-        <div role="group" aria-label="Tags" className="desk-chips" onWheel={wheelSideways} style={{ display: 'flex', gap: 6, overflowX: 'auto', margin: `0 -${v.exPadX}px`, padding: `0 ${v.exPadX}px` }}>
-          {v.wallTags.map((x: V) => (
-            <button key={x.key} onClick={x.pick} aria-pressed={x.on} className={x.on ? undefined : hover('border-color:rgba(var(--ink-rgb),.55)')} style={{ flexShrink: 0, height: 32, padding: '0 13px', borderRadius: 16, border: `1px solid ${x.on ? INK : 'rgba(var(--ink-rgb),.2)'}`, background: x.on ? INK : 'transparent', color: x.on ? PAPER : INK, font: `500 12.5px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' }}>{x.label}</button>
-          ))}
-        </div>
-      )}
       <Masonry tiles={v.wallTiles.slice(0, at)} cols={v.wallCols} gap={v.wallGap} />
       {v.wallPeople.length > 0 && (
         <section aria-label="Artists to follow" style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '22px 0', borderTop: '1px solid rgba(var(--ink-rgb),.2)', borderBottom: '1px solid rgba(var(--ink-rgb),.2)' }}>
@@ -428,7 +342,25 @@ export function Explore({ v }: { v: V }) {
             <button onClick={v.hidePromo} aria-label="Close" title="Close" className={hover(`color:${MARK}`)} style={{ position: 'absolute', right: 8, top: 8, width: 28, height: 28, padding: 0, border: 'none', background: 'none', color: MUTED, font: `400 18px/1 ${SANS}`, cursor: 'pointer' }}>×</button>
           </div>
         )}
-        {v.exGrid && <Wall v={v} />}
+        {v.exGrid && (
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${v.exCols},minmax(0,1fr))`, gap: '44px 18px', width: '100%', alignItems: 'end' }}>
+              {v.exploreList.map((xb: V) => (
+                <div key={xb.key} onClick={xb.open} style={{ display: 'flex', flexDirection: 'column', gap: 20, cursor: 'pointer', minWidth: 0 }}>
+                  <div className={hover('transform:translateY(-8px)')} style={{ position: 'relative', aspectRatio: xb.ar, width: `calc(${xb.wp}% - 7px)`, marginRight: 7, transition: 'transform .35s cubic-bezier(.2,.8,.2,1)' }}>
+                    <ClosedBook bg={xb.bg} board={xb.color} hasBand={xb.hasBand} label={xb.showLabel ? xb.name : null} />
+                    {xb.mature && <span style={matureBadge}>Mature</span>}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+                    {v.notMob && <span style={label(STONE, 10)}>{xb.no}</span>}
+                    <span style={{ ...serif(22, 1.1, 'normal'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{xb.name}</span>
+                    <span style={{ fontSize: 13, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>by <span onClick={xb.openArtist} className={hoverText} style={{ color: INK, cursor: 'pointer', borderBottom: '1px solid rgba(var(--ink-rgb),.3)' }}>{xb.artist}</span>{xb.verified && <Verified size={12} />} · {xb.count}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {v.exGrid && v.exCanMore && (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 12 }}>
             <button onClick={v.loadMore} disabled={v.exBusy} className={hoverLine} style={{ ...underlineBtn(14), opacity: v.exBusy ? 0.5 : 1 }}>{v.exBusy ? 'Loading…' : 'Load more'}</button>
