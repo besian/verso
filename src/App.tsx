@@ -552,6 +552,8 @@ export default class App extends Component<object, State> {
     if (bookId) want.set('bc:' + bookId, () => api.watch(['bookCounts', bookId], d => this.setState(st => ({ counts: { ...st.counts, ['b:' + bookId]: Math.max(0, d?.likes || 0) } }))));
     if (bookId) want.set('cm:' + bookId, () => api.watchComments(bookId, list => this.setState({ comments: { bookId, list } })));
     // The Following feed: whether you've liked each post's sketchbook, for its heart.
+    // Explore's wall: the same, for the sketchbooks on it.
+    if (me && s.mode === 'explore' && s.exTab !== 'following') for (const b of this.exSorted().slice(0, 60)) if (b.ownerId) want.set(`lk:${b.id}:${me}`, () => api.watch(['books', b.id, 'likes', me], d => this.setState(st => ({ liked: { ...st.liked, [b.id]: !!d }, stamp: { ...st.stamp, [b.id]: d ? String(d.r || 'love') : '' } }))));
     if (me && s.mode === 'explore' && s.exTab === 'following') for (const b of (s.followFeed || []).slice(0, 40)) want.set(`lk:${b.id}:${me}`, () => api.watch(['books', b.id, 'likes', me], d => this.setState(st => ({ liked: { ...st.liked, [b.id]: !!d }, stamp: { ...st.stamp, [b.id]: d ? String(d.r || 'love') : '' } }))));
     if (bookId && me && s.mode === 'other') want.set(`lk:${bookId}:${me}`, () => api.watch(['books', bookId, 'likes', me], d => this.setState(st => ({ liked: { ...st.liked, [bookId]: !!d } }))));
     const pu = s.mode === 'profile' ? s.profileOf?.uid || me : undefined;
@@ -589,6 +591,14 @@ export default class App extends Component<object, State> {
     const on = !this.state.liked?.[o.id], key = 'b:' + o.id;
     this.setState(st => ({ liked: { ...st.liked, [o.id]: on }, counts: { ...st.counts, [key]: Math.max(0, (st.counts?.[key] || 0) + (on ? 1 : -1)) } }));
     api.setLike(a, { id: o.id, ownerId: o.ownerId, name: o.name }, on).catch(e => { console.error(e); this.toast('Couldn’t save that. Try again.'); this.setState(st => ({ liked: { ...st.liked, [o.id]: !on } })); });
+  }
+  /** Follows an artist, or stops following them. */
+  toggleFollowOf(key: string) {
+    const s = this.state, follows = s.follows || [];
+    if (!s.acct) return this.openJoin();
+    const on = !follows.includes(key);
+    this.setState({ follows: on ? [...follows, key] : follows.filter(x => x !== key) });
+    api.setFollow(s.acct, key, on).then(() => this.loadFollowFeed()).catch(e => { console.error(e); this.setState(st => ({ follows: on ? st.follows.filter(x => x !== key) : [...st.follows, key] })); });
   }
   /** Presses a stamp on a sketchbook (a like with a word of encouragement), swaps it for another, or takes it off. */
   setStamp(o: OtherBook, key: string) {
@@ -1762,6 +1772,47 @@ export default class App extends Component<object, State> {
       })() : [],
     };
   }
+  /** Explore's wall, like a pinboard: pages from everyone's sketchbooks at their own shapes (each book's newest page,
+   *  and now and then its first), the tags people are using, and artists you might follow. */
+  wallVals(list: OtherBook[], mob: boolean): V {
+    const s = this.state, me = s.acct?.uid, follows = s.follows || [], filtering = !!(s.exQ || s.exLabel);
+    const canFollow = (uid?: string) => !!uid && uid !== me;
+    const tile = (b: OtherBook, i: number) => {
+      const u = b.images[i], av = b.ownerId ? this.avatarOf(b.ownerId) : null, stamp = s.stamp?.[b.id] || (s.liked?.[b.id] ? 'love' : '');
+      return {
+        key: b.id + ':' + i, src: b.thumbs?.[u] || u, a: this.shapeOf(b).a, n: i + 1, name: b.name, artist: b.artist, verified: this.isTeam(b.ownerId), mature: !!b.mature,
+        av: av ? avatarBg(av) : '', init: (b.artist || '?').trim().charAt(0).toUpperCase(), cap: b.notes?.[u]?.c || '',
+        canFollow: !b.arch && canFollow(b.ownerId), following: !!b.ownerId && follows.includes(b.ownerId), follow: () => b.ownerId && this.toggleFollowOf(b.ownerId),
+        canStamp: !!b.ownerId && !b.arch, stamped: !!stamp, stampInk: STAMPS.find(x => x.key === stamp)?.ink || '', stamp: () => this.setStamp(b, stamp || 'love'),
+        open: () => { this.openOtherBook(b, 'explore'); if (i > 0) setTimeout(() => this.goToPage(i), 80); },
+        openArtist: () => this.openProfile(this.whoOf(b)),
+      };
+    };
+    const firsts: V[] = [], seconds: V[] = [];
+    list.forEach(b => { const n = b.images.length; if (!n) return; firsts.push(tile(b, n - 1)); if (n >= 3) seconds.push(tile(b, 0)); });
+    const tiles: V[] = [];
+    firsts.forEach((t, k) => { tiles.push(t); if (k % 3 === 2 && seconds.length) tiles.push(seconds.shift()!); });
+    tiles.push(...seconds);
+    // The tags people use most, this week's prompt first.
+    const count = new Map<string, number>();
+    this.community().forEach(b => (b.tags || []).forEach(t => count.set(t, (count.get(t) || 0) + 1)));
+    const pr = currentPrompt()?.tag, top = [...count.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t).filter(t => t !== pr).slice(0, 10);
+    const on = s.exLabel?.startsWith('t:') ? s.exLabel.slice(2) : '';
+    const tags = [...(pr ? [pr] : []), ...top].map(t => ({ key: t, label: '#' + t, on: on === tagSlug(t), pick: () => this.setLabel(on === tagSlug(t) ? '' : 't:' + tagSlug(t)) }));
+    // Artists to follow: people with public work you don't follow yet, most liked first, with three of their pages.
+    const seen = new Set<string>(), people: V[] = [];
+    [...this.community()].sort((a, b) => b.likes - a.likes).forEach(b => {
+      const uid = b.ownerId; if (!uid || b.arch || uid === me || follows.includes(uid) || seen.has(uid) || people.length >= 8 || !b.images.length) return;
+      seen.add(uid); const av = this.avatarOf(uid);
+      people.push({ key: uid, name: b.artist, verified: this.isTeam(uid), av: av ? avatarBg(av) : '', init: (b.artist || '?').trim().charAt(0).toUpperCase(),
+        pages: b.images.slice(-3).reverse().map(u => ({ key: u, src: b.thumbs?.[u] || u })), a: this.shapeOf(b).a, book: b.name,
+        follow: () => this.toggleFollowOf(uid), open: () => this.openProfile(this.whoOf(b)) });
+    });
+    return {
+      wallTiles: tiles, wallCols: mob ? 2 : Math.max(2, Math.min(6, Math.floor((s.vw - 80 + 18) / 250))), wallGap: mob ? 12 : 20,
+      wallTags: filtering && !on ? [] : tags, wallPeople: filtering ? [] : people, wallPeopleAt: mob ? 6 : 12,
+    };
+  }
   /** Explore's Content filter. Showing Mature work needs a signed-in adult, as in Account settings. */
   setContent(k: 'hide' | 'all' | 'only') {
     const s = this.state, only = k === 'only';
@@ -1899,13 +1950,7 @@ export default class App extends Component<object, State> {
       togglePreview: () => this.setState(st => ({ pfPreview: !st.pfPreview })),
       pfNew: this.openNewPick,
       folLbl: folOn ? 'Following' : 'Follow', folBg: folOn ? 'transparent' : MARK, folFg: folOn ? INK : PAPER, folBd: folOn ? 'rgba(var(--ink-rgb),.5)' : MARK,
-      toggleFollow: () => {
-        if (!s.acct) return this.openJoin();
-        const key = s.profileOf?.uid; if (!key) return;
-        const on = !follows.includes(key);
-        this.setState({ follows: on ? [...follows, key] : follows.filter(x => x !== key) });
-        api.setFollow(s.acct, key, on).then(() => this.loadFollowFeed()).catch(e => { console.error(e); this.setState(st => ({ follows: on ? st.follows.filter(x => x !== key) : [...st.follows, key] })); });
-      },
+      toggleFollow: () => { const key = s.profileOf?.uid; if (key) this.toggleFollowOf(key); },
     };
   }
 
@@ -2386,6 +2431,7 @@ export default class App extends Component<object, State> {
         ar: String(this.shapeOf(b).a), wp: String(GRID_WIDTH[b.shape] || 78),
         open: () => this.openOtherBook(b), openArtist: (e: MouseEvent) => { e.stopPropagation(); this.openProfile(this.whoOf(b)); },
       })),
+      ...this.wallVals(list, mob),
       stackList,
       stMature: !!tb?.mature, stRank: 'Sketchbook ' + String((tb?.idx ?? 0) + 1).padStart(3, '0'), stShape: this.shapeOf(tb).label || '', stName: tb?.name, stArtist: tb?.artist,
       stPages: `Pages 01—${String(tb?.pages).padStart(2, '0')}`, stPos: `${top + 1} of ${n}`,

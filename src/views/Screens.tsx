@@ -228,6 +228,97 @@ function FollowingFeed({ v }: { v: V }) {
   );
 }
 
+/** One page on the wall: the page at its own shape, taped up, with who made it underneath. Follow and stamp sit on
+ *  the page under the mouse; a touch screen double-taps to stamp. A stamp you've pressed stays inked on it. */
+function WallTile({ t }: { t: V }) {
+  // Touch screens: a tap opens the page, a double-tap stamps it (there's no hover to show the buttons).
+  const tap = useRef<{ at: number; timer?: ReturnType<typeof setTimeout> }>({ at: 0 });
+  const onTap = () => {
+    if (!matchMedia('(hover: none)').matches) return t.open();
+    const r = tap.current, now = Date.now(); clearTimeout(r.timer);
+    if (now - r.at < 280) { r.at = 0; if (t.canStamp && !t.stamped) t.stamp(); return; }
+    r.at = now; r.timer = setTimeout(() => { r.at = 0; t.open(); }, 280);
+  };
+  return (
+    <div className="wall-tile" style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+      <div onClick={onTap} style={{ position: 'relative', padding: 6, background: '#FBF9F4', touchAction: 'manipulation', boxShadow: '0 6px 16px rgba(20,20,30,.13), 0 1px 2px rgba(20,20,30,.1)', cursor: 'pointer' }}>
+        <span aria-hidden="true" style={{ position: 'absolute', top: -6, left: '50%', width: 40, height: 12, transform: 'translateX(-50%) rotate(-3deg)', background: 'rgba(205,190,150,.55)', zIndex: 1 }} />
+        <img src={t.src} alt={`Page ${t.n} of ${t.name} by ${t.artist}`} loading="lazy" draggable={false} style={{ display: 'block', width: '100%', aspectRatio: t.a, objectFit: 'cover', background: '#F1EDE4' }} />
+        {t.mature && <span style={matureBadge}>Mature</span>}
+        {t.canFollow && (
+          <button onClick={e => { e.stopPropagation(); t.follow(); }} className={'wall-act' + (t.following ? '' : ' ' + hover(`background:${MARK}`))} aria-pressed={t.following}
+            style={{ position: 'absolute', top: 12, right: 12, height: 28, padding: '0 11px', border: t.following ? '1px solid rgba(34,35,32,.35)' : 'none', borderRadius: 14, background: t.following ? 'rgba(251,249,244,.92)' : '#222320', color: t.following ? '#222320' : '#F4F1E9', font: `500 12px ${SANS}`, cursor: 'pointer' }}>{t.following ? 'Following' : 'Follow'}</button>
+        )}
+        {t.canStamp && (
+          <button onClick={e => { e.stopPropagation(); t.stamp(); }} aria-pressed={t.stamped} aria-label={t.stamped ? `You stamped it: ${t.stampInk}. Take it off` : 'Stamp it: Loved'}
+            className={'wall-act' + (t.stamped ? ' keep desk-stamp' : '')}
+            style={{ position: 'absolute', right: 12, bottom: 12, width: 52, height: 52, padding: 0, borderRadius: '50%', border: `2px solid ${MARK}`, background: t.stamped ? 'rgba(251,249,244,.6)' : 'rgba(251,249,244,.85)', color: MARK, font: `600 8.5px/1.1 ${SANS}`, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer', transform: 'rotate(-14deg)' }}>
+            {t.stamped ? t.stampInk : '♥ Love'}
+          </button>
+        )}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+        <button onClick={t.openArtist} aria-label={`${t.artist}’s profile`} style={{ width: 22, height: 22, flexShrink: 0, padding: 0, borderRadius: '50%', border: '1px solid rgba(var(--ink-rgb),.15)', background: t.av || INK, color: PAPER, font: `500 10px ${SANS}`, cursor: 'pointer' }}>{t.av ? '' : t.init}</button>
+        <span style={{ minWidth: 0, fontSize: 12.5, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: MUTED }}>
+          <button onClick={t.openArtist} className={hoverText} style={{ padding: 0, border: 'none', background: 'none', color: INK, font: `600 12.5px ${SANS}`, cursor: 'pointer' }}>{t.artist}</button>{t.verified && <Verified size={12} />} · {t.name}
+        </span>
+      </div>
+      {t.cap && <span style={{ marginTop: -4, fontSize: 12.5, lineHeight: 1.4, color: INK, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' } as CSSProperties}>{t.cap}</span>}
+    </div>
+  );
+}
+
+/** Pages in columns, each placed in the shortest column so far (their shapes are known, so nothing jumps as more load). */
+function Masonry({ tiles, cols, gap }: { tiles: V[]; cols: number; gap: number }) {
+  const colList: V[][] = Array.from({ length: cols }, () => []), h = new Array(cols).fill(0);
+  tiles.forEach(t => { const k = h.indexOf(Math.min(...h)); colList[k].push(t); h[k] += 1 / t.a + (t.cap ? 0.32 : 0.2); });
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap, alignItems: 'start' }}>
+      {colList.map((c, k) => <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: gap + 14, minWidth: 0 }}>{c.map(t => <WallTile key={t.key} t={t} />)}</div>)}
+    </div>
+  );
+}
+
+/** Explore, as a wall of pages from everyone, with the tags people use and artists you might follow. */
+function Wall({ v }: { v: V }) {
+  const at = v.wallPeople.length ? v.wallPeopleAt : v.wallTiles.length;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: v.notMob ? 28 : 20 }}>
+      {v.wallTags.length > 0 && (
+        <div role="group" aria-label="Tags" className="desk-chips" onWheel={wheelSideways} style={{ display: 'flex', gap: 6, overflowX: 'auto', margin: `0 -${v.exPadX}px`, padding: `0 ${v.exPadX}px` }}>
+          {v.wallTags.map((x: V) => (
+            <button key={x.key} onClick={x.pick} aria-pressed={x.on} className={x.on ? undefined : hover('border-color:rgba(var(--ink-rgb),.55)')} style={{ flexShrink: 0, height: 32, padding: '0 13px', borderRadius: 16, border: `1px solid ${x.on ? INK : 'rgba(var(--ink-rgb),.2)'}`, background: x.on ? INK : 'transparent', color: x.on ? PAPER : INK, font: `500 12.5px ${SANS}`, cursor: 'pointer', whiteSpace: 'nowrap' }}>{x.label}</button>
+          ))}
+        </div>
+      )}
+      <Masonry tiles={v.wallTiles.slice(0, at)} cols={v.wallCols} gap={v.wallGap} />
+      {v.wallPeople.length > 0 && (
+        <section aria-label="Artists to follow" style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '22px 0', borderTop: '1px solid rgba(var(--ink-rgb),.2)', borderBottom: '1px solid rgba(var(--ink-rgb),.2)' }}>
+          <span style={{ ...serif(v.notMob ? 28 : 24, 1, '-.01em') }}>Artists to <em style={{ color: MARK }}>follow</em></span>
+          <div className="desk-chips" onWheel={wheelSideways} style={{ display: 'flex', gap: 16, overflowX: 'auto', margin: `0 -${v.exPadX}px`, padding: `4px ${v.exPadX}px 6px` }}>
+            {v.wallPeople.map((p: V) => (
+              <div key={p.key} style={{ flexShrink: 0, width: 228, display: 'flex', flexDirection: 'column', gap: 10, padding: 12, background: '#FBF9F4', boxShadow: '0 4px 12px rgba(20,20,30,.1)' }}>
+                <div onClick={p.open} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 4, cursor: 'pointer' }}>
+                  {p.pages.map((pg: V) => <img key={pg.key} src={pg.src} alt="" loading="lazy" style={{ display: 'block', width: '100%', aspectRatio: p.a, objectFit: 'cover', background: '#F1EDE4' }} />)}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                  <button onClick={p.open} aria-label={`${p.name}’s profile`} style={{ width: 30, height: 30, flexShrink: 0, padding: 0, borderRadius: '50%', border: '1px solid rgba(34,35,32,.15)', background: p.av || '#222320', color: '#F4F1E9', font: `500 12px ${SANS}`, cursor: 'pointer' }}>{p.av ? '' : p.init}</button>
+                  <button onClick={p.open} style={{ flex: 1, minWidth: 0, padding: 0, border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', color: '#222320', display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ font: `600 13px ${SANS}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}{p.verified && <Verified size={12} />}</span>
+                    <span style={{ font: `italic 400 13px ${SERIF}`, color: '#77756E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.book}</span>
+                  </button>
+                  <button onClick={p.follow} className={hover(`background:${MARK}`)} style={{ height: 30, padding: '0 12px', border: 'none', borderRadius: 15, background: '#222320', color: '#F4F1E9', font: `500 12px ${SANS}`, cursor: 'pointer', flexShrink: 0 }}>Follow</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+      {at < v.wallTiles.length && <Masonry tiles={v.wallTiles.slice(at)} cols={v.wallCols} gap={v.wallGap} />}
+    </div>
+  );
+}
+
 export function Explore({ v }: { v: V }) {
   if (v.exFollowing) return <FollowingFeed v={v} />;
   return (
@@ -337,25 +428,7 @@ export function Explore({ v }: { v: V }) {
             <button onClick={v.hidePromo} aria-label="Close" title="Close" className={hover(`color:${MARK}`)} style={{ position: 'absolute', right: 8, top: 8, width: 28, height: 28, padding: 0, border: 'none', background: 'none', color: MUTED, font: `400 18px/1 ${SANS}`, cursor: 'pointer' }}>×</button>
           </div>
         )}
-        {v.exGrid && (
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${v.exCols},minmax(0,1fr))`, gap: '44px 18px', width: '100%', alignItems: 'end' }}>
-              {v.exploreList.map((xb: V) => (
-                <div key={xb.key} onClick={xb.open} style={{ display: 'flex', flexDirection: 'column', gap: 20, cursor: 'pointer', minWidth: 0 }}>
-                  <div className={hover('transform:translateY(-8px)')} style={{ position: 'relative', aspectRatio: xb.ar, width: `calc(${xb.wp}% - 7px)`, marginRight: 7, transition: 'transform .35s cubic-bezier(.2,.8,.2,1)' }}>
-                    <ClosedBook bg={xb.bg} board={xb.color} hasBand={xb.hasBand} label={xb.showLabel ? xb.name : null} />
-                    {xb.mature && <span style={matureBadge}>Mature</span>}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-                    {v.notMob && <span style={label(STONE, 10)}>{xb.no}</span>}
-                    <span style={{ ...serif(22, 1.1, 'normal'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{xb.name}</span>
-                    <span style={{ fontSize: 13, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>by <span onClick={xb.openArtist} className={hoverText} style={{ color: INK, cursor: 'pointer', borderBottom: '1px solid rgba(var(--ink-rgb),.3)' }}>{xb.artist}</span>{xb.verified && <Verified size={12} />} · {xb.count}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {v.exGrid && <Wall v={v} />}
         {v.exGrid && v.exCanMore && (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 12 }}>
             <button onClick={v.loadMore} disabled={v.exBusy} className={hoverLine} style={{ ...underlineBtn(14), opacity: v.exBusy ? 0.5 : 1 }}>{v.exBusy ? 'Loading…' : 'Load more'}</button>

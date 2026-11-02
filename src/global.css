@@ -80,6 +80,10 @@ input[type="date"] { color-scheme: inherit; }
 @keyframes desk-in { from { opacity: 0; transform: translateX(var(--from)) rotate(.6deg); } }
 .desk-stamp { transform: rotate(-14deg); animation: desk-stamp .45s cubic-bezier(.3,1.4,.5,1); }
 @keyframes desk-stamp { from { transform: rotate(-24deg) scale(1.6); opacity: 0; } 60% { opacity: .95; } to { transform: rotate(-14deg) scale(1); } }
+/* Explore's wall: Follow and stamp show on the page under the mouse (touch screens double-tap to stamp instead), and a pressed stamp stays. */
+.wall-act { opacity: 0; transition: opacity .15s; }
+.wall-tile:hover .wall-act, .wall-act:focus-visible, .wall-act.keep { opacity: 1; }
+@media (hover: none) { .wall-act:not(.keep) { display: none; } }
 .desk-chips { scrollbar-width: none; }
 .desk-chips::-webkit-scrollbar { display: none; }
 @media (prefers-reduced-motion: reduce) { .desk-in-next, .desk-in-prev, .desk-stamp { animation: none; } }
