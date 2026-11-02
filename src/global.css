@@ -73,12 +73,12 @@ input[type="date"] { color-scheme: inherit; }
 .faq-q > summary .faq-plus { transition: transform .2s; }
 .faq-q[open] > summary .faq-plus { transform: rotate(45deg); }
 
-/* A stamp lands like a real one, pressed and lifted. */
-.desk-stamp { transform: rotate(-14deg); animation: desk-stamp .45s cubic-bezier(.3,1.4,.5,1); }
-@keyframes desk-stamp { from { transform: rotate(-24deg) scale(1.6); opacity: 0; } 60% { opacity: .95; } to { transform: rotate(-14deg) scale(1); } }
-@media (prefers-reduced-motion: reduce) { .desk-stamp { animation: none; } }
+/* A heart you press pops a little. */
+.wall-liked svg { animation: wall-like .4s cubic-bezier(.3,1.5,.5,1); }
+@keyframes wall-like { from { transform: scale(.4); } }
+@media (prefers-reduced-motion: reduce) { .wall-liked svg { animation: none; } }
 
-/* The Following wall: Follow and stamp show on the page under the mouse (touch screens double-tap to stamp instead), and a pressed stamp stays. */
+/* The Following wall: Follow and the heart show on the page under the mouse (touch screens double-tap to like), and a red heart stays. */
 .wall-act { opacity: 0; transition: opacity .15s; }
 .wall-tile:hover .wall-act, .wall-act:focus-visible, .wall-act.keep { opacity: 1; }
 @media (hover: none) { .wall-act:not(.keep) { display: none; } }

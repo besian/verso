@@ -1,7 +1,7 @@
 import { Component, Suspense, createRef, lazy } from 'react';
 import { flushSync } from 'react-dom';
 import type { ChangeEvent, DragEvent, MouseEvent, PointerEvent, ReactNode, WheelEvent } from 'react';
-import { CONFIG, GUIDE_BOOK, GRID_WIDTH, STAMPS, MAX_MEDIUMS, MAX_TAGS, MEDIUMS, PALETTE, SHAPES, mediumKey, tagSlug } from './data';
+import { CONFIG, GUIDE_BOOK, GRID_WIDTH, MAX_MEDIUMS, MAX_TAGS, MEDIUMS, PALETTE, SHAPES, mediumKey, tagSlug } from './data';
 import type { Account, ArchiveEntry, Book, OtherBook, PageNote, Shape, ShapeKey } from './data';
 import * as api from './backend';
 import type { AuthUser, Billing, BillingDetails, BookDoc, Chat, Msg, Notif, Person, Report, Saved, Stats, ViewSource } from './backend';
@@ -135,7 +135,7 @@ interface State {
   community?: OtherBook[]; people?: Person[];
   saved?: Saved[]; blocked?: string[]; followFeed?: OtherBook[]; followPeople?: Person[]; pfTab?: 'books' | 'saved' | 'following';
   toast?: string; more?: 'book' | 'profile' | 'chat' | null;
-  counts?: Record<string, number>; liked?: Record<string, boolean>; stamp?: Record<string, string>; notifs?: Notif[]; notifOpen?: boolean;
+  counts?: Record<string, number>; liked?: Record<string, boolean>; notifs?: Notif[]; notifOpen?: boolean;
   reportFor?: { kind: 'book' | 'user' | 'message' | 'comment'; targetId: string; ownerId: string; label: string; quote?: string } | null; reportReason?: string; reportNote?: string; reportBusy?: boolean; reportErr?: string;
   p: number; zoom: number; managing: boolean;
   vw: number; vh: number; sw?: number; sh?: number;
@@ -552,7 +552,7 @@ export default class App extends Component<object, State> {
     if (bookId) want.set('bc:' + bookId, () => api.watch(['bookCounts', bookId], d => this.setState(st => ({ counts: { ...st.counts, ['b:' + bookId]: Math.max(0, d?.likes || 0) } }))));
     if (bookId) want.set('cm:' + bookId, () => api.watchComments(bookId, list => this.setState({ comments: { bookId, list } })));
     // The Following feed: whether you've liked each post's sketchbook, for its heart.
-    if (me && s.mode === 'explore' && s.exTab === 'following') for (const b of (s.followFeed || []).slice(0, 40)) want.set(`lk:${b.id}:${me}`, () => api.watch(['books', b.id, 'likes', me], d => this.setState(st => ({ liked: { ...st.liked, [b.id]: !!d }, stamp: { ...st.stamp, [b.id]: d ? String(d.r || 'love') : '' } }))));
+    if (me && s.mode === 'explore' && s.exTab === 'following') for (const b of (s.followFeed || []).slice(0, 40)) want.set(`lk:${b.id}:${me}`, () => api.watch(['books', b.id, 'likes', me], d => this.setState(st => ({ liked: { ...st.liked, [b.id]: !!d } }))));
     if (bookId && me && s.mode === 'other') want.set(`lk:${bookId}:${me}`, () => api.watch(['books', bookId, 'likes', me], d => this.setState(st => ({ liked: { ...st.liked, [bookId]: !!d } }))));
     const pu = s.mode === 'profile' ? s.profileOf?.uid || me : undefined;
     for (const u of new Set([pu, me])) if (u) {
@@ -597,17 +597,6 @@ export default class App extends Component<object, State> {
     const on = !follows.includes(key);
     this.setState({ follows: on ? [...follows, key] : follows.filter(x => x !== key) });
     api.setFollow(s.acct, key, on).then(() => this.loadFollowFeed()).catch(e => { console.error(e); this.setState(st => ({ follows: on ? st.follows.filter(x => x !== key) : [...st.follows, key] })); });
-  }
-  /** Presses a stamp on a sketchbook (a like with a word of encouragement), swaps it for another, or takes it off. */
-  setStamp(o: OtherBook, key: string) {
-    const a = this.state.acct; if (!a) return this.openJoin();
-    if (!o.ownerId) return;
-    const cur = this.state.stamp?.[o.id] || (this.state.liked?.[o.id] ? 'love' : ''), st = STAMPS.find(x => x.key === key);
-    if (cur === key) { this.setState(x => ({ stamp: { ...x.stamp, [o.id]: '' } })); return this.toggleLike(o); }
-    this.setState(x => ({ liked: { ...x.liked, [o.id]: true }, stamp: { ...x.stamp, [o.id]: key }, counts: cur ? x.counts : { ...x.counts, ['b:' + o.id]: (x.counts?.['b:' + o.id] || 0) + 1 } }));
-    const book = { id: o.id, ownerId: o.ownerId, name: o.name }, stamp = st && { key, label: st.chip };
-    (cur ? api.setLike(a, book, false).then(() => api.setLike(a, book, true, stamp)) : api.setLike(a, book, true, stamp))
-      .catch(e => { console.error(e); this.toast('Couldn’t save that. Try again.'); this.setState(x => ({ stamp: { ...x.stamp, [o.id]: cur }, liked: { ...x.liked, [o.id]: !!cur } })); });
   }
   componentWillUnmount() {
     this.watches.forEach(stop => stop());
@@ -1736,12 +1725,12 @@ export default class App extends Component<object, State> {
     const s = this.state, me = s.acct?.uid, follows = s.follows || [];
     const canFollow = (uid?: string) => !!uid && uid !== me;
     const tile = (b: OtherBook, i: number) => {
-      const u = b.images[i], av = b.ownerId ? this.avatarOf(b.ownerId) : null, stamp = s.stamp?.[b.id] || (s.liked?.[b.id] ? 'love' : '');
+      const u = b.images[i], av = b.ownerId ? this.avatarOf(b.ownerId) : null;
       return {
         key: b.id + ':' + i, src: b.thumbs?.[u] || u, a: this.shapeOf(b).a, n: i + 1, name: b.name, artist: b.artist, verified: this.isTeam(b.ownerId), mature: !!b.mature,
         av: av ? avatarBg(av) : '', init: (b.artist || '?').trim().charAt(0).toUpperCase(), cap: b.notes?.[u]?.c || '',
         canFollow: !b.arch && canFollow(b.ownerId), following: !!b.ownerId && follows.includes(b.ownerId), follow: () => b.ownerId && this.toggleFollowOf(b.ownerId),
-        canStamp: !!b.ownerId && !b.arch, stamped: !!stamp, stampInk: STAMPS.find(x => x.key === stamp)?.ink || '', stamp: () => this.setStamp(b, stamp || 'love'),
+        canLike: !!b.ownerId && !b.arch, liked: !!s.liked?.[b.id], like: () => this.toggleLike(b),
         open: () => { this.openOtherBook(b, 'explore'); if (i > 0) setTimeout(() => this.goToPage(i), 80); },
         openArtist: () => this.openProfile(this.whoOf(b)),
       };

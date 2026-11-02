@@ -149,15 +149,15 @@ function FollowingFeed({ v }: { v: V }) {
   );
 }
 
-/** One page on the wall: the page at its own shape, taped up, with who made it underneath. Follow and stamp sit on
- *  the page under the mouse; a touch screen double-taps to stamp. A stamp you've pressed stays inked on it. */
+/** One page on the wall: the page at its own shape, taped up, with who made it underneath. Follow and the heart sit
+ *  on the page under the mouse; a touch screen double-taps to like. A page you've liked keeps its red heart. */
 function WallTile({ t }: { t: V }) {
-  // Touch screens: a tap opens the page, a double-tap stamps it (there's no hover to show the buttons).
+  // Touch screens: a tap opens the page, a double-tap likes it (there's no hover to show the buttons).
   const tap = useRef<{ at: number; timer?: ReturnType<typeof setTimeout> }>({ at: 0 });
   const onTap = () => {
     if (!matchMedia('(hover: none)').matches) return t.open();
     const r = tap.current, now = Date.now(); clearTimeout(r.timer);
-    if (now - r.at < 280) { r.at = 0; if (t.canStamp && !t.stamped) t.stamp(); return; }
+    if (now - r.at < 280) { r.at = 0; if (t.canLike && !t.liked) t.like(); return; }
     r.at = now; r.timer = setTimeout(() => { r.at = 0; t.open(); }, 280);
   };
   return (
@@ -170,11 +170,11 @@ function WallTile({ t }: { t: V }) {
           <button onClick={e => { e.stopPropagation(); t.follow(); }} className={'wall-act' + (t.following ? '' : ' ' + hover(`background:${MARK}`))} aria-pressed={t.following}
             style={{ position: 'absolute', top: 12, right: 12, height: 28, padding: '0 11px', border: t.following ? '1px solid rgba(34,35,32,.35)' : 'none', borderRadius: 14, background: t.following ? 'rgba(251,249,244,.92)' : '#222320', color: t.following ? '#222320' : '#F4F1E9', font: `500 12px ${SANS}`, cursor: 'pointer' }}>{t.following ? 'Following' : 'Follow'}</button>
         )}
-        {t.canStamp && (
-          <button onClick={e => { e.stopPropagation(); t.stamp(); }} aria-pressed={t.stamped} aria-label={t.stamped ? `You stamped it: ${t.stampInk}. Take it off` : 'Stamp it: Loved'}
-            className={'wall-act' + (t.stamped ? ' keep desk-stamp' : '')}
-            style={{ position: 'absolute', right: 12, bottom: 12, width: 52, height: 52, padding: 0, borderRadius: '50%', border: `2px solid ${MARK}`, background: t.stamped ? 'rgba(251,249,244,.6)' : 'rgba(251,249,244,.85)', color: MARK, font: `600 8.5px/1.1 ${SANS}`, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer', transform: 'rotate(-14deg)' }}>
-            {t.stamped ? t.stampInk : '♥ Love'}
+        {t.canLike && (
+          <button onClick={e => { e.stopPropagation(); t.like(); }} aria-pressed={t.liked} aria-label={t.liked ? 'Unlike' : 'Like'} title={t.liked ? 'Unlike' : 'Like'}
+            className={'wall-act' + (t.liked ? ' keep wall-liked' : '')}
+            style={{ position: 'absolute', right: 12, bottom: 12, width: 38, height: 38, padding: 0, border: 'none', borderRadius: '50%', background: 'rgba(251,249,244,.92)', boxShadow: '0 2px 8px rgba(20,20,30,.18)', color: t.liked ? MARK : '#222320', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill={t.liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z" /></svg>
           </button>
         )}
       </div>
